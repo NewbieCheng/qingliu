@@ -1,0 +1,12 @@
+**/node_modules
+.env
+.env.*
+!.env.example
+data
+*.zip
+server
+frontend/src
+frontend/package*.json
+docs
+samples
+deploy

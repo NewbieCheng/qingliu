@@ -1,0 +1,23 @@
+# Merge this into the team's existing HTTPS server block; replace domain/certificate paths.
+server {
+    listen 443 ssl;
+    server_name qingliu.example.com;
+    ssl_certificate /YOUR_CERT/fullchain.pem;
+    ssl_certificate_key /YOUR_CERT/privkey.pem;
+    client_max_body_size 64m;
+    location / {
+        proxy_pass http://127.0.0.1:8787;
+        proxy_set_header Host $host;
+        # Login throttling deliberately uses the direct peer; keep proxy rate limits too.
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 130s;
+        proxy_send_timeout 130s;
+        proxy_request_buffering on;
+        proxy_cache off;
+    }
+}
+server {
+    listen 80;
+    server_name qingliu.example.com;
+    return 301 https://$host$request_uri;
+}
