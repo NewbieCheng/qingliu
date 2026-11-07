@@ -23,6 +23,43 @@ function useStoredFlag(key) {
   return [value, setValue];
 }
 
+function RailToggleIcon({ collapsed }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      width="17"
+      height="17"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 4v12" />
+      <path d={collapsed ? "m8 7 3 3-3 3" : "m11 7-3 3 3 3"} />
+    </svg>
+  );
+}
+
+function TopbarToggleIcon({ collapsed }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {collapsed ? <path d="m5 8 5 5 5-5" /> : <path d="m5 12 5-5 5 5" />}
+    </svg>
+  );
+}
+
 function NavIcon({ kind }) {
   const paths = {
     clients: (
@@ -104,19 +141,18 @@ export function WorkspaceShell({
     >
       <aside className="rail">
         <div className="rail-head">
-          <Link to="/" className="brand">
-            <span className="brand-name">清流</span>
-            <span className="brand-note">资料有据 · 测算有序</span>
+          <Link to="/" className="brand" aria-label="青流工作台">
+            <img
+              className="brand-logo"
+              src="/qingliu-logo-dark.svg"
+              alt="青流"
+            />
+            <img
+              className="brand-mark"
+              src="/qingliu-app-icon.svg"
+              alt="青流"
+            />
           </Link>
-          <button
-            type="button"
-            className="rail-toggle"
-            aria-label={railCollapsed ? "展开侧边栏" : "收起侧边栏"}
-            aria-expanded={!railCollapsed}
-            onClick={() => setRailCollapsed((value) => !value)}
-          >
-            {railCollapsed ? "›" : "‹"}
-          </button>
         </div>
         <nav className="rail-nav" aria-label="主导航">
           <div className="rail-group">
@@ -188,12 +224,13 @@ export function WorkspaceShell({
           <div className="topbar-copy">
             <button
               type="button"
-              className="topbar-toggle"
-              aria-label={topbarCollapsed ? "展开顶栏" : "收起顶栏"}
-              aria-expanded={!topbarCollapsed}
-              onClick={() => setTopbarCollapsed((value) => !value)}
+              className="topbar-sidebar"
+              aria-label={railCollapsed ? "展开侧边栏" : "收起侧边栏"}
+              aria-expanded={!railCollapsed}
+              title={railCollapsed ? "展开侧边栏" : "收起侧边栏"}
+              onClick={() => setRailCollapsed((value) => !value)}
             >
-              {topbarCollapsed ? "⌄" : "⌃"}
+              <RailToggleIcon collapsed={railCollapsed} />
             </button>
             <span className="topbar-title">内部初筛工作台</span>
             {!topbarCollapsed && (
@@ -203,6 +240,15 @@ export function WorkspaceShell({
             )}
           </div>
           <div className="topbar-links">
+            <button
+              type="button"
+              className="topbar-toggle"
+              aria-label={topbarCollapsed ? "展开顶栏" : "收起顶栏"}
+              aria-expanded={!topbarCollapsed}
+              onClick={() => setTopbarCollapsed((value) => !value)}
+            >
+              <TopbarToggleIcon collapsed={topbarCollapsed} />
+            </button>
             <Link to="/recharge">账户</Link>
             <button
               type="button"

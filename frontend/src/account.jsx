@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { navigate } from "./router.jsx";
+import { toast } from "./toast.jsx";
 
 const STATUS = {
   pending: "待支付",
@@ -49,6 +50,29 @@ function stamp(value) {
   return new Date(value).toLocaleString("zh-CN");
 }
 
+function remainingMs(order) {
+  if (!order?.expires_at) return 0;
+  return Math.max(0, new Date(order.expires_at).getTime() - Date.now());
+}
+
+function remainingText(order) {
+  const total = Math.ceil(remainingMs(order) / 1000);
+  const minutes = Math.max(0, Math.floor(total / 60));
+  const seconds = Math.max(0, total % 60);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function orderStatusLabel(order) {
+  if (
+    order?.status === "closed" &&
+    order.expires_at &&
+    new Date(order.expires_at).getTime() <= Date.now()
+  ) {
+    return "已过期";
+  }
+  return STATUS[order?.status] || order?.status || "";
+}
+
 export function RechargePage() {
   const [skus, setSkus] = useState([]);
   const [balance, setBalance] = useState(null);
@@ -58,8 +82,33 @@ export function RechargePage() {
   const [qr, setQr] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [clock, setClock] = useState(Date.now());
 
-  async function load() {
+  async function openOrder(next, scroll = false) {
+    setOrder(next);
+    if (
+      next?.status === "pending" &&
+      next.code_url &&
+      !next.code_url.startsWith("mock://")
+    ) {
+      try {
+        setQr(await QRCode.toDataURL(next.code_url, { width: 240, margin: 1 }));
+      } catch {
+        setQr("");
+      }
+    } else {
+      setQr("");
+    }
+    if (scroll) {
+      window.setTimeout(() => {
+        document
+          .querySelector(".checkout")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
+    }
+  }
+
+  async function load(resume = true) {
     try {
       const [skuData, balanceData, orderData, ledgerData] = await Promise.all([
         request("/api/billing/skus"),
@@ -69,9 +118,20 @@ export function RechargePage() {
       ]);
       setSkus(skuData.items || []);
       setBalance(balanceData);
-      setOrders(orderData.items || []);
+      const nextOrders = orderData.items || [];
+      setOrders(nextOrders);
       setLedgers(ledgerData.items || []);
       setError("");
+      const resumable = nextOrders.find(
+        (item) =>
+          item.status === "pending" &&
+          item.code_url &&
+          !item.code_url.startsWith("mock://") &&
+          remainingMs(item) > 0,
+      );
+      if (resume && !order && resumable) {
+        await openOrder(resumable);
+      }
     } catch (e) {
       setError(e.message);
     }
@@ -82,14 +142,23 @@ export function RechargePage() {
   }, []);
 
   useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     if (!order || order.status !== "pending" || !order.code_url) return;
     const timer = setInterval(async () => {
       try {
         const next = await request(`/api/billing/orders/${order.order_no}`);
-        setOrder(next);
         if (next.status !== "pending") {
-          setQr("");
-          await load();
+          await openOrder(next);
+          await load(false);
+        } else if (remainingMs(next) <= 0) {
+          await openOrder(next);
+          await load(false);
+        } else {
+          setOrder(next);
         }
       } catch {
         // keep polling; a transient network error is not a payment failure
@@ -105,16 +174,17 @@ export function RechargePage() {
       const created = await request("/api/billing/orders", {
         sku_code: sku.code,
       });
-      setOrder(created);
-      if (created.code_url && !created.code_url.startsWith("mock://")) {
-        setQr(
-          await QRCode.toDataURL(created.code_url, { width: 240, margin: 1 }),
-        );
-      } else {
-        setQr("");
-      }
-      await load();
+      const reused = order?.order_no === created.order_no;
+      await openOrder(created);
+      toast(
+        reused
+          ? "已恢复未支付订单，二维码仍可继续使用"
+          : "订单已创建，请扫码支付",
+        "info",
+      );
+      await load(false);
     } catch (e) {
+      toast(e.message, "error");
       setError(e.message);
     } finally {
       setBusy("");
@@ -122,6 +192,11 @@ export function RechargePage() {
   }
 
   const points = balance?.points_balance ?? 0;
+  const currentExpired =
+    order?.status === "pending" &&
+    Boolean(order.expires_at) &&
+    new Date(order.expires_at).getTime() <= clock;
+  const currentRemaining = order ? remainingText(order) : "";
 
   return (
     <main className="account-page">
@@ -205,33 +280,54 @@ export function RechargePage() {
               {order.bonus_points ? ` + ${order.bonus_points}` : ""}
             </p>
             <p className={`badge ${order.status === "paid" ? "" : "amber"}`}>
-              {STATUS[order.status] || order.status}
+              {orderStatusLabel(order)}
             </p>
+            {order.status === "pending" && !currentExpired && (
+              <p className="checkout-expiry">
+                二维码有效期至 {stamp(order.expires_at)} · 剩余{" "}
+                <strong>{currentRemaining}</strong>
+                {remainingMs(order) <= 5 * 60 * 1000 && (
+                  <span className="checkout-expiry-warning"> 即将过期</span>
+                )}
+              </p>
+            )}
             {order.status === "pending" &&
+              !currentExpired &&
               order.code_url &&
               !order.code_url.startsWith("mock://") && (
                 <p className="muted">
-                  请使用微信扫码支付，支付完成后本页会自动刷新。
+                  请使用微信扫码支付。刷新页面不会丢失订单，可回到「最近订单」继续支付。
                 </p>
               )}
             {order.status === "pending" &&
+              !currentExpired &&
               (!order.code_url || order.code_url.startsWith("mock://")) && (
                 <p className="muted">
                   当前为人工/测试通道。请把订单号发给管理员确认到账。
                 </p>
               )}
+            {currentExpired && (
+              <p className="error">
+                二维码已过期，订单已关闭。请重新选择套餐下单。
+              </p>
+            )}
             {order.status === "paid" && (
               <p className="success">积分已到账，余额已刷新。</p>
             )}
+            {order.status === "closed" && !currentExpired && (
+              <p className="muted">订单已关闭，请重新选择套餐下单。</p>
+            )}
           </div>
-          {qr && <img className="checkout-qr" src={qr} alt="微信支付二维码" />}
+          {qr && !currentExpired && (
+            <img className="checkout-qr" src={qr} alt="微信支付二维码" />
+          )}
         </section>
       )}
 
       <section className="card">
         <div className="section-title">
           <h2>最近订单</h2>
-          <p>只显示当前账号的充值订单。</p>
+          <p>只显示当前账号的充值订单；待支付订单可重新打开二维码。</p>
         </div>
         <div className="table-wrap">
           <table>
@@ -243,27 +339,53 @@ export function RechargePage() {
                 <th>积分</th>
                 <th>状态</th>
                 <th>创建时间</th>
+                <th>有效期</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
-              {orders.map((item) => (
-                <tr key={item.order_no}>
-                  <td>{item.order_no}</td>
-                  <td>{item.sku_name}</td>
-                  <td>{fen(item.amount_fen)}</td>
-                  <td>
-                    {Number(item.points || 0) + Number(item.bonus_points || 0)}
-                  </td>
-                  <td>
-                    <span
-                      className={`badge ${item.status === "paid" ? "" : "amber"}`}
-                    >
-                      {STATUS[item.status] || item.status}
-                    </span>
-                  </td>
-                  <td className="muted">{stamp(item.created_at)}</td>
-                </tr>
-              ))}
+              {orders.map((item) => {
+                const itemExpired =
+                  item.status === "pending" &&
+                  item.expires_at &&
+                  new Date(item.expires_at).getTime() <= clock;
+                return (
+                  <tr key={item.order_no}>
+                    <td>{item.order_no}</td>
+                    <td>{item.sku_name}</td>
+                    <td>{fen(item.amount_fen)}</td>
+                    <td>
+                      {Number(item.points || 0) +
+                        Number(item.bonus_points || 0)}
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${item.status === "paid" ? "" : "amber"}`}
+                      >
+                        {itemExpired ? "已过期" : orderStatusLabel(item)}
+                      </span>
+                    </td>
+                    <td className="muted">{stamp(item.created_at)}</td>
+                    <td className="muted">
+                      {item.status === "pending" && !itemExpired
+                        ? remainingText(item)
+                        : stamp(item.expires_at)}
+                    </td>
+                    <td>
+                      {item.status === "pending" && !itemExpired ? (
+                        <button
+                          className="ghost order-resume"
+                          onClick={() => void openOrder(item, true)}
+                        >
+                          继续支付
+                        </button>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -364,7 +486,7 @@ export function ProfilePage() {
           <p className="eyebrow">个人信息</p>
           <h1>{me.display}</h1>
           <p className="muted">
-            账号由工作台统一管理；清流只保留业务角色与本地工作记录。
+            账号由工作台统一管理；青流只保留业务角色与本地工作记录。
           </p>
         </div>
         <div className="balance-chip">

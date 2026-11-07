@@ -704,7 +704,7 @@ func (a *App) mux() http.Handler {
 			bad(405, "不支持的请求")
 		}
 		path := q.r.URL.Path
-		if strings.HasPrefix(path, "/assets/") {
+		if strings.HasPrefix(path, "/assets/") || strings.HasSuffix(path, ".svg") {
 			q.w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			http.FileServer(http.Dir(a.static)).ServeHTTP(q.w, q.r)
 			return

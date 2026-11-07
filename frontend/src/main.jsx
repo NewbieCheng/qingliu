@@ -6,6 +6,7 @@ import { AIAnalysisPanel } from "./ai_panel.jsx";
 import { Link, navigate, useLinkInterceptor, usePathname } from "./router.jsx";
 import { WorkspaceShell } from "./shell.jsx";
 import { UploadDropzone } from "./upload.jsx";
+import { toast, ToastHost } from "./toast.jsx";
 
 const SOURCES = {
   bank_statement: "银行卡流水",
@@ -55,9 +56,8 @@ function money(n) {
     v = negative ? s.slice(1) : s;
   return `${negative ? "-" : ""}${v.length > 2 ? v.slice(0, -2) : "0"}.${v.slice(-2).padStart(2, "0")}`;
 }
-function Form({ onSave, children, className = "" }) {
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+function Form({ onSave, children, className = "", success = "已保存" }) {
+  const [busy, setBusy] = useState(false);
   return (
     <form
       className={className}
@@ -66,29 +66,17 @@ function Form({ onSave, children, className = "" }) {
         if (busy) return;
         const data = new FormData(e.currentTarget);
         setBusy(true);
-        setError("");
         try {
           await onSave(data, e.currentTarget);
+          toast(success);
         } catch (e) {
-          setError(e.message);
+          toast(e.message, "error");
         } finally {
           setBusy(false);
         }
       }}
     >
-      <fieldset disabled={busy}>
-        {children}
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-        {busy && (
-          <p className="muted" role="status">
-            正在保存…
-          </p>
-        )}
-      </fieldset>
+      <fieldset disabled={busy}>{children}</fieldset>
     </form>
   );
 }
@@ -98,6 +86,70 @@ function Field({ label, children }) {
       <span>{label}</span>
       {children}
     </label>
+  );
+}
+function LoginPassword() {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="login-input">
+      <svg
+        viewBox="0 0 20 20"
+        width="16"
+        height="16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        aria-hidden="true"
+      >
+        <rect x="4" y="8.5" width="12" height="8" rx="1.8" />
+        <path d="M6.5 8.5V6.8a3.5 3.5 0 0 1 7 0v1.7" />
+      </svg>
+      <input
+        name="password"
+        type={show ? "text" : "password"}
+        autoComplete="current-password"
+        required
+        maxLength="72"
+        placeholder="请输入密码"
+      />
+      <button
+        type="button"
+        className="login-eye"
+        aria-label={show ? "隐藏密码" : "显示密码"}
+        onClick={() => setShow((value) => !value)}
+      >
+        {show ? (
+          <svg
+            viewBox="0 0 20 20"
+            width="17"
+            height="17"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M2.5 10s2.7-4.5 7.5-4.5 7.5 4.5 7.5 4.5-2.7 4.5-7.5 4.5S2.5 10 2.5 10Z" />
+            <circle cx="10" cy="10" r="2.1" />
+            <path d="m3 3 14 14" />
+          </svg>
+        ) : (
+          <svg
+            viewBox="0 0 20 20"
+            width="17"
+            height="17"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M2.5 10s2.7-4.5 7.5-4.5 7.5 4.5 7.5 4.5-2.7 4.5-7.5 4.5S2.5 10 2.5 10Z" />
+            <circle cx="10" cy="10" r="2.1" />
+          </svg>
+        )}
+      </button>
+    </div>
   );
 }
 function Modal({ title, onClose, children }) {
@@ -135,6 +187,13 @@ function Modal({ title, onClose, children }) {
 function App() {
   const pathname = usePathname();
   useLinkInterceptor();
+  const [rememberedUser] = useState(() => {
+    try {
+      return localStorage.getItem("ql.login.username") || "";
+    } catch {
+      return "";
+    }
+  });
   const [user, setUser] = useState(null),
     [ready, setReady] = useState(false),
     [modal, setModal] = useState("");
@@ -159,41 +218,148 @@ function App() {
   if (!ready) return <p className="loading">正在打开工作台…</p>;
   if (!user)
     return (
-      <main className="login">
-        <div className="brand">
-          清流<span>客户资料与流水初筛</span>
-        </div>
-        <h1>登录工作台</h1>
-        <p className="muted">从资料到测算，每一笔都有依据。</p>
-        <Form
-          onSave={async (f) => {
-            await api("/api/login", Object.fromEntries(f));
-            const me = await api("/api/me");
-            csrf = me.csrf;
-            window.__qlCsrf = me.csrf;
-            setUser(me.user);
-            navigate("/");
-          }}
-        >
-          <Field label="账号">
-            <input
-              name="username"
-              autoComplete="username"
-              required
-              maxLength="60"
+      <main className="login-page">
+        <section className="login-visual" aria-hidden="true">
+          <div className="login-visual-grid" />
+          <div className="login-visual-ring" />
+          <div className="login-visual-top">
+            <img
+              src="/qingliu-logo-dark.svg"
+              alt="青流"
+              className="login-visual-logo"
             />
-          </Field>
-          <Field label="密码">
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              maxLength="72"
-            />
-          </Field>
-          <button className="primary">登录</button>
-        </Form>
+          </div>
+          <div className="login-visual-copy">
+            <p className="login-kicker">内部初筛工作台</p>
+            <h1>
+              资料有据，
+              <br />
+              测算有序。
+            </h1>
+            <p>
+              原件留存、人工复核、版本留痕。
+              <br />
+              从资料到测算，每一笔都有依据。
+            </p>
+          </div>
+          <div className="login-visual-foot">
+            <span>今天不加班旗下 · 企业 AI 工作台</span>
+          </div>
+        </section>
+
+        <section className="login-panel">
+          <div className="login-panel-inner">
+            <div className="login-mobile-brand">
+              <img src="/qingliu-logo.svg" alt="青流" />
+            </div>
+            <div className="login-panel-head">
+              <span className="login-wordmark">青流工作台</span>
+              <span className="login-secure">
+                <svg
+                  viewBox="0 0 16 16"
+                  width="12"
+                  height="12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="7" width="10" height="7" rx="1.5" />
+                  <path d="M5.5 7V5.5a2.5 2.5 0 0 1 5 0V7" />
+                </svg>
+                安全登录
+              </span>
+            </div>
+            <h2>登录</h2>
+            <p className="login-panel-desc">
+              使用工作台账号进入客户资料与流水核对。
+            </p>
+
+            <Form
+              className="login-form"
+              success="登录成功"
+              onSave={async (f) => {
+                await api("/api/login", Object.fromEntries(f));
+                try {
+                  if (f.get("remember")) {
+                    localStorage.setItem(
+                      "ql.login.username",
+                      String(f.get("username")),
+                    );
+                  } else {
+                    localStorage.removeItem("ql.login.username");
+                  }
+                } catch {
+                  /* private mode */
+                }
+                const me = await api("/api/me");
+                csrf = me.csrf;
+                window.__qlCsrf = me.csrf;
+                setUser(me.user);
+                navigate("/");
+              }}
+            >
+              <Field label="账号">
+                <div className="login-input">
+                  <svg
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    aria-hidden="true"
+                  >
+                    <circle cx="10" cy="6.8" r="2.8" />
+                    <path d="M4.5 17c.7-3 2.6-4.5 5.5-4.5s4.8 1.5 5.5 4.5" />
+                  </svg>
+                  <input
+                    name="username"
+                    autoComplete="username"
+                    defaultValue={rememberedUser}
+                    required
+                    maxLength="60"
+                    placeholder="请输入工作台账号"
+                  />
+                </div>
+              </Field>
+              <Field label="密码">
+                <LoginPassword />
+              </Field>
+              <div className="login-options">
+                <label className="login-remember">
+                  <input
+                    type="checkbox"
+                    name="remember"
+                    defaultChecked={Boolean(rememberedUser)}
+                  />
+                  记住账号
+                </label>
+                <span className="login-help">忘记密码请联系管理员</span>
+              </div>
+              <button className="primary login-submit">
+                进入工作台
+                <svg
+                  viewBox="0 0 16 16"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" />
+                </svg>
+              </button>
+            </Form>
+
+            <p className="login-panel-note">
+              账号由「今天不加班」工作台统一管理。登录即表示同意内部资料保密与留痕要求。
+            </p>
+          </div>
+        </section>
       </main>
     );
   const cid = pathname.match(/^\/clients\/([a-f0-9]{32})$/)?.[1];
@@ -229,6 +395,7 @@ function App() {
       {modal === "password" && (
         <Modal title="修改密码" onClose={() => setModal("")}>
           <Form
+            success="密码已更新，请重新登录"
             onSave={async (f) => {
               await api("/api/password", Object.fromEntries(f));
               setUser(null);
@@ -410,8 +577,7 @@ function Case({ cid, user }) {
     [page, setPage] = useState(1),
     [selected, setSelected] = useState([]),
     [original, setOriginal] = useState(null),
-    [admin, setAdmin] = useState(null),
-    [notice, setNotice] = useState("");
+    [admin, setAdmin] = useState(null);
   const range = period ? new URLSearchParams(period).toString() : "";
   const url = `/api/clients/${cid}?${range}`;
   async function load() {
@@ -438,7 +604,6 @@ function Case({ cid, user }) {
   async function mutate(path, body) {
     await api(`${url.replace("?", `/${path}?`)}`, body);
     await load();
-    setNotice("已保存");
   }
   if (!d)
     return (
@@ -457,9 +622,22 @@ function Case({ cid, user }) {
     ["暂计经营（未核实）", sum.included],
   ];
   return (
-    <main>
+    <main className="case-page">
       <a className="back" href="/">
-        ← 返回客户档案
+        <svg
+          viewBox="0 0 16 16"
+          width="13"
+          height="13"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M9.5 3.5 5 8l4.5 4.5" />
+        </svg>
+        返回客户档案
       </a>
       <div className="page-title">
         <div>
@@ -470,13 +648,21 @@ function Case({ cid, user }) {
             {new Date(d.customer.created).toLocaleDateString("zh-CN")}
           </p>
         </div>
-        <span className={`badge ${d.busy ? "amber" : ""}`}>
-          {d.busy
-            ? "后台处理中"
-            : d.submitted_current
-              ? "已提交复核"
-              : "待核对"}
-        </span>
+        <div className="case-facts">
+          <span className={`badge ${d.busy ? "amber" : ""}`}>
+            {d.busy
+              ? "后台处理中"
+              : d.submitted_current
+                ? "已提交复核"
+                : "待核对"}
+          </span>
+          <span>
+            <strong>{d.docs.length}</strong> 份资料
+          </span>
+          <span>
+            <strong>{d.row_count}</strong> 笔交易
+          </span>
+        </div>
       </div>
       <div className="steps">
         {[
@@ -498,11 +684,6 @@ function Case({ cid, user }) {
       {error && (
         <p className="error" role="alert">
           {error}
-        </p>
-      )}
-      {notice && (
-        <p className="success" role="status">
-          {notice}
         </p>
       )}
       {d.jobs.some((j) =>
@@ -688,7 +869,6 @@ function Case({ cid, user }) {
             onSave={(f) => {
               setPage(1);
               setPeriod(Object.fromEntries(f));
-              setNotice("");
             }}
             key={range || "initial"}
           >
@@ -1482,4 +1662,9 @@ function Admin() {
     </main>
   );
 }
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(
+  <>
+    <App />
+    <ToastHost />
+  </>,
+);

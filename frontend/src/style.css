@@ -221,3 +221,254 @@ table th{background:var(--ql-surface-2);letter-spacing:.08em}
 .rail-link.active .rail-link-icon{opacity:1;color:#e6c39d}
 .rail-collapsed .rail-link-icon{width:20px;height:20px}
 .sku-price small{font-size:12px;color:var(--ql-muted);font-family:"PingFang SC","Microsoft YaHei",sans-serif;font-weight:400;margin-left:4px}
+
+/* —— 2026-11 紧凑工作台：更小的壳层、SVG 控件、toast、订单恢复 —— */
+:root{--ql-rail:232px;--ql-rail-collapsed:68px;--ql-content:1120px}
+body{background:var(--ql-paper);color:var(--ql-ink)}
+.workspace>aside.rail{padding:17px 13px}
+.workspace>aside.rail .brand-name{font-size:25px}
+.rail-toggle{width:28px;height:28px;border-radius:4px;display:grid;place-items:center}
+.rail-toggle svg,.topbar-toggle svg{display:block}
+.rail-nav{margin-top:24px;gap:16px}
+.rail-link{padding:8px 10px;gap:10px;font-size:13px}
+.rail-group-label{margin-left:10px}
+.topbar{height:48px;padding:0 22px}
+.topbar-toggle{width:28px;height:28px;border:1px solid transparent;border-radius:4px;display:grid;place-items:center;color:var(--ql-muted)}
+.topbar-toggle:hover{border-color:var(--ql-line);background:var(--ql-surface-2);color:var(--ql-forest)}
+.topbar-collapsed .topbar{height:34px}
+.page-wrap{padding:22px 28px 38px}
+.page-wrap>main{padding:0}
+main{max-width:var(--ql-content)}
+.page-title{margin-bottom:16px;align-items:flex-end}
+.page-title h1{font-size:clamp(24px,2.6vw,30px);margin-bottom:5px}
+.page-title .eyebrow{margin-bottom:7px}
+.page-title .muted{font-size:13px;line-height:1.65}
+.back{margin-bottom:9px;font-size:12px;color:var(--ql-muted)}
+.card{padding:20px;margin-bottom:14px;border-radius:2px}
+.card+.card{margin-top:14px}
+.card h2{font-size:17px;margin-bottom:12px}
+.card p{margin-bottom:10px}
+.section-title{margin-bottom:14px}
+.section-title p{margin-bottom:0;font-size:12px}
+.steps{margin-bottom:14px;border-radius:2px}
+.steps button{padding:11px 14px;font-size:12px}
+.steps span{width:21px;height:21px;margin-right:9px;font-size:10px}
+.toolbar{margin-bottom:12px;gap:9px}
+.table-wrap{border-top:1px solid var(--ql-line)}
+td,th{padding:11px 10px}
+.accounting{gap:1px;margin:12px 0}
+.accounting>div{padding:12px 14px}
+.accounting strong{font-size:20px}
+.checkout{padding:18px 20px;gap:20px}
+.checkout h2{font-size:20px;margin-bottom:4px}
+.checkout .eyebrow{margin-bottom:4px}
+.checkout-qr{width:170px;height:170px}
+.checkout-expiry{margin:6px 0 8px;color:var(--ql-muted);font-size:12px;font-variant-numeric:tabular-nums}
+.checkout-expiry strong{color:var(--ql-forest);font-family:"SFMono-Regular",Consolas,monospace;font-size:13px}
+.checkout-expiry-warning{color:var(--ql-alert)}
+.order-resume{padding:2px 0!important;font-size:12px!important;color:var(--ql-copper)!important;border:0!important;background:transparent!important}
+.order-resume:hover{text-decoration:underline}
+.case-page .page-title{margin-bottom:12px}
+.case-page .page-title h1{font-size:clamp(25px,2.7vw,31px)}
+.case-page .steps{margin-bottom:12px}
+
+/* 表单反馈统一走右上角 toast，不再在表单内挤一块提示 */
+.toast-stack{position:fixed;z-index:80;bottom:22px;right:22px;display:grid;gap:7px;width:min(360px,calc(100vw - 28px));pointer-events:none}
+.toast{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;background:#1d3f37;color:#f4f8f3;border-left:3px solid #c89a6b;box-shadow:0 10px 26px rgba(18,33,28,.18);font-size:12.5px;line-height:1.55;animation:ql-toast-in .16s ease-out both}
+.toast svg{flex:0 0 auto;margin-top:1px}
+.toast-error{background:#5a2a24;border-left-color:#e3a08c}
+.toast-info{background:#244a50;border-left-color:#8bc0c2}
+@keyframes ql-toast-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.toast{animation:none}}
+
+@media(max-width:1000px){
+  .page-wrap{padding:18px 20px 32px}
+  .workspace>aside.rail{padding-left:8px;padding-right:8px}
+}
+@media(max-width:680px){
+  .page-wrap{padding:16px 13px 30px}
+  .topbar{height:38px;padding:0 12px}
+  .card{padding:15px 13px}
+  .page-title h1{font-size:23px}
+  .steps button{padding:8px 4px}
+  .steps span{width:18px;height:18px;margin-bottom:4px}
+  .checkout{padding:15px}
+  .checkout-qr{width:150px;height:150px}
+  .toast-stack{bottom:12px;right:10px}
+  .table-wrap table{min-width:760px}
+}
+.back{display:inline-flex;align-items:center;gap:5px}
+.case-facts{display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:flex-end}
+.case-facts>span:not(.badge){display:inline-flex;align-items:baseline;gap:4px;color:var(--ql-muted);font-size:11px;white-space:nowrap}
+.case-facts>span:not(.badge) strong{font-family:"Noto Serif SC",serif;font-size:16px;color:var(--ql-ink);font-weight:600}
+.case-facts>span+span:not(.badge){padding-left:16px;border-left:1px solid var(--ql-line)}
+details>summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{
+  content:"";flex:0 0 auto;width:12px;height:12px;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M6 3l5 5-5 5' fill='none' stroke='%2367736c' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat;
+  transition:transform .15s ease;
+}
+details[open]>summary::before{transform:rotate(90deg)}
+@media(max-width:680px){.case-facts{justify-content:flex-start;gap:10px}.case-facts>span+span:not(.badge){padding-left:10px}}
+
+/* 移动端：侧栏回到顶部横向导航，避免桌面宽度规则把内容压窄 */
+@media(max-width:680px){
+  .workspace{display:block}
+  .workspace>aside.rail,.workspace.rail-collapsed>aside.rail{
+    position:static;width:100%;height:auto;padding:8px 12px;
+    display:flex;flex-direction:row;align-items:center;gap:10px;
+  }
+  .rail-head{flex:0 0 auto;flex-direction:row!important;align-items:center;gap:8px}
+  .rail-toggle{display:none}
+  .workspace>aside.rail .brand-name,.rail-collapsed .brand-name{font-size:20px;white-space:nowrap}
+  .brand-note{display:none}
+  .rail-nav{margin:0;display:flex;flex:1;gap:2px;overflow-x:auto;overflow-y:hidden}
+  .rail-group{display:flex;gap:2px}
+  .rail-group-label{display:none}
+  .rail-link{padding:8px 10px;border-left:0;font-size:12px;white-space:nowrap}
+  .rail-link-text{display:block}
+  .rail-link-icon{width:16px;height:16px}
+  .rail-user{display:none}
+  .workspace .main,.workspace.rail-collapsed .main{margin-left:0;width:100%}
+  .topbar{height:38px;padding:0 12px}
+  .topbar-title{font-size:12px}
+  .page-wrap{padding:14px 12px 28px}
+  .case-facts{justify-content:flex-start;gap:8px}
+  .case-facts>span+span:not(.badge){padding-left:8px}
+  .steps{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .steps button{font-size:11px;padding:7px 2px}
+  .steps span{margin-bottom:3px}
+  .toast-stack{right:10px;bottom:12px;width:calc(100vw - 20px)}
+}
+
+/* 侧栏开关放在顶栏；收起时品牌保持单行 */
+.topbar-sidebar{width:28px;height:28px;padding:0;border:1px solid transparent;border-radius:4px;display:grid;place-items:center;color:var(--ql-forest);background:transparent}
+.topbar-sidebar:hover{border-color:var(--ql-line);background:var(--ql-surface-2)}
+.topbar-copy{gap:8px}
+.workspace.rail-collapsed>aside.rail .brand-name{font-size:16px;letter-spacing:0;white-space:nowrap;text-align:center;width:100%}
+.rail-collapsed .rail-head{justify-content:center;align-items:center}
+@media(max-width:680px){
+  .topbar-sidebar{display:none}
+  .case-page .page-title{align-items:flex-start}
+  .case-page .case-facts{justify-content:flex-start}
+}
+@media(max-width:680px){
+  .workspace.rail-collapsed .rail-link-text{display:block}
+  .workspace.rail-collapsed .rail-link{justify-content:flex-start;padding:8px 10px}
+  .workspace.rail-collapsed .rail-link-icon{width:16px;height:16px}
+  .toast-stack{top:44px;bottom:auto;right:10px}
+}
+@media(max-width:680px){
+  .rail-link{padding:8px 6px;font-size:11px;gap:5px}
+  .rail-link-icon{width:14px;height:14px}
+  .rail-nav{gap:0}
+  .toast-stack{top:78px}
+}
+
+/* 青流品牌 Logo（来自 qingliu-logo-kit） */
+.workspace>aside.rail{background:#153F37}
+.workspace>aside.rail .brand{display:block;min-width:0;line-height:0}
+.brand-logo{display:block;width:min(190px,100%);height:auto;border-radius:4px}
+.brand-mark{display:none;width:36px;height:36px;border-radius:9px}
+.workspace.rail-collapsed>aside.rail .brand-logo{display:none}
+.workspace.rail-collapsed>aside.rail .brand-mark{display:block;margin:0 auto}
+.workspace.rail-collapsed>aside.rail .rail-head{justify-content:center;align-items:center}
+.login .brand{line-height:0;margin-bottom:22px}
+.login-logo{display:block;width:min(230px,100%);height:auto}
+@media(max-width:680px){
+  .workspace>aside.rail .brand-logo{display:none}
+  .workspace>aside.rail .brand-mark{display:block;width:28px;height:28px;border-radius:7px}
+  .workspace>aside.rail .brand{line-height:0}
+  .login-logo{width:180px}
+}
+
+/* —— 青流登录：沿用共同工作台的左品牌 / 右凭证结构 —— */
+.login-page{
+  min-height:100vh;display:grid;grid-template-columns:minmax(440px,1.04fr) minmax(420px,.96fr);
+  background:#F7F8F3;color:var(--ql-ink);
+}
+.login-visual{
+  position:relative;overflow:hidden;display:flex;flex-direction:column;
+  padding:34px 44px 30px;background:#153F37;color:#F4F5EF;
+}
+.login-visual-grid{
+  position:absolute;inset:0;pointer-events:none;opacity:.6;
+  background:
+    linear-gradient(rgba(244,245,239,.055) 1px,transparent 1px) 0 0/64px 64px,
+    linear-gradient(90deg,rgba(244,245,239,.055) 1px,transparent 1px) 0 0/64px 64px;
+}
+.login-visual-ring{
+  position:absolute;width:min(66vw,720px);aspect-ratio:1;border:1px solid rgba(114,169,149,.24);
+  border-radius:50%;right:-24%;bottom:-28%;pointer-events:none;
+}
+.login-visual-ring::before,.login-visual-ring::after{
+  content:"";position:absolute;border-radius:50%;border:1px solid rgba(114,169,149,.13);
+}
+.login-visual-ring::before{inset:12%}
+.login-visual-ring::after{inset:27%}
+.login-visual-top{position:relative;z-index:1}
+.login-visual-logo{display:block;width:min(230px,75%);height:auto;border-radius:5px}
+.login-visual-copy{position:relative;z-index:1;margin:auto 0;max-width:560px;padding:48px 0}
+.login-kicker{margin:0 0 18px;color:#D98B55;font-size:12px;letter-spacing:.22em}
+.login-visual-copy h1{
+  margin:0 0 22px;color:#F4F5EF;font-family:"Noto Serif SC",serif;
+  font-size:clamp(42px,5vw,68px);line-height:1.2;letter-spacing:.01em;font-weight:600;
+}
+.login-visual-copy>p:last-child{margin:0;color:#B8CDC3;font-size:14px;line-height:2}
+.login-visual-foot{position:relative;z-index:1;color:#8FAEA0;font-size:11px;letter-spacing:.08em}
+
+.login-panel{display:flex;align-items:center;justify-content:center;padding:48px 40px;background:
+  radial-gradient(ellipse at 80% 10%,rgba(114,169,149,.10),transparent 45%),
+  #F7F8F3}
+.login-panel-inner{width:min(392px,100%)}
+.login-mobile-brand{display:none}
+.login-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:34px}
+.login-wordmark{font-family:"Noto Serif SC",serif;font-size:15px;letter-spacing:.12em;color:var(--ql-forest)}
+.login-secure{display:inline-flex;align-items:center;gap:4px;color:var(--ql-muted);font-size:11px;white-space:nowrap}
+.login-panel h2{
+  margin:0 0 8px;font-family:"Noto Serif SC",serif;font-size:38px;line-height:1.2;
+  letter-spacing:-.02em;color:var(--ql-ink);
+}
+.login-panel-desc{margin:0 0 26px;color:var(--ql-muted);font-size:13px;line-height:1.7}
+.login-form fieldset{border:0;margin:0;padding:0;min-width:0}
+.login-form .field{gap:7px;margin-bottom:16px}
+.login-form .field>span{font-size:12px;color:var(--ql-muted);font-weight:500}
+.login-input{position:relative;display:flex;align-items:center}
+.login-input>svg{position:absolute;left:13px;color:#8AA097;pointer-events:none}
+.login-input input{
+  width:100%;height:44px;border:1px solid #CCD8D2;border-radius:3px;background:#fff;
+  padding:0 42px 0 39px;color:var(--ql-ink);font-size:14px;outline:none;
+}
+.login-input input::placeholder{color:#A4B3AC}
+.login-input input:focus{border-color:#5E8E7E;box-shadow:0 0 0 1px rgba(94,142,126,.14)}
+.login-eye{
+  position:absolute;right:5px;display:grid;place-items:center;width:34px;height:34px;
+  border:0;background:transparent;color:#8AA097;padding:0;border-radius:2px;
+}
+.login-eye:hover{color:var(--ql-forest);background:transparent}
+.login-options{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 0 22px}
+.login-remember{display:inline-flex;align-items:center;gap:7px;color:var(--ql-muted);font-size:12px;line-height:1.4;cursor:pointer}
+.login-remember input{width:14px;height:14px;accent-color:var(--ql-forest)}
+.login-help{color:var(--ql-muted);font-size:11px;text-align:right}
+.login-submit{
+  width:100%;height:46px;display:flex;align-items:center;justify-content:center;gap:9px;
+  border-radius:3px;font-size:14px;font-weight:600;letter-spacing:.04em;
+}
+.login-submit svg{transition:transform .15s}
+.login-submit:hover svg{transform:translateX(3px)}
+.login-panel-note{margin:22px 0 0;color:#82928A;font-size:11px;line-height:1.75;text-align:center}
+.login-panel-note::before{content:"";display:block;width:26px;height:1px;background:#C5D2CB;margin:0 auto 14px}
+@media(max-width:860px){
+  .login-page{display:block;min-height:100vh;background:
+    radial-gradient(ellipse at 20% 0%,rgba(114,169,149,.12),transparent 50%),#F7F8F3}
+  .login-visual{display:none}
+  .login-panel{min-height:100vh;padding:24px 20px 36px;background:transparent}
+  .login-panel-inner{max-width:400px}
+  .login-mobile-brand{display:block;margin-bottom:34px}
+  .login-mobile-brand img{display:block;width:180px;height:auto}
+  .login-panel-head{margin-bottom:24px}
+  .login-panel h2{font-size:34px}
+  .login-panel-note{margin-top:18px}
+}
+.login-page{padding:0;max-width:none;margin:0}
