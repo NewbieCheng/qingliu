@@ -37,6 +37,7 @@ type App struct {
 	origin string
 	static string
 	slots  chan struct{}
+	wb     wbConfig
 }
 type request struct {
 	w       http.ResponseWriter
@@ -97,7 +98,7 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 		r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
 		q := &request{w: w, r: r, app: a}
 		if c, e := r.Cookie("ql_session"); e == nil {
-			q.session = a.s.one("SELECT s.token,s.csrf,u.id,u.username,u.display,u.role FROM ql_sessions s JOIN ql_users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.active=1", hash([]byte(c.Value)), time.Now().Unix())
+			q.session = a.s.one("SELECT s.token,s.csrf,u.id,u.username,u.display,u.role,w.workbench_user_id,w.service_role,w.email AS wb_email FROM ql_sessions s JOIN ql_users u ON u.id=s.user_id LEFT JOIN ql_workbench_accounts w ON w.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1", hash([]byte(c.Value)), time.Now().Unix())
 			q.user = q.session
 		}
 		public := r.URL.Path == "/api/login" || r.URL.Path == "/health"
@@ -177,6 +178,19 @@ func (a *App) mux() http.Handler {
 		if integer(failure["n"]) >= 5 {
 			bad(429, "尝试次数过多，请15分钟后重试")
 		}
+		// Workbench accounts are the primary identity. A local password remains
+		// as a transition fallback for the accounts created before the move; it
+		// is removed once every operator has a workbench account.
+		if a.wb.Ready() {
+			if session, err := a.wb.login(q.r.Context(), name, pass); err == nil {
+				uid := a.wbUpsertLocalUser(session)
+				a.wbSaveLogin(uid, session)
+				s.exec("DELETE FROM ql_login_failures WHERE failure_key=?", key)
+				a.newSession(q, uid)
+				q.json(Object{"ok": true})
+				return
+			}
+		}
 		u := s.one("SELECT * FROM ql_users WHERE username=? AND active=1", name)
 		// Dummy bcrypt work also runs for an unknown account.
 		hashed := []byte("$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy")
@@ -189,15 +203,91 @@ func (a *App) mux() http.Handler {
 			bad(401, "账号或密码不正确")
 		}
 		s.exec("DELETE FROM ql_login_failures WHERE failure_key=?", key)
-		s.exec("DELETE FROM ql_sessions WHERE expires<?", time.Now().Unix())
-		token, csrf := id()+id(), id()+id()
-		s.exec("INSERT INTO ql_sessions VALUES(?,?,?,?)", hash([]byte(token)), u["id"], csrf, time.Now().Add(8*time.Hour).Unix())
-		http.SetCookie(q.w, &http.Cookie{Name: "ql_session", Value: token, Path: "/", HttpOnly: true, Secure: a.secure, SameSite: http.SameSiteLaxMode, MaxAge: 28800})
-		s.event(str(u, "id"), "", "login", "")
+		a.newSession(q, str(u, "id"))
 		q.json(Object{"ok": true})
 	}))
 	m.HandleFunc("GET /api/me", a.route(func(q *request) {
-		q.json(Object{"user": Object{"id": q.user["id"], "username": q.user["username"], "display": q.user["display"], "role": q.user["role"]}, "csrf": q.session["csrf"]})
+		q.json(Object{
+			"user": Object{
+				"id": q.user["id"], "username": q.user["username"], "display": q.user["display"], "role": q.user["role"],
+				"service_code": "qingliu", "service_role": q.user["service_role"],
+				"workbench_user_id": q.user["workbench_user_id"], "email": q.user["wb_email"],
+				"workbench_linked": integer(q.user["workbench_user_id"]) > 0,
+			},
+			"csrf": q.session["csrf"],
+		})
+	}))
+	m.HandleFunc("GET /api/billing/skus", a.route(func(q *request) {
+		if !a.wb.Ready() {
+			bad(503, "尚未接入工作台")
+		}
+		status, data, err := a.wb.do(q.r.Context(), http.MethodGet, "/api/v1/payment/skus?service_code=qingliu", nil, "")
+		if err != nil {
+			bad(503, err.Error())
+		}
+		if status != http.StatusOK {
+			bad(status, wbMessage(data, "套餐加载失败"))
+		}
+		q.json(wbPayload(data))
+	}))
+	m.HandleFunc("POST /api/billing/orders", a.route(func(q *request) {
+		b := q.body()
+		status, data, err := a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodPost, "/api/v1/payment/orders", Object{"sku_code": str(b, "sku_code"), "service_code": "qingliu"})
+		if err != nil {
+			bad(503, err.Error())
+		}
+		if status < 200 || status >= 300 {
+			bad(status, wbMessage(data, "下单失败"))
+		}
+		q.json(wbPayload(data))
+	}))
+	m.HandleFunc("GET /api/billing/orders", a.route(func(q *request) {
+		path := "/api/v1/payment/orders"
+		if raw := q.r.URL.RawQuery; raw != "" {
+			path += "?" + raw
+		}
+		status, data, err := a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodGet, path, nil)
+		if err != nil {
+			bad(503, err.Error())
+		}
+		if status != http.StatusOK {
+			bad(status, wbMessage(data, "订单加载失败"))
+		}
+		q.json(wbPayload(data))
+	}))
+	m.HandleFunc("GET /api/billing/orders/{order_no}", a.route(func(q *request) {
+		status, data, err := a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodGet, "/api/v1/payment/orders/"+q.r.PathValue("order_no"), nil)
+		if err != nil {
+			bad(503, err.Error())
+		}
+		if status != http.StatusOK {
+			bad(status, wbMessage(data, "订单不存在"))
+		}
+		q.json(wbPayload(data))
+	}))
+	m.HandleFunc("GET /api/billing/balance", a.route(func(q *request) {
+		status, data, err := a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodGet, "/api/v1/account/balance", nil)
+		if err != nil {
+			bad(503, err.Error())
+		}
+		if status != http.StatusOK {
+			bad(status, wbMessage(data, "余额加载失败"))
+		}
+		q.json(wbPayload(data))
+	}))
+	m.HandleFunc("GET /api/billing/ledgers", a.route(func(q *request) {
+		path := "/api/v1/account/ledgers"
+		if raw := q.r.URL.RawQuery; raw != "" {
+			path += "?" + raw
+		}
+		status, data, err := a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodGet, path, nil)
+		if err != nil {
+			bad(503, err.Error())
+		}
+		if status != http.StatusOK {
+			bad(status, wbMessage(data, "流水加载失败"))
+		}
+		q.json(wbPayload(data))
 	}))
 	m.HandleFunc("POST /api/logout", a.route(func(q *request) {
 		s.exec("DELETE FROM ql_sessions WHERE token=?", q.session["token"])
@@ -206,10 +296,21 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("POST /api/password", a.route(func(q *request) {
 		b := q.body()
-		u := s.one("SELECT password FROM ql_users WHERE id=?", q.user["id"])
-		require(bcrypt.CompareHashAndPassword([]byte(str(u, "password")), []byte(str(b, "current_password"))) == nil, "当前密码不正确")
 		p := str(b, "new_password")
 		require(len(p) >= 10 && len(p) <= 72, "密码须为10至72字节")
+		if integer(q.user["workbench_user_id"]) > 0 {
+			status, data, err := a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodPost, "/api/v1/auth/password", Object{
+				"current_password": str(b, "current_password"), "new_password": p,
+			})
+			if err != nil || status != http.StatusOK {
+				bad(400, wbMessage(data, "当前密码不正确"))
+			}
+			s.event(str(q.user, "id"), "", "change_password", "workbench")
+			q.json(Object{"ok": true})
+			return
+		}
+		u := s.one("SELECT password FROM ql_users WHERE id=?", q.user["id"])
+		require(bcrypt.CompareHashAndPassword([]byte(str(u, "password")), []byte(str(b, "current_password"))) == nil, "当前密码不正确")
 		h, e := bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
 		must(e)
 		s.exec("UPDATE ql_users SET password=? WHERE id=?", string(h), q.user["id"])
@@ -512,6 +613,24 @@ func (a *App) mux() http.Handler {
 			q.json(Object{"id": jid})
 		})
 	}))
+	m.HandleFunc("GET /api/clients/{cid}/ai-analysis", a.route(func(q *request) {
+		cid := q.access()
+		q.json(Object{"items": a.latestAIAnalyses(cid, 10)})
+	}))
+	m.HandleFunc("POST /api/clients/{cid}/ai-analysis", a.route(func(q *request) {
+		q.edit(func(cid string) {
+			b := q.body()
+			docID := str(b, "document_id")
+			if docID == "" {
+				latest := s.one("SELECT id FROM ql_documents WHERE customer_id=? ORDER BY created DESC,id DESC LIMIT 1", cid)
+				require(latest != nil, "请先上传资料")
+				docID = str(latest, "id")
+			}
+			row := a.startAIAnalysis(str(q.user, "id"), cid, docID)
+			require(row != nil, "资料不存在")
+			q.json(Object{"ok": true, "analysis": row})
+		})
+	}))
 	m.HandleFunc("POST /api/clients/{cid}/retry/{jid}", a.route(func(q *request) {
 		q.edit(func(cid string) {
 			j := s.one("SELECT * FROM ql_jobs WHERE id=? AND customer_id=?", q.r.PathValue("jid"), cid)
@@ -590,7 +709,7 @@ func (a *App) mux() http.Handler {
 			http.FileServer(http.Dir(a.static)).ServeHTTP(q.w, q.r)
 			return
 		}
-		if path != "/" && path != "/login" && !strings.HasPrefix(path, "/clients/") && path != "/admin" {
+		if path != "/" && path != "/login" && !strings.HasPrefix(path, "/clients/") && path != "/admin" && path != "/recharge" && path != "/profile" {
 			bad(404, "页面不存在")
 		}
 		http.ServeFile(q.w, q.r, filepath.Join(a.static, "index.html"))
@@ -664,7 +783,7 @@ func main() {
 	if _, e = os.Stat(filepath.Join(static, "index.html")); e != nil {
 		log.Fatal("找不到 React 构建产物")
 	}
-	a := &App{s, secure, origin, static, make(chan struct{}, 4)}
+	a := &App{s: s, secure: secure, origin: origin, static: static, slots: make(chan struct{}, 4), wb: loadWBConfig()}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	workerDone := make(chan struct{})

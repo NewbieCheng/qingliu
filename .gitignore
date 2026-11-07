@@ -11,3 +11,7 @@ data/
 Thumbs.db
 .idea/
 .vscode/
+
+# build artifacts
+node_modules/
+bin/
