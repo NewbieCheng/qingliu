@@ -146,10 +146,16 @@ func sub(o Object, key string) Object {
 }
 
 func bytesOf(value any) []byte {
-	if raw, ok := value.([]byte); ok {
+	switch raw := value.(type) {
+	case []byte:
 		return raw
+	case string:
+		// Store.query normalizes every []byte column to string; VARBINARY
+		// token columns therefore arrive here as string, not []byte.
+		return []byte(raw)
+	default:
+		return nil
 	}
-	return nil
 }
 
 func wbPayload(data Object) any {
