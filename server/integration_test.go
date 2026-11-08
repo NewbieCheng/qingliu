@@ -148,7 +148,7 @@ func TestMySQLWorkflow(t *testing.T) {
 	if code, _, _ := sales.req("POST", base+"/ownership", Object{}); code != 409 {
 		t.Fatal("busy mutation allowed")
 	}
-	if !runOne(context.Background(), s) {
+	if !runOne(context.Background(), s, a) {
 		t.Fatal("no task")
 	}
 	rows := s.rows(cid)
@@ -172,7 +172,7 @@ func TestMySQLWorkflow(t *testing.T) {
 		t.Fatal("sales issued formal")
 	}
 	reviewer.post(base+"/report"+rangeQuery, Object{"stage": "formal", "attest": true, "statement": "已对照合成原件"})
-	if !runOne(context.Background(), s) {
+	if !runOne(context.Background(), s, a) {
 		t.Fatal("no report task")
 	}
 	job := s.one("SELECT * FROM ql_jobs WHERE customer_id=? AND kind='report' ORDER BY seq DESC LIMIT 1", cid)
@@ -195,7 +195,7 @@ func TestMySQLWorkflow(t *testing.T) {
 		}
 	}
 	s.exec("UPDATE ql_jobs SET status='queued' WHERE id=?", job["id"])
-	runOne(context.Background(), s)
+	runOne(context.Background(), s, a)
 	if integer(s.one("SELECT COUNT(*) n FROM ql_reports WHERE customer_id=?", cid)["n"]) != 1 {
 		t.Fatal("duplicate report on recovery")
 	}

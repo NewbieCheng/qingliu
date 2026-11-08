@@ -47,8 +47,8 @@ type wbSession struct {
 	User         Object
 }
 
-func (c wbConfig) login(ctx context.Context, email, password string) (wbSession, error) {
-	body := Object{"email": email, "password": password, "service_code": "qingliu"}
+func (c wbConfig) login(ctx context.Context, email, password string, mode int) (wbSession, error) {
+	body := Object{"email": email, "password": password, "service_code": "qingliu", "login_mode": loginModeName(mode)}
 	status, data, err := c.do(ctx, http.MethodPost, "/api/v1/service/auth/login", body, "")
 	if err != nil {
 		return wbSession{}, err
@@ -57,6 +57,43 @@ func (c wbConfig) login(ctx context.Context, email, password string) (wbSession,
 		return wbSession{}, errors.New(wbMessage(data, "账号或密码不正确"))
 	}
 	return parseWBSession(data)
+}
+
+// loginModeName maps the qingliu login tab to the workbench login mode.
+// 1 = personal, 2 = enterprise (teams/companies provisioned in the workbench).
+func loginModeName(mode int) string {
+	if mode == 2 {
+		return "enterprise"
+	}
+	return "personal"
+}
+
+// register signs a new personal identity up on the workbench with the shared
+// invite code. The service secret stays server-side.
+func (c wbConfig) register(ctx context.Context, body Object) (wbSession, error) {
+	status, data, err := c.do(ctx, http.MethodPost, "/api/v1/service/auth/register", body, "")
+	if err != nil {
+		return wbSession{}, err
+	}
+	if status != http.StatusCreated && status != http.StatusOK {
+		return wbSession{}, errors.New(wbMessage(data, "注册失败"))
+	}
+	return parseWBSession(data)
+}
+
+// verifyCode proxies one-time-code issuance (registration / reset) so the
+// browser never talks to the workbench directly.
+func (c wbConfig) verifyCode(ctx context.Context, body Object) (int, Object, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/auth/verification-codes", body, "")
+}
+
+// captcha proxies the workbench captcha challenge used before issuing codes.
+func (c wbConfig) captcha(ctx context.Context, kind string) (int, Object, error) {
+	path := "/api/v1/auth/captcha"
+	if kind != "" {
+		path += "?type=" + kind
+	}
+	return c.do(ctx, http.MethodGet, path, nil, "")
 }
 
 func (c wbConfig) refresh(ctx context.Context, refreshToken string) (wbSession, error) {

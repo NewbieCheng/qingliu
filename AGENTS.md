@@ -62,6 +62,12 @@ frontend/src/
 - 客户原始资料/报告落盘前使用现有 `VAULT_KEY` 认证加密；不要绕过 Store 自己写文件。
 - 数据库结构变更要版本化；目前 `schema.sql` 是 `CREATE TABLE IF NOT EXISTS` 启动建表，不能直接改线上表后不回写。
 
+## 本地 Go 构建
+
+- 本机 `C:\Users\<user>\AppData\Local\go-build` 可能不可写，构建/测试请把缓存指到工作区内：
+  `GOCACHE=$PWD/.gocache GOTMPDIR=$PWD/.gotmp GOPATH=$PWD/.gopath TMP=$PWD/.gotmp TEMP=$PWD/.gotmp go test ./...`
+- Windows 下 `syscall.Umask` 不可用，权限收紧走 `umask_windows.go`；不要把它加回 `main.go`。
+
 ## 文档索引
 
 | 文档 | 内容 |

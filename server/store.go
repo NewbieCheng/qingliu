@@ -192,6 +192,35 @@ func (s *Store) allowed(user Object, cid string) bool {
 	}
 	return str(user, "role") == "admin" || s.one("SELECT customer_id FROM ql_grants WHERE customer_id=? AND user_id=?", cid, user["id"]) != nil
 }
+
+// jobProgress records the human-facing stage and percentage of a running
+// background job. Progress is display-only: it never drives billing, access or
+// report state, and it is re-derived from DB status after a restart.
+func (s *Store) jobProgress(jid, stage, message string, progress int) {
+	if progress < 0 {
+		progress = 0
+	}
+	if progress > 99 {
+		progress = 99
+	}
+	s.exec("UPDATE ql_jobs SET stage=?,message=?,progress=? WHERE id=?", stage, message, progress, jid)
+}
+
+// parsePercent maps a page counter to the 5..95 band reserved for the local
+// parse step. The remaining 5 percent is the write/commit phase.
+func parsePercent(page, total int) int {
+	if total <= 0 {
+		return 10
+	}
+	if page < 1 {
+		page = 1
+	}
+	if page > total {
+		page = total
+	}
+	return 5 + (page*90)/total
+}
+
 func (s *Store) busy(cid string) bool {
 	return s.one("SELECT id FROM ql_jobs WHERE customer_id=? AND status IN ('queued','running') LIMIT 1", cid) != nil
 }

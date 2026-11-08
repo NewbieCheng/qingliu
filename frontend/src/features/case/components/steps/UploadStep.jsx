@@ -10,7 +10,7 @@ export function UploadStep({ data, onUpload, onNext }) {
     <section className="card">
       <SectionTitle
         title="上传客户资料"
-        description="PDF、CSV 或 XLSX；每批最多10份，单份30MB，整批64MB。PDF最多500页。"
+        description="PDF、CSV 或 XLSX；每批最多10份，单份30MB，整批60MB。PDF最多500页。上传后可在任务列表查看解析进度。"
       />
       <Form onSave={async (form) => onUpload(form)}>
         <Field label="资料来源">

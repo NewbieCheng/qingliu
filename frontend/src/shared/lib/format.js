@@ -31,3 +31,13 @@ export function formatFileSize(bytes) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
+
+// 浏览器安全的随机 ID：优先用 Web Crypto，旧环境退化为时间戳+随机数。
+export function randomId(prefix = "id") {
+  const webCrypto = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
+  const random =
+    webCrypto && typeof webCrypto.randomUUID === "function"
+      ? webCrypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}-${random}`;
+}

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func workerLoop(ctx context.Context, s *Store) {
+func workerLoop(ctx context.Context, s *Store, app *App) {
 	conn, e := s.db.Conn(ctx)
 	if e != nil {
 		if ctx.Err() == nil {
@@ -41,7 +41,7 @@ func workerLoop(ctx context.Context, s *Store) {
 	}
 	defer conn.ExecContext(context.Background(), "SELECT RELEASE_LOCK('qingliu:worker')")
 	// Only the holder of the database-wide worker lock may recover interrupted jobs.
-	s.exec("UPDATE ql_jobs SET status='queued',message='重启后恢复处理' WHERE status='running'")
+	s.exec("UPDATE ql_jobs SET status='queued',message='重启后恢复处理',progress=0,stage='queued' WHERE status='running'")
 	for ctx.Err() == nil {
 		if e = conn.PingContext(ctx); e != nil {
 			if ctx.Err() == nil {
@@ -49,7 +49,7 @@ func workerLoop(ctx context.Context, s *Store) {
 			}
 			return
 		}
-		worked := runOne(ctx, s)
+		worked := runOne(ctx, s, app)
 		if !worked {
 			select {
 			case <-ctx.Done():
@@ -59,7 +59,7 @@ func workerLoop(ctx context.Context, s *Store) {
 		}
 	}
 }
-func runOne(ctx context.Context, s *Store) (worked bool) {
+func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 	var job Object
 	defer func() {
 		if v := recover(); v != nil {
@@ -91,7 +91,7 @@ func runOne(ctx context.Context, s *Store) (worked bool) {
 	unlock, e := s.lock(ctx, "case:"+cid)
 	must(e)
 	defer unlock()
-	s.exec("UPDATE ql_jobs SET status='running',message='正在处理' WHERE id=?", jid)
+	s.jobProgress(jid, "starting", "正在准备处理", 3)
 	user := s.one("SELECT id,role,display FROM ql_users WHERE id=? AND active=1", job["user_id"])
 	if user == nil || !s.allowed(user, cid) {
 		panic(fmt.Errorf("操作账号已失效或没有客户权限"))
@@ -109,7 +109,7 @@ func runOne(ctx context.Context, s *Store) (worked bool) {
 		known := s.one("SELECT id FROM ql_documents WHERE customer_id=? AND sha=?", cid, p["sha"])
 		if known == nil {
 			result, e := parseFile(jobctx, b, str(p, "name"), str(p, "source"), yes(p, "ocr"), func(page, total int) {
-				s.exec("UPDATE ql_jobs SET message=? WHERE id=?", fmt.Sprintf("正在识别 %d / %d 页", page, total), jid)
+				s.jobProgress(jid, "parsing", fmt.Sprintf("正在识别第 %d / %d 页", page, total), parsePercent(page, total))
 			})
 			must(e)
 			did := id()
@@ -128,12 +128,19 @@ func runOne(ctx context.Context, s *Store) (worked bool) {
 			state = "partial"
 			message = "资料已保存，识别未完整通过，请核对提示；未通过的资料不能直接签发正式版本"
 		}
-		s.exec("UPDATE ql_jobs SET status=?,message=? WHERE id=?", state, message, jid)
+		s.exec("UPDATE ql_jobs SET status=?,message=?,stage='done',progress=100 WHERE id=?", state, message, jid)
 		must(os.Remove(path))
+	} else if str(job, "kind") == "ai_analysis" {
+		if app == nil {
+			panic(fmt.Errorf("AI 分析执行器未装配"))
+		}
+		app.runAIAnalysisJob(jobctx, str(user, "id"), cid, p, func(stage, message string, progress int) {
+			s.jobProgress(jid, stage, message, progress)
+		})
 	} else if str(job, "kind") == "report" {
 		existing := s.one("SELECT id FROM ql_reports WHERE job_id=?", jid)
 		if existing != nil {
-			s.exec("UPDATE ql_jobs SET status='done',message='报告已保存' WHERE id=?", jid)
+			s.exec("UPDATE ql_jobs SET status='done',message='报告已保存',stage='done',progress=100 WHERE id=?", jid)
 			return true
 		}
 		d := s.caseData(cid, str(p, "source"), str(p, "start"), str(p, "end"))
@@ -148,9 +155,9 @@ func runOne(ctx context.Context, s *Store) (worked bool) {
 				panic(fmt.Errorf("复核条件已变化，请重新提交"))
 			}
 		}
-		s.exec("UPDATE ql_jobs SET message='正在生成PDF、Excel与报告快照' WHERE id=?", jid)
+		s.jobProgress(jid, "rendering", "正在生成PDF、Excel与报告快照", 60)
 		must(generateReport(s, cid, jid, d, p))
-		s.exec("UPDATE ql_jobs SET status='done',message='报告已保存，可下载' WHERE id=?", jid)
+		s.exec("UPDATE ql_jobs SET status='done',message='报告已保存，可下载',stage='done',progress=100 WHERE id=?", jid)
 	} else {
 		panic(fmt.Errorf("未知任务类型"))
 	}

@@ -40,12 +40,17 @@ export function AIAnalysisPanel({ cid }) {
     return () => window.clearInterval(timer);
   }, [items[0]?.id, items[0]?.status, cid]);
 
-  async function start() {
+  async function start(task) {
     setBusy(true);
     setError("");
     try {
-      await startAnalysis(cid);
-      toast("已提交，AI 正在阅读原件；完成后会显示在这里。", "info");
+      await startAnalysis(cid, task);
+      toast(
+        task === "page_ocr"
+          ? "已提交文档视觉识别，将逐页转写；进度在下方显示。"
+          : "已提交，AI 正在阅读原件；完成后会显示在这里。",
+        "info",
+      );
       await load();
     } catch (requestError) {
       setError(requestError.message);
@@ -76,6 +81,14 @@ export function AIAnalysisPanel({ cid }) {
         >
           {busy ? "提交中…" : "生成 AI 辅助分析"}
         </button>
+        <button
+          className="ghost"
+          disabled={busy}
+          onClick={() => void start("page_ocr")}
+          title="逐页渲染后由视觉模型转写，适合扫描件或图片型流水，页数较多时耗时更长"
+        >
+          文档视觉识别（OCR）
+        </button>
         <button className="ghost" onClick={() => void load()}>
           刷新
         </button>
@@ -89,6 +102,27 @@ export function AIAnalysisPanel({ cid }) {
             </StatusBadge>
             {latest.error ? ` · ${latest.error}` : ""}
           </p>
+          {["uploading", "queued", "running"].includes(latest.status) && (
+            <>
+              <div
+                className="task-progress"
+                role="progressbar"
+                aria-valuenow={Number(latest.progress) || 0}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="AI 分析进度"
+              >
+                <div
+                  className="task-progress-bar"
+                  style={{ width: `${Math.max(0, Math.min(100, Number(latest.progress) || 0))}%` }}
+                />
+              </div>
+              <p className="task-meta">
+                <span>{latest.stage === "running" ? "逐页识别中" : "分析中"}</span>
+                <span>{Number(latest.progress) || 0}%</span>
+              </p>
+            </>
+          )}
           {latest.result?.summary && (
             <p className="ai-summary">{latest.result.summary}</p>
           )}

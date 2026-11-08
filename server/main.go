@@ -101,7 +101,9 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 			q.session = a.s.one("SELECT s.token,s.csrf,u.id,u.username,u.display,u.role,w.workbench_user_id,w.service_role,w.email AS wb_email FROM ql_sessions s JOIN ql_users u ON u.id=s.user_id LEFT JOIN ql_workbench_accounts w ON w.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1", hash([]byte(c.Value)), time.Now().Unix())
 			q.user = q.session
 		}
-		public := r.URL.Path == "/api/login" || r.URL.Path == "/health"
+		public := r.URL.Path == "/api/login" || r.URL.Path == "/api/register" ||
+			r.URL.Path == "/api/auth/captcha" || r.URL.Path == "/api/auth/verification-codes" ||
+			r.URL.Path == "/health"
 		if strings.HasPrefix(r.URL.Path, "/api/") && !public && q.user == nil {
 			bad(401, "请先登录")
 		}
@@ -110,9 +112,9 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 			if origin := r.Header.Get("Origin"); origin != "" && origin != a.origin {
 				bad(403, "请求来源不允许")
 			}
-			if r.URL.Path == "/api/login" {
+			if r.URL.Path == "/api/login" || r.URL.Path == "/api/register" || r.URL.Path == "/api/auth/verification-codes" {
 				if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
-					bad(400, "登录请求格式无效")
+					bad(400, "请求格式无效")
 				}
 			} else {
 				if q.session == nil || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(str(q.session, "csrf"))) != 1 {
@@ -165,7 +167,21 @@ func (a *App) mux() http.Handler {
 	m.HandleFunc("POST /api/login", a.route(func(q *request) {
 		b := q.body()
 		name, pass := strings.TrimSpace(str(b, "username")), str(b, "password")
-		require(len(name) <= 60 && len(pass) <= 72, "账号或密码格式无效")
+		if name == "" {
+			name = strings.TrimSpace(str(b, "email"))
+		}
+		if name == "" {
+			name = strings.TrimSpace(str(b, "phone"))
+		}
+		require(len(name) <= 120 && len(pass) <= 72, "账号或密码格式无效")
+		// 登录模式：1=个人，2=团队。团队账号由工作台后台创建，清流只负责登录。
+		mode := integer(b["login_mode"])
+		if mode == 0 {
+			mode = integer(b["mode"])
+		}
+		if mode != 2 {
+			mode = 1
+		}
 		ip := q.r.RemoteAddr
 		key := hash([]byte(ipHost(ip) + "/" + name))
 		unlock, e := s.lock(q.r.Context(), "login:"+key)
@@ -182,7 +198,7 @@ func (a *App) mux() http.Handler {
 		// as a transition fallback for the accounts created before the move; it
 		// is removed once every operator has a workbench account.
 		if a.wb.Ready() {
-			if session, err := a.wb.login(q.r.Context(), name, pass); err == nil {
+			if session, err := a.wb.login(q.r.Context(), name, pass, int(mode)); err == nil {
 				uid := a.wbUpsertLocalUser(session)
 				a.wbSaveLogin(uid, session)
 				s.exec("DELETE FROM ql_login_failures WHERE failure_key=?", key)
@@ -216,6 +232,59 @@ func (a *App) mux() http.Handler {
 			},
 			"csrf": q.session["csrf"],
 		})
+	}))
+	// 注册相关：验证码与图形验证码都代理到工作台，浏览器不接触 service secret。
+	m.HandleFunc("GET /api/auth/captcha", a.route(func(q *request) {
+		if !a.wb.Ready() {
+			bad(503, "尚未接入工作台")
+		}
+		status, data, err := a.wb.captcha(q.r.Context(), q.r.URL.Query().Get("type"))
+		if err != nil {
+			bad(503, err.Error())
+		}
+		if status != http.StatusOK {
+			bad(status, wbMessage(data, "验证码加载失败"))
+		}
+		q.json(wbPayload(data))
+	}))
+	m.HandleFunc("POST /api/auth/verification-codes", a.route(func(q *request) {
+		if !a.wb.Ready() {
+			bad(503, "尚未接入工作台")
+		}
+		b := q.body()
+		status, data, err := a.wb.verifyCode(q.r.Context(), b)
+		if err != nil {
+			bad(503, err.Error())
+		}
+		if status < 200 || status >= 300 {
+			bad(status, wbMessage(data, "验证码发送失败"))
+		}
+		q.json(wbPayload(data))
+	}))
+	m.HandleFunc("POST /api/register", a.route(func(q *request) {
+		if !a.wb.Ready() {
+			bad(503, "尚未接入工作台")
+		}
+		b := q.body()
+		email := strings.TrimSpace(str(b, "email"))
+		require(email != "", "请填写邮箱")
+		body := Object{
+			"email": email, "phone": strings.TrimSpace(str(b, "phone")),
+			"password": str(b, "password"), "code": strings.TrimSpace(str(b, "code")),
+			"display_name": strings.TrimSpace(str(b, "display_name")),
+			"invite_code":  strings.TrimSpace(str(b, "invite_code")),
+			"service_code": "qingliu",
+		}
+		// 团队注册暂不开放：公司由工作台后台创建，清流只提供团队登录。
+		require(integer(b["login_mode"]) != 2, "团队账号请由管理员在工作台后台创建")
+		session, err := a.wb.register(q.r.Context(), body)
+		if err != nil {
+			bad(400, err.Error())
+		}
+		uid := a.wbUpsertLocalUser(session)
+		a.wbSaveLogin(uid, session)
+		a.newSession(q, uid)
+		q.json(Object{"ok": true})
 	}))
 	m.HandleFunc("GET /api/billing/skus", a.route(func(q *request) {
 		if !a.wb.Ready() {
@@ -391,7 +460,7 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("GET /api/clients/{cid}/jobs", a.route(func(q *request) {
 		cid := q.access()
-		q.json(Object{"jobs": s.query("SELECT id,kind,status,message,created FROM ql_jobs WHERE customer_id=? ORDER BY seq DESC LIMIT 30", cid)})
+		q.json(Object{"jobs": s.query("SELECT id,kind,status,message,progress,stage,created FROM ql_jobs WHERE customer_id=? ORDER BY seq DESC LIMIT 30", cid)})
 	}))
 	m.HandleFunc("POST /api/clients/{cid}/upload", a.route(func(q *request) {
 		q.edit(func(cid string) {
@@ -403,6 +472,17 @@ func (a *App) mux() http.Handler {
 			require(len(files) >= 1 && len(files) <= 10, "每批请选择1至10份文件")
 			source := q.r.FormValue("source")
 			require(validSource(source), "无效来源")
+			// 批次幂等：浏览器生成 batch 键，断网重试同一批次直接回放，不重复建任务。
+			batch := strings.TrimSpace(q.r.FormValue("batch"))
+			if len(batch) > 64 {
+				batch = batch[:64]
+			}
+			if batch != "" {
+				if done := s.one("SELECT payload FROM ql_upload_batches WHERE customer_id=? AND batch=?", cid, batch); done != nil {
+					q.json(obj(str(done, "payload")))
+					return
+				}
+			}
 			payloads := []Object{}
 			paths := []string{}
 			committed := false
@@ -440,15 +520,21 @@ func (a *App) mux() http.Handler {
 			tx, e := s.db.Begin()
 			must(e)
 			defer tx.Rollback()
+			jobIDs := []string{}
 			for _, p := range payloads {
-				_, e = tx.Exec("INSERT INTO ql_jobs(id,customer_id,user_id,kind,status,payload,message) VALUES(?,?,?,'upload','queued',?,'排队等待处理')", p["id"], cid, q.user["id"], js(p))
+				_, e = tx.Exec("INSERT INTO ql_jobs(id,customer_id,user_id,kind,status,payload,message,progress,stage,upload_batch) VALUES(?,?,?,'upload','queued',?,'已进入队列，等待解析',0,'queued',?)", p["id"], cid, q.user["id"], js(p), batch)
 				must(e)
+				jobIDs = append(jobIDs, str(p, "id"))
 			}
 			must(tx.Commit())
 			committed = true
 			s.bump(cid)
 			s.event(str(q.user, "id"), cid, "upload_queued", fmt.Sprint(len(payloads)))
-			q.json(Object{"ok": true})
+			result := Object{"ok": true, "jobs": jobIDs, "batch": batch}
+			if batch != "" {
+				s.exec("INSERT INTO ql_upload_batches(customer_id,batch,payload) VALUES(?,?,?) ON DUPLICATE KEY UPDATE payload=payload", cid, batch, js(result))
+			}
+			q.json(result)
 		})
 	}))
 	m.HandleFunc("POST /api/clients/{cid}/ownership", a.route(func(q *request) {
@@ -626,7 +712,12 @@ func (a *App) mux() http.Handler {
 				require(latest != nil, "请先上传资料")
 				docID = str(latest, "id")
 			}
-			row := a.startAIAnalysis(str(q.user, "id"), cid, docID)
+			// task=page_ocr 时走工作台的「文档视觉识别」，适合扫描件/图片型流水。
+			task := strings.TrimSpace(str(b, "task"))
+			if task != "page_ocr" {
+				task = ""
+			}
+			row := a.startAIAnalysis(str(q.user, "id"), cid, docID, task)
 			require(row != nil, "资料不存在")
 			q.json(Object{"ok": true, "analysis": row})
 		})
@@ -758,7 +849,7 @@ func (s *Store) addUser(name, display, pass, role string) error {
 	return nil
 }
 func main() {
-	syscall.Umask(0077)
+	restrictUmask()
 	s, e := openStore()
 	if e != nil {
 		log.Fatal(e)
@@ -795,7 +886,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	workerDone := make(chan struct{})
-	go func() { defer close(workerDone); workerLoop(ctx, s) }()
+	go func() { defer close(workerDone); workerLoop(ctx, s, a) }()
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
 		addr = "127.0.0.1:8787"

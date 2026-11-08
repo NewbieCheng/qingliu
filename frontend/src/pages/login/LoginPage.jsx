@@ -1,8 +1,11 @@
-import React from "react";
-import { LoginForm } from "@/features/auth/index.js";
+import React, { useState } from "react";
+import { LoginForm, RegisterForm } from "@/features/auth/index.js";
 import { ShieldIcon } from "@/shared/ui/icons.jsx";
 
 export function LoginPage() {
+  const [tab, setTab] = useState("login");
+  const [mode, setMode] = useState(1);
+
   return (
     <main className="login-page">
       <section className="login-visual" aria-hidden="true">
@@ -44,13 +47,71 @@ export function LoginPage() {
               安全登录
             </span>
           </div>
-          <h2>登录</h2>
-          <p className="login-panel-desc">
-            使用工作台账号进入客户资料与流水核对。
-          </p>
-          <LoginForm />
+
+          <div className="login-switch" role="tablist" aria-label="登录或注册">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "login"}
+              className={`login-switch-btn ${tab === "login" ? "is-active" : ""}`}
+              onClick={() => setTab("login")}
+            >
+              登录
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "register"}
+              className={`login-switch-btn ${tab === "register" ? "is-active" : ""}`}
+              onClick={() => setTab("register")}
+            >
+              注册
+            </button>
+          </div>
+
+          {tab === "login" ? (
+            <>
+              <p className="login-panel-desc">
+                使用不加班工作台账号进入客户资料与流水核对。
+              </p>
+              <LoginForm mode={mode} onModeChange={setMode} />
+            </>
+          ) : (
+            <>
+              <p className="login-panel-desc">
+                使用邀请码注册个人账号，注册后可直接登录青流与不加班工作台。
+              </p>
+              <RegisterForm />
+            </>
+          )}
+
           <p className="login-panel-note">
-            账号由「今天不加班」工作台统一管理。登录即表示同意内部资料保密与留痕要求。
+            账号由「今天不加班」工作台统一管理。
+            {tab === "login" ? (
+              <>
+                {" "}
+                还没有账号？
+                <button
+                  type="button"
+                  className="login-inline-link"
+                  onClick={() => setTab("register")}
+                >
+                  立即注册
+                </button>
+              </>
+            ) : (
+              <>
+                {" "}
+                已有账号？
+                <button
+                  type="button"
+                  className="login-inline-link"
+                  onClick={() => setTab("login")}
+                >
+                  返回登录
+                </button>
+              </>
+            )}
           </p>
         </div>
       </section>

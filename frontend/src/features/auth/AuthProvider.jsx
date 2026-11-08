@@ -19,14 +19,30 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
-  const login = useCallback(async (credentials) => {
-    await api("/api/login", credentials);
+  const adoptSession = useCallback(async () => {
     const me = await api("/api/me", undefined, { skipAuthRedirect: true });
     setCsrf(me.csrf);
     window.__qlCsrf = me.csrf;
     setUser(me.user);
     return me.user;
   }, []);
+
+  const login = useCallback(
+    async (credentials) => {
+      await api("/api/login", credentials);
+      return adoptSession();
+    },
+    [adoptSession],
+  );
+
+  // 注册成功后服务端已建立会话，这里只做一次 /api/me 接管。
+  const register = useCallback(
+    async (payload) => {
+      await api("/api/register", payload);
+      return adoptSession();
+    },
+    [adoptSession],
+  );
 
   const logout = useCallback(async () => {
     try {
@@ -67,11 +83,12 @@ export function AuthProvider({ children }) {
       ready,
       rememberedUsername,
       login,
+      register,
       logout,
       refreshSession,
       rememberUsername,
     }),
-    [user, ready, rememberedUsername, login, logout, refreshSession],
+    [user, ready, rememberedUsername, login, register, logout, refreshSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -23,3 +23,9 @@ bin/
 
 # private handover material
 .secrets/
+
+# local Go toolchain caches (workspace builds)
+.gocache/
+.gotmp/
+.gopath/
+*.exe

@@ -1,0 +1,72 @@
+/* 登录/注册与任务进度：沿用深松绿 + 账本纸设计语言。 */
+
+.login-switch{
+  display:inline-flex;gap:2px;padding:3px;margin:0 0 18px;
+  background:#E7EDE6;border:1px solid #D8E1D7;border-radius:4px;
+}
+.login-switch-btn{
+  border:0;background:transparent;border-radius:3px;padding:7px 22px;
+  font-size:13px;color:var(--ql-muted);letter-spacing:.06em;
+}
+.login-switch-btn:hover{background:transparent;color:var(--ql-forest)}
+.login-switch-btn.is-active{background:#fff;color:var(--ql-forest);font-weight:600;box-shadow:0 1px 2px rgba(30,74,64,.10)}
+
+.login-tabs{
+  display:grid;grid-template-columns:1fr 1fr;margin:0 0 8px;
+  border-bottom:1px solid #D8E1D7;
+}
+.login-tab{
+  border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;
+  padding:10px 4px;font-size:13px;color:var(--ql-muted);
+}
+.login-tab:hover{background:transparent;color:var(--ql-forest)}
+.login-tab.is-active{border-bottom-color:var(--ql-forest);color:var(--ql-forest);font-weight:600}
+.login-mode-hint{margin:0 0 18px;color:#82928A;font-size:11.5px;line-height:1.6;min-height:18px}
+
+.login-inline-link{
+  border:0;background:transparent;padding:0 2px;color:var(--ql-forest);
+  font-size:11px;text-decoration:underline;text-underline-offset:3px;
+}
+.login-inline-link:hover{background:transparent}
+.login-register-note{margin:-4px 0 14px;font-size:11.5px}
+.login-code-row{display:flex;align-items:center;gap:8px}
+.login-code-row input{
+  flex:1;min-width:0;height:44px;border:1px solid #CCD8D2;border-radius:3px;
+  background:#fff;padding:0 12px;color:var(--ql-ink);font-size:14px;outline:none;
+}
+.login-code-row input:focus{border-color:#5E8E7E;box-shadow:0 0 0 1px rgba(94,142,126,.14)}
+.login-code-row button{height:44px;padding:0 14px;font-size:12px;white-space:nowrap}
+.login-captcha{
+  flex:0 0 108px;height:44px;padding:0;overflow:hidden;border:1px solid #CCD8D2;
+  border-radius:3px;background:#fff;display:grid;place-items:center;
+}
+.login-captcha img{width:100%;height:100%;object-fit:contain;display:block}
+
+/* 任务进度：真实阶段 + 百分比，不做假动画。 */
+.task-list .task{
+  display:grid;gap:7px;padding:12px 0;font-size:12px;
+  border-top:1px solid #EDF1EC;
+}
+.task-list .task:first-of-type{border-top:0}
+.task-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.task-head>span:first-child{flex:1;min-width:0;overflow-wrap:anywhere}
+.task-progress{
+  position:relative;height:6px;border-radius:3px;overflow:hidden;background:#E7EDE6;
+}
+.task-progress-bar{
+  height:100%;border-radius:3px;background:var(--ql-forest);
+  transition:width .45s ease;
+}
+.task.is-active .task-progress-bar{
+  background:linear-gradient(90deg,#3F7C6B,#1E4A40);
+}
+.task-progress.is-failed{background:#F6E3DF}
+.task-progress.is-failed .task-progress-bar{background:var(--ql-alert)}
+.task-meta{display:flex;justify-content:space-between;color:#82928A;font-size:11px}
+.task.is-active .task-meta>span:last-child{color:var(--ql-forest);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* 原生文件框保留可访问性，视觉上由拖拽区承担。 */
+.upload-native-input{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0;
+}
