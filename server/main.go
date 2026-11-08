@@ -665,7 +665,15 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("GET /api/admin", a.route(func(q *request) {
 		q.admin()
-		q.json(Object{"users": s.query("SELECT id,username,display,role,active FROM ql_users ORDER BY created"), "events": s.query("SELECT e.*,u.display FROM ql_events e LEFT JOIN ql_users u ON e.user_id=u.id ORDER BY e.seq DESC LIMIT 100")})
+		q.json(Object{"users": s.query("SELECT id,username,display,role,active FROM ql_users ORDER BY created")})
+	}))
+	m.HandleFunc("GET /api/admin/audit", a.route(func(q *request) {
+		q.admin()
+		query := parseAuditQuery(q)
+		require(len(query.Search) <= 120, "检索文字过长")
+		result := auditEventsPage(s, query)
+		result["actions"] = auditActionOptions()
+		q.json(result)
 	}))
 	m.HandleFunc("POST /api/admin/users", a.route(func(q *request) {
 		q.admin()

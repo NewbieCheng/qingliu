@@ -227,4 +227,31 @@ func TestMySQLWorkflow(t *testing.T) {
 	if code, _, _ := other.req("GET", "/api/me", nil); code != 401 {
 		t.Fatal("deactivation did not revoke")
 	}
+	// Audit log: service-side pagination, whitelist filtering and access control.
+	if code, _, _ := sales.req("GET", "/api/admin/audit", nil); code != 403 {
+		t.Fatal("non-admin read audit log")
+	}
+	code, page, _ := admin.req("GET", "/api/admin/audit?page=1&page_size=2", nil)
+	if code != 200 || integer(page["count"]) < 1 || len(page["events"].([]any)) > 2 {
+		t.Fatalf("audit page: %d %v", code, page)
+	}
+	if page["page_size"] != float64(2) {
+		t.Fatalf("audit page_size = %v", page["page_size"])
+	}
+	code, filtered, _ := admin.req("GET", "/api/admin/audit?action=login&page_size=1000", nil)
+	if code != 200 || filtered["page_size"] != float64(auditMaxPageSize) {
+		t.Fatalf("audit filter/bound: %d %v", code, filtered)
+	}
+	for _, event := range filtered["events"].([]any) {
+		if str(event.(Object), "action") != "login" || str(event.(Object), "action_label") != "登录" {
+			t.Fatalf("audit filter leak: %v", event)
+		}
+	}
+	_, overview, _ := admin.req("GET", "/api/admin", nil)
+	if _, ok := overview["events"]; ok {
+		t.Fatal("/api/admin still returns unbounded events")
+	}
+	if _, ok := overview["users"]; !ok {
+		t.Fatal("/api/admin missing users")
+	}
 }

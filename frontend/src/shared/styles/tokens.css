@@ -1,0 +1,17 @@
+/* Qingliu design tokens: single source for colors, type, layout and surfaces. */
+:root{
+  --ql-paper:#eef1eb;
+  --ql-ink:#1b2421;
+  --ql-forest:#1e4a40;
+  --ql-forest-deep:#153f37;
+  --ql-copper:#9b6a43;
+  --ql-alert:#b4452f;
+  --ql-warning:#b07a2a;
+  --ql-line:#d5dbd2;
+  --ql-muted:#68746d;
+  --ql-surface:#fbfcf8;
+  --ql-surface-2:#f4f6f0;
+  --ql-rail:232px;
+  --ql-rail-collapsed:68px;
+  --ql-content:1120px;
+}
