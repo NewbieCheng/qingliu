@@ -5,6 +5,11 @@ import { useAuth } from "../context.js";
 import { navigate } from "@/shared/router/index.js";
 import { LoginPassword } from "./LoginPassword.jsx";
 
+// 仅本地开发（vite dev）用：从 frontend/.env.local 读预填账号，构建产物里为空。
+const devUsername = import.meta.env.DEV
+  ? import.meta.env.VITE_DEV_LOGIN_USERNAME || ""
+  : "";
+
 export function LoginForm() {
   const { login, rememberedUsername, rememberUsername } = useAuth();
 
@@ -25,7 +30,7 @@ export function LoginForm() {
           <input
             name="username"
             autoComplete="username"
-            defaultValue={rememberedUsername}
+            defaultValue={rememberedUsername || devUsername}
             required
             maxLength="60"
             placeholder="请输入工作台账号"

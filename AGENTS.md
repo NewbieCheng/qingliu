@@ -94,6 +94,7 @@ npm run dev        # → http://127.0.0.1:5173
 - 代理会改写 `Origin`/`Referer`，并剥掉响应 `Set-Cookie` 的 `Secure`，否则本地登录/保存会被 403、Cookie 也存不住。
 - 换环境只改 `frontend/vite.config.js` 的 `target`，换完必须**重新登录**（旧 token 属于旧库）。
 - 源码热更新即时生效；`frontend/dist` 是交付产物，发布前要重新 `npm run build`。
+- **本地登录预填**：`frontend/.env.local` 里的 `VITE_DEV_LOGIN_USERNAME` / `VITE_DEV_LOGIN_PASSWORD` 只在 `npm run dev`（`import.meta.env.DEV`）时填进登录表单，生产构建里为空（已验证构建产物不含该口令）。该文件命中 `.gitignore` 的 `*.local`，不要提交。
 
 ## 验证基线
 

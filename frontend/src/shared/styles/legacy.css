@@ -89,7 +89,8 @@ footer{border-top:1px solid var(--ql-line);color:var(--ql-muted)}
   width:var(--ql-rail);padding:22px 16px;background:linear-gradient(180deg,#173e36 0%,#122f2a 100%);
   border-right:1px solid rgba(255,255,255,.08);transition:width .18s ease,padding .18s ease;z-index:8;
 }
-.rail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.rail-head{display:flex;align-items:center;justify-content:flex-start;gap:8px}
+.workspace>aside.rail .rail-head>.brand{flex:1 1 auto;min-width:0}
 .workspace>aside.rail .brand{display:flex;flex-direction:column;gap:6px;min-width:0;letter-spacing:.12em}
 .brand-name{font-size:28px;line-height:1.1;font-weight:650}
 .brand-note{font-size:10px;letter-spacing:.14em;color:#9cb9ae;white-space:nowrap;transition:opacity .12s}
@@ -341,8 +342,9 @@ details[open]>summary::before{transform:rotate(90deg)}
 }
 
 /* 侧栏开关放在顶栏；收起时品牌保持单行 */
-.topbar-sidebar{width:28px;height:28px;padding:0;border:1px solid transparent;border-radius:4px;display:grid;place-items:center;color:var(--ql-forest);background:transparent}
-.topbar-sidebar:hover{border-color:var(--ql-line);background:var(--ql-surface-2)}
+.topbar-sidebar{width:26px;height:26px;padding:0;border:1px solid rgba(255,255,255,.22);border-radius:4px;display:grid;place-items:center;color:#dce9e4;background:rgba(255,255,255,.04);flex:0 0 auto}
+.topbar-sidebar:hover{border-color:rgba(255,255,255,.38);background:rgba(255,255,255,.12);color:#fff}
+.topbar-sidebar:focus-visible{outline:2px solid #c79a6b;outline-offset:1px}
 .topbar-copy{gap:8px}
 .workspace.rail-collapsed>aside.rail .brand-name{font-size:16px;letter-spacing:0;white-space:nowrap;text-align:center;width:100%}
 .rail-collapsed .rail-head{justify-content:center;align-items:center}
@@ -366,17 +368,19 @@ details[open]>summary::before{transform:rotate(90deg)}
 
 /* 青流品牌 Logo（来自 qingliu-logo-kit） */
 .workspace>aside.rail{background:#153F37}
-.workspace>aside.rail .brand{display:block;min-width:0;line-height:0}
-.brand-logo{display:block;width:min(190px,100%);height:auto;border-radius:4px}
-.brand-mark{display:none;width:36px;height:36px;border-radius:9px}
+.workspace>aside.rail .brand{display:block;min-width:0;line-height:0;text-align:left}
+.brand-logo{display:block;width:min(190px,100%);height:auto;margin:0;border-radius:4px}
+.brand-mark{display:none;width:32px;height:32px}
 .workspace.rail-collapsed>aside.rail .brand-logo{display:none}
-.workspace.rail-collapsed>aside.rail .brand-mark{display:block;margin:0 auto}
-.workspace.rail-collapsed>aside.rail .rail-head{justify-content:center;align-items:center}
+.workspace.rail-collapsed>aside.rail .brand-mark{display:block;margin:0 auto;width:30px;height:30px}
+.workspace.rail-collapsed>aside.rail .rail-head{justify-content:center;align-items:center;flex-direction:column;gap:6px}
+.workspace.rail-collapsed>aside.rail .rail-head>.brand{flex:0 0 auto}
+.workspace.rail-collapsed>aside.rail .topbar-sidebar{width:24px;height:24px}
 .login .brand{line-height:0;margin-bottom:22px}
 .login-logo{display:block;width:min(230px,100%);height:auto}
 @media(max-width:680px){
   .workspace>aside.rail .brand-logo{display:none}
-  .workspace>aside.rail .brand-mark{display:block;width:28px;height:28px;border-radius:7px}
+  .workspace>aside.rail .brand-mark{display:block;width:28px;height:28px}
   .workspace>aside.rail .brand{line-height:0}
   .login-logo{width:180px}
 }

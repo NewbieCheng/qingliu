@@ -49,7 +49,7 @@ export function Sidebar({
           />
           <img
             className="brand-mark"
-            src="/qingliu-app-icon.svg"
+            src="/qingliu-icon-light.svg"
             alt="青流"
           />
         </Link>
