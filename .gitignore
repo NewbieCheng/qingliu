@@ -16,5 +16,10 @@ Thumbs.db
 node_modules/
 bin/
 
+# local tool caches
+.codegraph/
+.pnpm-store/
+.vite/
+
 # private handover material
 .secrets/

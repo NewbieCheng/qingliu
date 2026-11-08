@@ -31,16 +31,6 @@ export function Sidebar({
   return (
     <aside className="rail">
       <div className="rail-head">
-        <button
-          type="button"
-          className="topbar-sidebar"
-          aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
-          aria-expanded={!collapsed}
-          title={collapsed ? "展开侧边栏" : "收起侧边栏"}
-          onClick={onToggle}
-        >
-          <RailToggleIcon collapsed={collapsed} />
-        </button>
         <Link to="/" className="brand" aria-label="青流工作台">
           <img
             className="brand-logo"
@@ -53,6 +43,16 @@ export function Sidebar({
             alt="青流"
           />
         </Link>
+        <button
+          type="button"
+          className="topbar-sidebar"
+          aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
+          aria-expanded={!collapsed}
+          title={collapsed ? "展开侧边栏" : "收起侧边栏"}
+          onClick={onToggle}
+        >
+          <RailToggleIcon collapsed={collapsed} />
+        </button>
       </div>
       <nav className="rail-nav" aria-label="主导航">
         {NAVIGATION.filter(
