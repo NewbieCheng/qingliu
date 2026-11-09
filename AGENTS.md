@@ -62,7 +62,8 @@ frontend/src/
 - 表单消息统一走 Toast，不要恢复表单内绿色“已保存”或红色原始错误条。
 - Go 侧保持单进程、标准库 `net/http`、MySQL、进程内单执行器；不要引入 Redis、消息中间件或第二个常驻服务。
 - 客户原始资料/报告落盘前使用现有 `VAULT_KEY` 认证加密；不要绕过 Store 自己写文件。
-- 数据库结构变更要版本化；目前 `schema.sql` 是 `CREATE TABLE IF NOT EXISTS` 启动建表，不能直接改线上表后不回写。
+- 数据库结构变更要版本化；目前 `schema.sql` 是 `CREATE TABLE IF NOT EXISTS` 启动建表，不能直接改线上表后不回写。已有库按 `server/migrations/NNN-*.sql` **手动**执行（无独立迁移工具），每个脚本必须可重复执行（用 `information_schema` 判存在），并同步改 `schema.sql`。
+- **给工作台造账号不能只写 `t_user`**：工作台判断「这个账号能用哪个产品」读的是 `t_user_service`（不是 `t_user.service_code`），密码校验只认 `$argon2id`（bcrypt 一律判错）。跨库搬账号时三件事缺一不可：`t_user` + `t_user_service`（`qingliu`/`workbench` 各一条）+ 用 `auth.HashPassword` 重新生成哈希。
 
 ## 本地 Go 构建
 
@@ -87,8 +88,9 @@ frontend/src/
 | [10-本地开发与测试](docs/10-本地开发与测试.md) | 本地 MySQL、测试、浏览器回归 |
 | [11-工作台后台](docs/11-工作台后台.md) | 清流依赖的后台仓库、接口、两套环境与发布 |
 | [12-查询与缓存](docs/12-查询与缓存.md) | 服务端分页、操作记录接口、前端缓存 TTL 与失效策略 |
+| [16-空间与权限投影](docs/16-空间与权限投影.md) | 会话空间、切换接口、工作台权限码投影与角色映射（2026-11 起） |
 
-`docs/部署与交接.md`、`docs/架构核查与迁移.md`、`docs/验收记录.md` 是早期交付记录，冲突处以 README 和 docs/05 为准。
+早期交付记录（`部署与交接.md`、`架构核查与迁移.md`、`验收记录.md`）已于 2026-11-09 删除：内容与 docs/05 和 README 重复，且其中的 Docker 默认、旧环境指向已失效。需要历史时看 git log。
 
 ## 快速启动前端（5173 直连生产）
 

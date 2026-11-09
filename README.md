@@ -50,4 +50,4 @@ curl -fsS http://127.0.0.1:8787/health
 
 ## 旧文档
 
-`docs/部署与交接.md`、`docs/架构核查与迁移.md`、`docs/验收记录.md` 是早期交付记录，仍有参考价值，但其中 Docker 默认、旧品牌名等描述以本 README 和 docs/05 为准。
+早期交付记录（`部署与交接.md`、`架构核查与迁移.md`、`验收记录.md`）已于 2026-11-09 删除：与本 README 和 docs/05 重复，且其中的 Docker 默认、旧品牌名、旧 `WORKBENCH_BASE_URL` 指向均已失效。
