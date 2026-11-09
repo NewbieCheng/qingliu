@@ -20,6 +20,9 @@ export const ROLES = {
   admin: "管理员",
   sales: "业务员",
   reviewer: "复核员",
+  // 工作台 `enterprise_member_readonly` 等只读档位会落到这里（见 server/permissions.go）。
+  // 改造前它们被降级成 sales，界面还写着「业务员」，与实际权限不符。
+  readonly: "只读成员",
 };
 
 export const DOCUMENT_STATUS = {

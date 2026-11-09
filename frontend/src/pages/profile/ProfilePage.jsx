@@ -7,7 +7,7 @@ import { toast } from "@/shared/ui/toast-api.js";
 import { ROLES } from "@/shared/lib/constants.js";
 import { Link, navigate } from "@/shared/router/index.js";
 import { invalidateProfile, queryProfile } from "@/app/queries/index.js";
-import { changePassword, logout } from "@/features/profile/index.js";
+import { changePassword, logout, SpaceCard } from "@/features/profile/index.js";
 
 export function ProfilePage() {
   const [me, setMe] = useState(null);
@@ -93,6 +93,9 @@ export function ProfilePage() {
           </FormRow>
         )}
       </section>
+      {/* 一个人可以同时属于企业空间与自己的个人空间；切换入口只在会员关系
+          多于一个时才有意义，因此由 SpaceCard 自己决定是否显示提示。 */}
+      <SpaceCard />
       <section className="card">
         <SectionTitle
           title="修改密码"

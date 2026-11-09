@@ -268,18 +268,18 @@ func (a *App) wbSaveLogin(userID string, session wbSession) {
 	user := session.User
 	email := str(user, "email")
 	display := str(user, "display_name")
-	role := str(user, "service_role")
-	if role != "admin" && role != "sales" && role != "reviewer" {
-		role = "sales"
-	}
+	serviceRole := str(user, "service_role")
+	// 权限快照（见 server/permissions.go）：优先用工作台真的返回的权限码，
+	// 没有时按服务角色映射。存下来之后，判定不再依赖「三条字符串」。
+	codes := loginPermissions(serviceRole, strList(user["permissions"]))
 	wbID := integer(user["user_id"])
 	a.s.exec(`INSERT INTO ql_workbench_accounts
- (user_id,workbench_user_id,email,display_name,service_role,access_token,refresh_token,token_expires)
- VALUES(?,?,?,?,?,?,?,?)
+ (user_id,workbench_user_id,email,display_name,service_role,access_token,refresh_token,token_expires,permissions)
+ VALUES(?,?,?,?,?,?,?,?,?)
  ON DUPLICATE KEY UPDATE workbench_user_id=VALUES(workbench_user_id),email=VALUES(email),
  display_name=VALUES(display_name),service_role=VALUES(service_role),access_token=VALUES(access_token),
- refresh_token=VALUES(refresh_token),token_expires=VALUES(token_expires)`,
-		userID, wbID, email, display, role, a.s.seal([]byte(session.AccessToken)), a.s.seal([]byte(session.RefreshToken)), session.ExpiresAt.Unix())
+ refresh_token=VALUES(refresh_token),token_expires=VALUES(token_expires),permissions=VALUES(permissions)`,
+		userID, wbID, email, display, serviceRole, a.s.seal([]byte(session.AccessToken)), a.s.seal([]byte(session.RefreshToken)), session.ExpiresAt.Unix(), js(codes))
 }
 
 // wbUpsertLocalUser reuses an existing ql_users row with the same email so
@@ -294,10 +294,10 @@ func (a *App) wbUpsertLocalUser(session wbSession) string {
 	if display == "" {
 		display = email
 	}
-	role := str(user, "service_role")
-	if role != "admin" && role != "sales" && role != "reviewer" {
-		role = "sales"
-	}
+	// 与服务角色同名落库：role 列已降级为「默认值/显示标签」（见 localRole）。
+	// 原先是「三档之外一律 sales」，让只读成员拿到了写权限；这里保持原始
+	// 服务角色，判定交给权限快照。
+	role := localRole(str(user, "service_role"))
 	tenant := integer(user["tenant_id"])
 	// 默认团队「今天不加班」承接既有管理员：工作台上还没有租户的管理员账号
 	// 首次登录清流时落到 team 1，避免管理员的资料散落在个人空间。
@@ -329,7 +329,14 @@ func (a *App) wbAccount(userID string) Object {
 func (a *App) newSession(q *request, userID string) {
 	a.s.exec("DELETE FROM ql_sessions WHERE expires<?", time.Now().Unix())
 	token, csrf := id()+id(), id()+id()
-	a.s.exec("INSERT INTO ql_sessions VALUES(?,?,?,?)", hash([]byte(token)), userID, csrf, time.Now().Add(8*time.Hour).Unix())
+	// 空间默认取用户的主身份空间：新会话先落在「我的默认空间」，
+	// 之后由 POST /api/switch-space 改写（见 migrations/004）。
+	// 显式列名而不是 VALUES(?..)：设了默认值的列不该靠表顺序撞运气。
+	home := 0
+	if row := a.s.one("SELECT tenant_id FROM ql_users WHERE id=?", userID); row != nil {
+		home = int(integer(row["tenant_id"]))
+	}
+	a.s.exec("INSERT INTO ql_sessions(token,user_id,csrf,expires,tenant_id) VALUES(?,?,?,?,?)", hash([]byte(token)), userID, csrf, time.Now().Add(8*time.Hour).Unix(), home)
 	http.SetCookie(q.w, &http.Cookie{Name: "ql_session", Value: token, Path: "/", HttpOnly: true, Secure: a.secure, SameSite: http.SameSiteLaxMode, MaxAge: 28800})
 	a.s.event(userID, "", "login", "")
 }
@@ -496,4 +503,22 @@ func (a *App) tenantName(ctx context.Context, user Object) string {
 	a.tenantNames[integer(user["tenant_id"])] = name
 	a.tenantMu.Unlock()
 	return name
+}
+
+// localRole 把工作台的服务角色收敛到清流的**粗粒度** role 列。
+//
+// 它现在只是一个「默认值 / 显示用标签」：真正的判定读权限快照
+// （见 server/permissions.go）。认不出的角色落到 readonly 而不是 sales
+// —— 「三档之外一律 sales」正是「只读成员能改资料」这个缺陷的来源。
+func localRole(serviceRole string) string {
+	switch serviceRole {
+	case "admin", "sales", "reviewer":
+		return serviceRole
+	case "enterprise_member_readonly":
+		return "reviewer"
+	case "":
+		return "readonly"
+	default:
+		return "readonly"
+	}
 }

@@ -2,7 +2,7 @@ import { cacheQuery, dropCache } from "@/shared/api/cache.js";
 import { listClients } from "@/features/clients/api.js";
 import { getAdminOverview, listAuditEvents } from "@/features/admin/api.js";
 import { getBalance } from "@/features/billing/api.js";
-import { getProfile } from "@/features/profile/api.js";
+import { getProfile, listSpaces } from "@/features/profile/api.js";
 
 const TTL = {
   me: 60_000,
@@ -47,6 +47,14 @@ export function queryBalance({ force = false } = {}) {
   return cacheQuery(getBalance, { key: "billing:balance", ttlMs: TTL.balance, force });
 }
 
+/**
+ * 可切换的空间列表。缓存很短：成员关系被工作台改动后，
+ * 这里最多 15 秒就会刷新出来。
+ */
+export function querySpaces({ force = false } = {}) {
+  return cacheQuery(listSpaces, { key: "profile:spaces", ttlMs: TTL.adminUsers, force });
+}
+
 export function invalidateClients() {
   dropCache("clients:");
 }
@@ -61,4 +69,15 @@ export function invalidateBalance() {
 
 export function invalidateProfile() {
   dropCache("profile:me");
+  dropCache("profile:spaces");
+}
+
+/**
+ * 切换空间后必须清空**全部**业务缓存。
+ *
+ * 空间换了，客户列表、余额、操作记录、团队与个人资料都换了视角；
+ * 只清 profile 会让首页继续显示上一个空间的客户 —— 那是比报错更糟的越权感。
+ */
+export function invalidateAll() {
+  dropCache("");
 }

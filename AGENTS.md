@@ -7,10 +7,10 @@
 | 环境 | 清流前端 | 工作台后端（`WORKBENCH_BASE_URL`） | 服务器 | 数据库 |
 |---|---|---|---|---|
 | **生产** | `https://qingliu.bujiaban.top` | `https://worker.bujiaban.top` | `115.191.68.41` | 独立的一套 `qingliu` + `intelligent_team` |
-| **测试** | 尚未部署（`qingliu.no996ai.cn` 无 DNS） | `https://worker.no996ai.cn` | `118.196.106.85` | 另一套独立库 |
+| **测试** | 尚未单独部署（`qingliu.no996ai.cn` 无 DNS 记录）；联调时改本地 `vite.config.js` 的 target 指向 118 | `https://worker.no996ai.cn` | `118.196.106.85` | 另一套独立库 |
 
 - **`bujiaban.top` = 生产，`no996ai.cn` = 测试**。两套 MySQL 完全独立：套餐、价格、账号、余额、订单互不同步，改一边另一边不会变。
-- `qingliu.bujiaban.top` 的 `WORKBENCH_BASE_URL` 必须是同环境的 `https://worker.bujiaban.top`；**禁止**指向 `worker.no996ai.cn`（测试）。指错就会读到测试库，测试后台新建/上架的套餐在清流永远查不到。
+- `qingliu.bujiaban.top` 的 `WORKBENCH_BASE_URL` 必须是同环境的 `https://worker.bujiaban.top`；**禁止**指向 `worker.no996ai.cn`（测试）。指错就会读到测试库，测试后台新建/上架的套餐在清流永远查不到。2026-11-09 已由 `worker.no996ai.cn` 切换到 `worker.bujiaban.top`（备份在服务器 `/root/qingliu.env.bak-*`）。
 - 测试后台没有微信支付配置（`WECHAT_PAY_*` 全空，只注册了 `manual` 渠道）。`provider=wechat_native` 的套餐在测试环境下单会返回「支付未配置」；要在测试走完整下单流程，把测试库 SKU 的 `provider` 改成 `manual`，再由管理员在后台标记已支付。
 - 切换 `WORKBENCH_BASE_URL` 之后必须重新登录：`ql_workbench_accounts` 里存的 access/refresh token 属于旧库，会全部失效；而且账号必须存在于目标工作台库（`t_user.email` 匹配、`service_code=qingliu`），否则登录会静默回落到本地密码，随后 `balance` / `orders` / `ledgers` 全部 503「请重新登录工作台账号」。
 - 套餐在**对应环境**的控制台维护：生产 `https://worker.bujiaban.top/console/platform/packages`，测试 `https://worker.no996ai.cn/console/platform/packages`。
@@ -52,6 +52,8 @@ frontend/src/
 - 列表查询必须服务端分页；相同查询的复用和 TTL 只放在 `app/queries/index.js`，缓存原语只在 `shared/api/cache.js`。
 - 写操作成功后先失效相关查询缓存再刷新；退出登录和 401 必须清空全部前端缓存。
 - 缓存只放浏览器内存，不要写 localStorage/sessionStorage，也不要用于资金、权限、报告签发的最终判断。
+- **权限以工作台为准**：判定走 `server/permissions.go` 的 `q.can(code)`（读登录时存下的工作台权限码快照）。`ql_users.role` 只是默认值/兜底，**不要**在 handler 里再写 `role == "admin"` 这类硬编码；新权限先加成常量再映射到 `rolePermissions`。
+- **空间是会话属性**：`ql_sessions.tenant_id` 决定「这个会话在看哪个空间」，`scopeWhere` 读它。切换走 `POST /api/switch-space`（先问工作台 `GET /api/v1/me/spaces` 再写库），不要新增第二套「团队」概念。
 - 操作记录统一走 `GET /api/admin/audit`，支持分页与筛选；不要再在 `/api/admin` 里附带全量事件。
 
 ## 开发约定

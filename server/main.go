@@ -51,6 +51,10 @@ type request struct {
 	user    Object
 	session Object
 	app     *App
+	// permissions 是工作台权限码快照（见 server/permissions.go）。
+	// 为 nil 表示「没有快照」（本地过渡账号 / 迁移前登录），此时退回
+	// ql_users.role 的三档判定，行为与改造前一致。
+	permissions map[string]bool
 }
 
 func (q *request) json(v any) {
@@ -106,8 +110,13 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 		if c, e := r.Cookie("ql_session"); e == nil {
 			// tenant_id/tenant_role 必须一起取出来：资料隔离的授权口径依赖它们，
 			// 漏选会让所有团队账号退化成「个人空间」，看到的是别人的资料。
-			q.session = a.s.one("SELECT s.token,s.csrf,u.id,u.username,u.display,u.role,u.tenant_id,u.tenant_role,w.workbench_user_id,w.service_role,w.email AS wb_email FROM ql_sessions s JOIN ql_users u ON u.id=s.user_id LEFT JOIN ql_workbench_accounts w ON w.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1", hash([]byte(c.Value)), time.Now().Unix())
+			// 空间以**会话**为准（s.tenant_id，见 migrations/004）：一个人在工作台
+			// 可能同时属于多个企业，也可能同时有自己的个人空间，登录时定死的那一个
+			// 只是「默认空间」，切换后必须立刻生效，否则切了等于没切。
+			// COALESCE 是给迁移前的老会话兜底：它们没有 s.tenant_id，沿用用户列。
+			q.session = a.s.one("SELECT s.token,s.csrf,s.tenant_id AS space_tenant_id,COALESCE(NULLIF(s.tenant_id,0),u.tenant_id) AS tenant_id,u.id,u.username,u.display,u.role,u.tenant_id AS home_tenant_id,u.tenant_role,w.workbench_user_id,w.service_role,w.email AS wb_email,w.permissions FROM ql_sessions s JOIN ql_users u ON u.id=s.user_id LEFT JOIN ql_workbench_accounts w ON w.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1", hash([]byte(c.Value)), time.Now().Unix())
 			q.user = q.session
+			q.permissions = parsePermissions(str(q.session, "permissions"))
 		}
 		public := r.URL.Path == "/api/login" || r.URL.Path == "/api/register" ||
 			r.URL.Path == "/api/auth/captcha" || r.URL.Path == "/api/auth/verification-codes" ||
@@ -133,8 +142,13 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 		fn(q)
 	}
 }
+// admin 只保留一个薄壳，判定交给 permissions.go。
+//
+// 改造前它读 ql_users.role（清流自己的三档字符串），于是工作台上被降成
+// enterprise_member_readonly 的人在清流里仍然是 admin。现在读的是工作台
+// 权限快照，没有快照（本地过渡账号）时才退回旧的 role 判定。
 func (q *request) admin() {
-	if str(q.user, "role") != "admin" {
+	if !q.isAdmin() {
 		bad(403, "仅管理员可操作")
 	}
 }
@@ -240,11 +254,22 @@ func (a *App) mux() http.Handler {
 		a.newSession(q, str(u, "id"))
 		q.json(Object{"ok": true})
 	}))
+	// 空间：列出能进的空间、切换当前空间（见 server/space.go，migrations/004）。
+	// 切换只改**本会话**，不影响同一个人在其他设备上的登录。
+	m.HandleFunc("GET /api/spaces", a.route(func(q *request) {
+		q.json(a.spaces(q))
+	}))
+	m.HandleFunc("POST /api/switch-space", a.route(func(q *request) {
+		q.json(a.switchSpace(q))
+	}))
 	m.HandleFunc("GET /api/me", a.route(func(q *request) {
 		q.json(Object{
 			"user": Object{
 				"id": q.user["id"], "username": q.user["username"], "display": q.user["display"], "role": q.user["role"],
 				"service_code": "qingliu", "service_role": q.user["service_role"],
+				// 权限码快照（工作台 RBAC 的投影）。前端按它显示/隐藏操作，
+				// 服务端每个写接口仍然各判一次（q.can）。
+				"permissions": q.permissionList(),
 				"workbench_user_id": q.user["workbench_user_id"], "email": q.user["wb_email"],
 				"workbench_linked": integer(q.user["workbench_user_id"]) > 0,
 				// 资料归属维度：0=个人空间，>0=公司团队。前端据此提示当前范围。
@@ -741,7 +766,7 @@ func (a *App) mux() http.Handler {
 			require(stage == "draft" || stage == "formal", "报告状态无效")
 			require(str(d, "source") != "", "没有可生成报告的流水来源")
 			if stage == "formal" {
-				if str(q.user, "role") != "admin" && str(q.user, "role") != "reviewer" {
+				if !q.canSignReport() {
 					bad(403, "仅复核员或管理员可签发")
 				}
 				require(len(d["problems"].([]string)) == 0 && yes(d, "submitted_current") && yes(b, "attest") && strings.TrimSpace(str(b, "statement")) != "", "请完成资料核对与提交复核，并填写复核声明")

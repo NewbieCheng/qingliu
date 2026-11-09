@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS ql_users (
 CREATE TABLE IF NOT EXISTS ql_sessions (
  token CHAR(64) PRIMARY KEY, user_id CHAR(32) NOT NULL,
  csrf CHAR(64) NOT NULL, expires BIGINT NOT NULL,
+ tenant_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '本会话所在空间，0=个人空间（见 migrations/004）',
  FOREIGN KEY(user_id) REFERENCES ql_users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 CREATE TABLE IF NOT EXISTS ql_workbench_accounts (
@@ -18,6 +19,7 @@ CREATE TABLE IF NOT EXISTS ql_workbench_accounts (
  access_token VARBINARY(4096) NULL,
  refresh_token VARBINARY(4096) NULL,
  token_expires BIGINT NOT NULL DEFAULT 0,
+ permissions JSON NULL COMMENT '工作台权限码快照（见 server/permissions.go）',
  updated TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
  FOREIGN KEY(user_id) REFERENCES ql_users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;

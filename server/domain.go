@@ -49,6 +49,25 @@ func text(v any) string {
 	return fmt.Sprint(v)
 }
 func str(o Object, k string) string { return text(o[k]) }
+
+// strList 把 JSON 数组字段（权限码快照）读成字符串切片。
+//
+// 宽松解析而不是要求强类型：这个值来自另一个系统（工作台）的响应，
+// 形状不对时应该**降级成没有快照**（由 ql_users.role 兜底），
+// 而不是让整次登录失败。
+func strList(v any) []string {
+	list, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(list))
+	for _, item := range list {
+		if code := strings.TrimSpace(text(item)); code != "" {
+			out = append(out, code)
+		}
+	}
+	return out
+}
 func integer(v any) int64 {
 	switch n := v.(type) {
 	case int64:
