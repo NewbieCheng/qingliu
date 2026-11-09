@@ -70,3 +70,18 @@
   position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
   clip:rect(0 0 0 0);white-space:nowrap;border:0;
 }
+
+/* 图形验证码：左输入右图片，点击图片换一张。工作台返回 SVG，这里按原尺寸渲染。 */
+.captcha-row{display:flex;align-items:center;gap:8px}
+.captcha-input{
+  flex:1;min-width:0;height:44px;padding:0 12px;font-size:13px;
+  border:1px solid rgba(31,61,53,.16);border-radius:6px;background:#fff;
+}
+.captcha-input:focus{border-color:#5E8E7E;box-shadow:0 0 0 1px rgba(94,142,126,.14);outline:none}
+.captcha-image{
+  flex:none;width:132px;height:44px;padding:0;border:1px solid rgba(31,61,53,.16);
+  border-radius:6px;background:#fff;cursor:pointer;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+}
+.captcha-image svg{width:100%;height:100%;display:block}
+.captcha-loading{font-size:12px;color:#7A8B85}

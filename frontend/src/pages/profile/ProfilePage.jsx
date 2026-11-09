@@ -110,6 +110,9 @@ export function ProfilePage() {
         <FormRow label="服务角色">
           <strong>{ROLES[me.service_role] || ROLES[me.role] || me.role}</strong>
         </FormRow>
+        <FormRow label="资料范围">
+          <strong>{me.scope === "team" ? "团队资料（团队内共享）" : "个人资料（仅自己可见）"}</strong>
+        </FormRow>
         <FormRow label="工作台账号">
           <strong>{me.workbench_linked ? "已绑定" : "本地过渡账号"}</strong>
         </FormRow>

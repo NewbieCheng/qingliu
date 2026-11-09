@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useCallback, useState } from "react";
 import { Field, Form } from "@/shared/ui/Form.jsx";
 import { ArrowRightIcon, UserIcon } from "@/shared/ui/icons.jsx";
 import { useAuth } from "../context.js";
 import { navigate } from "@/shared/router/index.js";
 import { LoginPassword } from "./LoginPassword.jsx";
+import { CaptchaField } from "./CaptchaField.jsx";
 
 // 仅本地开发（vite dev）用：从 frontend/.env.local 读预填账号，构建产物里为空。
 const devUsername = import.meta.env.DEV
@@ -19,6 +20,16 @@ const LOGIN_MODES = [
 export function LoginForm({ mode = 1, onModeChange }) {
   const { login, rememberedUsername, rememberUsername } = useAuth();
   const current = LOGIN_MODES.find((item) => item.value === mode) || LOGIN_MODES[0];
+  // 验证码与工作台网页登录同一要求：密码登录必须过人机校验。
+  const [captchaCode, setCaptchaCode] = useState("");
+  const [captchaID, setCaptchaID] = useState("");
+  const [captchaError, setCaptchaError] = useState("");
+  const [captchaKey, setCaptchaKey] = useState(0);
+
+  const handleCaptcha = useCallback((code, id) => {
+    setCaptchaCode(code);
+    if (id) setCaptchaID(id);
+  }, []);
 
   return (
     <>
@@ -42,11 +53,19 @@ export function LoginForm({ mode = 1, onModeChange }) {
         success="登录成功"
         onSave={async (form) => {
           const username = String(form.get("username")).trim();
-          await login({
-            username,
-            password: form.get("password"),
-            login_mode: mode,
-          });
+          try {
+            await login({
+              username,
+              password: form.get("password"),
+              login_mode: mode,
+              captcha_id: captchaID,
+              captcha_code: captchaCode.trim(),
+            });
+          } catch (error) {
+            // 验证码一次性有效：任何失败都换一张，避免用户拿旧图重试。
+            setCaptchaKey((value) => value + 1);
+            throw error;
+          }
           rememberUsername(username, form.get("remember"));
           navigate("/");
         }}
@@ -67,6 +86,15 @@ export function LoginForm({ mode = 1, onModeChange }) {
         </Field>
         <Field label="密码">
           <LoginPassword />
+        </Field>
+        <Field label="验证码">
+          <CaptchaField
+            key={captchaKey}
+            value={captchaCode}
+            onChange={handleCaptcha}
+            onError={setCaptchaError}
+          />
+          {captchaError && <p className="error">{captchaError}</p>}
         </Field>
         <div className="login-options">
           <label className="login-remember">

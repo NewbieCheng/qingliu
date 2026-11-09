@@ -47,8 +47,17 @@ type wbSession struct {
 	User         Object
 }
 
-func (c wbConfig) login(ctx context.Context, email, password string, mode int) (wbSession, error) {
+// login signs in through the workbench service entry. captchaID/captchaCode are
+// the human challenge solved in the qingliu login page; the workbench requires
+// it for password logins exactly like its own web login.
+func (c wbConfig) login(ctx context.Context, email, password string, mode int, captchaID, captchaCode string) (wbSession, error) {
 	body := Object{"email": email, "password": password, "service_code": "qingliu", "login_mode": loginModeName(mode)}
+	if captchaID != "" {
+		body["captcha_id"] = captchaID
+	}
+	if captchaCode != "" {
+		body["captcha_code"] = captchaCode
+	}
 	status, data, err := c.do(ctx, http.MethodPost, "/api/v1/service/auth/login", body, "")
 	if err != nil {
 		return wbSession{}, err
@@ -105,6 +114,12 @@ func (c wbConfig) refresh(ctx context.Context, refreshToken string) (wbSession, 
 		return wbSession{}, errors.New("登录状态已过期，请重新登录")
 	}
 	return parseWBSession(data)
+}
+
+// serviceRequest 用服务凭证调用工作台（不带用户令牌），用于读取运营配置
+// 与以服务身份记账这类不归属于某个用户会话的调用。
+func (c wbConfig) serviceRequest(ctx context.Context, method, path string, body any) (int, Object, error) {
+	return c.do(ctx, method, path, body, "")
 }
 
 func (c wbConfig) do(ctx context.Context, method, path string, body any, token string) (int, Object, error) {
@@ -165,9 +180,16 @@ func parseWBSession(data Object) (wbSession, error) {
 			expires = parsed
 		}
 	}
+	user := sub(payload, "user")
+	// 租户决定资料归属：顶层与 user 里都可能出现，取到哪个用哪个。
+	if user != nil && integer(user["tenant_id"]) == 0 {
+		if tenant := integer(payload["tenant_id"]); tenant > 0 {
+			user["tenant_id"] = tenant
+		}
+	}
 	return wbSession{
 		AccessToken: access, RefreshToken: refresh, ExpiresAt: expires,
-		User: sub(payload, "user"),
+		User: user,
 	}, nil
 }
 
@@ -274,14 +296,27 @@ func (a *App) wbUpsertLocalUser(session wbSession) string {
 	if role != "admin" && role != "sales" && role != "reviewer" {
 		role = "sales"
 	}
+	tenant := integer(user["tenant_id"])
+	// 默认团队「今天不加班」承接既有管理员：工作台上还没有租户的管理员账号
+	// 首次登录清流时落到 team 1，避免管理员的资料散落在个人空间。
+	if tenant == 0 && role == "admin" && defaultTeamTenantID > 0 {
+		tenant = defaultTeamTenantID
+	}
+	tenantRole := ""
+	if tenant > 0 {
+		tenantRole = str(user, "service_role")
+		if tenantRole != "admin" {
+			tenantRole = "member"
+		}
+	}
 	if existing := a.s.one("SELECT id FROM ql_users WHERE username=?", email); existing != nil {
 		uid := str(existing, "id")
-		a.s.exec("UPDATE ql_users SET display=?,role=?,active=TRUE WHERE id=?", display, role, uid)
+		a.s.exec("UPDATE ql_users SET display=?,role=?,tenant_id=?,tenant_role=?,active=TRUE WHERE id=?", display, role, tenant, tenantRole, uid)
 		return uid
 	}
 	uid := id()
 	random, _ := bcrypt.GenerateFromPassword([]byte(id()+id()), bcrypt.DefaultCost)
-	a.s.exec("INSERT INTO ql_users(id,username,display,role,password) VALUES(?,?,?,?,?)", uid, email, display, role, string(random))
+	a.s.exec("INSERT INTO ql_users(id,username,display,role,password,tenant_id,tenant_role) VALUES(?,?,?,?,?,?,?)", uid, email, display, role, string(random), tenant, tenantRole)
 	return uid
 }
 

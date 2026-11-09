@@ -186,11 +186,22 @@ func (s *Store) event(user, cid, action, detail string) {
 	}
 	s.exec("INSERT INTO ql_events(user_id,customer_id,action,detail) VALUES(?,?,?,?)", user, c, action, detail)
 }
+
+// allowed reports whether the caller may touch this customer.
+//
+// 授权维度是**资料空间**，不是「创建者」也不是「角色」：
+//   - 团队账号（tenant_id>0）可以看整个团队的资料；
+//   - 个人账号（tenant_id=0）只能看自己创建的资料 —— 个人本身就是他自己的
+//     一个空间，与任何团队、任何其他个人都互不可见；
+//   - 管理员也受同一约束。之前 role=="admin" 无条件放行，等于把所有公司的
+//     流水与征信摊在管理员面前，这正是团队隔离要修掉的漏洞。
+//
+// 条件由 scopeWhere 生成，与列表查询共用同一份实现：两处各写一遍就会分叉，
+// 典型症状是「列表里看不到，直接输 ID 却能打开」。
 func (s *Store) allowed(user Object, cid string) bool {
-	if s.one("SELECT id FROM ql_customers WHERE id=?", cid) == nil {
-		return false
-	}
-	return str(user, "role") == "admin" || s.one("SELECT customer_id FROM ql_grants WHERE customer_id=? AND user_id=?", cid, user["id"]) != nil
+	where, args := scopeWhere(user, "c")
+	args = append(args, cid)
+	return s.one("SELECT c.id FROM ql_customers c WHERE "+where+" AND c.id=?", args...) != nil
 }
 
 // jobProgress records the human-facing stage and percentage of a running

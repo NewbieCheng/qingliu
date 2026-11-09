@@ -38,6 +38,8 @@ type App struct {
 	static string
 	slots  chan struct{}
 	wb     wbConfig
+	// pricing 缓存工作台「财务 → 解析计价」的三档单价，见 pricing.go。
+	pricing parsePricingCache
 }
 type request struct {
 	w       http.ResponseWriter
@@ -197,15 +199,25 @@ func (a *App) mux() http.Handler {
 		// Workbench accounts are the primary identity. A local password remains
 		// as a transition fallback for the accounts created before the move; it
 		// is removed once every operator has a workbench account.
+		// 工作台是唯一身份来源。这里**不再静默回退**到本地密码：
+		// 之前 wb.login 失败会被吞掉、接着走本地 bcrypt 校验，结果是
+		// 「工作台要求验证码、本地密码却能直接登进来」——验证码形同虚设。
 		if a.wb.Ready() {
-			if session, err := a.wb.login(q.r.Context(), name, pass, int(mode)); err == nil {
-				uid := a.wbUpsertLocalUser(session)
-				a.wbSaveLogin(uid, session)
-				s.exec("DELETE FROM ql_login_failures WHERE failure_key=?", key)
-				a.newSession(q, uid)
-				q.json(Object{"ok": true})
-				return
+			captchaID, captchaCode := str(b, "captcha_id"), str(b, "captcha_code")
+			session, err := a.wb.login(q.r.Context(), name, pass, int(mode), captchaID, captchaCode)
+			if err != nil {
+				s.exec("INSERT INTO ql_login_failures VALUES(?,?)", key, time.Now().Unix())
+				bad(401, err.Error())
 			}
+			uid := a.wbUpsertLocalUser(session)
+			a.wbSaveLogin(uid, session)
+			s.exec("DELETE FROM ql_login_failures WHERE failure_key=?", key)
+			a.newSession(q, uid)
+			q.json(Object{"ok": true})
+			return
+		}
+		if !a.localLoginAllowed() {
+			bad(503, "尚未接入工作台，请联系管理员")
 		}
 		u := s.one("SELECT * FROM ql_users WHERE username=? AND active=1", name)
 		// Dummy bcrypt work also runs for an unknown account.
@@ -229,6 +241,9 @@ func (a *App) mux() http.Handler {
 				"service_code": "qingliu", "service_role": q.user["service_role"],
 				"workbench_user_id": q.user["workbench_user_id"], "email": q.user["wb_email"],
 				"workbench_linked": integer(q.user["workbench_user_id"]) > 0,
+				// 资料归属维度：0=个人空间，>0=公司团队。前端据此提示当前范围。
+				"tenant_id": q.user["tenant_id"], "tenant_role": q.user["tenant_role"],
+				"scope": tenantScope(q.user),
 			},
 			"csrf": q.session["csrf"],
 		})
@@ -245,7 +260,20 @@ func (a *App) mux() http.Handler {
 		if status != http.StatusOK {
 			bad(status, wbMessage(data, "验证码加载失败"))
 		}
-		q.json(wbPayload(data))
+		// 工作台返回 {id, type, svg}；清流前端统一按 captcha_id + svg 渲染，
+		// 这里做一次归一化，避免前端去猜工作台的原始字段名。
+		payload, _ := wbPayload(data).(map[string]any)
+		if payload == nil {
+			bad(503, "验证码格式异常")
+		}
+		q.json(Object{
+			"captcha_id":  str(payload, "id"),
+			"type":        str(payload, "type"),
+			"svg":         str(payload, "svg"),
+			"prompt":      str(payload, "prompt"),
+			"icon_target": str(payload, "icon_target"),
+			"sequence":    payload["sequence"],
+		})
 	}))
 	m.HandleFunc("POST /api/auth/verification-codes", a.route(func(q *request) {
 		if !a.wb.Ready() {
@@ -394,8 +422,10 @@ func (a *App) mux() http.Handler {
 		if page < 1 {
 			page = 1
 		}
-		where := "(?='admin' OR EXISTS(SELECT 1 FROM ql_grants g WHERE g.customer_id=c.id AND g.user_id=?)) AND c.name LIKE ?"
-		args := []any{q.user["role"], q.user["id"], "%" + search + "%"}
+		// 列表与 allowed() 用同一口径：团队看整个团队，个人只看自己的。
+		where, args := scopeWhere(q.user, "c")
+		where += " AND c.name LIKE ?"
+		args = append(args, "%"+search+"%")
 		count := s.one("SELECT COUNT(*) AS n FROM ql_customers c WHERE "+where, args...)
 		args = append(args, 20, (page-1)*20)
 		clients := s.query("SELECT c.id,c.name,c.created,(SELECT COUNT(*) FROM ql_documents d WHERE d.customer_id=c.id) AS doc_count,(SELECT COUNT(*) FROM ql_jobs j WHERE j.customer_id=c.id AND j.status IN ('queued','running')) AS running FROM ql_customers c WHERE "+where+" ORDER BY c.created DESC LIMIT ? OFFSET ?", args...)
@@ -409,7 +439,7 @@ func (a *App) mux() http.Handler {
 		tx, e := s.db.Begin()
 		must(e)
 		defer tx.Rollback()
-		_, e = tx.Exec("INSERT INTO ql_customers(id,name,payload) VALUES(?,?,?)", cid, name, js(Object{"authorized": true, "company": str(b, "company"), "operator": q.user["display"], "rules": defaultRules(), "scope_required": true}))
+		_, e = tx.Exec("INSERT INTO ql_customers(id,name,payload,workspace_tenant_id,owner_user_id) VALUES(?,?,?,?,?)", cid, name, js(Object{"authorized": true, "company": str(b, "company"), "operator": q.user["display"], "rules": defaultRules(), "scope_required": true}), integer(q.user["tenant_id"]), str(q.user, "id"))
 		must(e)
 		_, e = tx.Exec("INSERT INTO ql_grants VALUES(?,?)", cid, q.user["id"])
 		must(e)
@@ -472,6 +502,11 @@ func (a *App) mux() http.Handler {
 			require(len(files) >= 1 && len(files) <= 10, "每批请选择1至10份文件")
 			source := q.r.FormValue("source")
 			require(validSource(source), "无效来源")
+			// 解析按档计费：余额不足就别收文件，避免用户等一轮才发现扣不了费。
+			// 读不到余额（工作台不可达）时放行，不能因为计费故障阻断业务。
+			if balance, ok := a.pointBalance(q.r.Context(), str(q.user, "id")); ok && balance <= 0 {
+				bad(402, "积分不足，无法解析；请联系管理员充值后再上传")
+			}
 			// 批次幂等：浏览器生成 batch 键，断网重试同一批次直接回放，不重复建任务。
 			batch := strings.TrimSpace(q.r.FormValue("batch"))
 			if len(batch) > 64 {
@@ -903,4 +938,34 @@ func main() {
 		log.Fatal(e)
 	}
 	<-workerDone
+}
+
+// tenantScope 把租户维度翻译成前端可读的范围名。
+func tenantScope(user Object) string {
+	if integer(user["tenant_id"]) > 0 {
+		return "team"
+	}
+	return "personal"
+}
+
+// scopeWhere 生成「这个用户能看到哪些资料」的 SQL 条件。
+//
+// 团队账号（tenant_id>0）看整个团队的资料；个人账号（tenant_id=0）只看自己
+// 创建的资料 —— 个人本身就是他自己的一个空间，与他人互不可见。
+// alias 是客户表在查询里的别名，两处调用（授权判定与列表）必须用同一口径，
+// 否则会出现「列表里看不到、直接输 ID 却能打开」的越权。
+func scopeWhere(user Object, alias string) (string, []any) {
+	if tenant := integer(user["tenant_id"]); tenant > 0 {
+		return alias + ".workspace_tenant_id=?", []any{tenant}
+	}
+	return "(" + alias + ".workspace_tenant_id=0 AND " + alias + ".owner_user_id=?)", []any{str(user, "id")}
+}
+
+// localLoginAllowed 决定是否允许「本地密码」这条过渡路径。
+//
+// 默认关闭：工作台才是身份来源，本地密码是两套密码两套风险，还会绕过
+// 工作台的人机验证。只有在显式设置 QINGLIU_ALLOW_LOCAL_LOGIN=1 时才开放，
+// 用于工作台不可达时的应急运维。
+func (a *App) localLoginAllowed() bool {
+	return strings.TrimSpace(os.Getenv("QINGLIU_ALLOW_LOCAL_LOGIN")) == "1"
 }

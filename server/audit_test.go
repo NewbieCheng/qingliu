@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -18,8 +19,14 @@ func TestParseAuditQueryBoundsAndFilters(t *testing.T) {
 		t.Fatalf("query = %+v", q)
 	}
 	where, args := q.filter()
-	if where == "1=1" || len(args) != 5 {
-		t.Fatalf("filter = %q args=%v", where, args)
+	// 断言的是「占位符数量 == 绑定参数数量」这条不变式，而不是某个写死的数字。
+	// 之前写死 5，filter 后来多了一个 e.action LIKE ? 就变成假红。
+	if where == "1=1" {
+		t.Fatalf("filter = %q", where)
+	}
+	if placeholders := strings.Count(where, "?"); placeholders != len(args) {
+		t.Fatalf("placeholder/arg mismatch: %d placeholders vs %d args; filter=%q args=%v",
+			placeholders, len(args), where, args)
 	}
 }
 

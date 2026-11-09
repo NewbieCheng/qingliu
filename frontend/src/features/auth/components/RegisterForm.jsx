@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Field, Form } from "@/shared/ui/Form.jsx";
 import { api } from "@/shared/api/client.js";
 import { navigate } from "@/shared/router/index.js";
 import { toast } from "@/shared/ui/toast-api.js";
 import { useAuth } from "../context.js";
+import { CaptchaField } from "./CaptchaField.jsx";
 
 // 注册与工作台完全同源：同一张邀请码表、同一套邮箱验证码与图形验证码。
 // 本页只负责交互，所有校验与发分都在工作台服务端完成。
@@ -17,19 +18,12 @@ export function RegisterForm() {
   const [codeSent, setCodeSent] = useState(false);
   const [answer, setAnswer] = useState("");
 
-  const loadCaptcha = useCallback(async () => {
-    setCaptchaError("");
-    try {
-      setCaptcha(await api("/api/auth/captcha?type=image"));
-      setAnswer("");
-    } catch (error) {
-      setCaptchaError(error.message);
-    }
+  // 图形验证码由 CaptchaField 自己拉取；这里只保存它回传的 id/code，
+  // 发邮箱验证码时要一并带上（工作台要求先过人机校验才能发码）。
+  const handleCaptcha = useCallback((code, id) => {
+    setAnswer(code);
+    setCaptcha({ captcha_id: id });
   }, []);
-
-  useEffect(() => {
-    void loadCaptcha();
-  }, [loadCaptcha]);
 
   async function sendCode() {
     if (!email.trim()) {
@@ -48,7 +42,6 @@ export function RegisterForm() {
       toast("验证码已发送到邮箱");
     } catch (error) {
       toast(error.message, "error");
-      void loadCaptcha();
     } finally {
       setSending(false);
     }
@@ -146,36 +139,11 @@ export function RegisterForm() {
         </div>
       </Field>
       <Field label="图形验证码">
-        <div className="login-code-row">
-          <input
-            value={answer}
-            onChange={(event) => setAnswer(event.target.value)}
-            required
-            maxLength="8"
-            placeholder="按图片填写"
-          />
-          {captcha?.image ? (
-            <button
-              type="button"
-              className="login-captcha"
-              onClick={loadCaptcha}
-              title="点击换一张"
-            >
-              <img
-                src={
-                  captcha.image.startsWith("data:")
-                    ? captcha.image
-                    : `data:image/png;base64,${captcha.image}`
-                }
-                alt="图形验证码"
-              />
-            </button>
-          ) : (
-            <button type="button" className="ghost" onClick={loadCaptcha}>
-              加载验证码
-            </button>
-          )}
-        </div>
+        <CaptchaField
+          value={answer}
+          onChange={handleCaptcha}
+          onError={setCaptchaError}
+        />
       </Field>
       {captchaError && (
         <p className="upload-error" role="alert">

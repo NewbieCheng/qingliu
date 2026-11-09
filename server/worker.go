@@ -119,6 +119,10 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 				panic(e)
 			}
 			s.bump(cid)
+			// 解析成功后扣积分：走哪条路径就按哪档单价，价格由后台配置。
+			if points, chargeErr := app.chargeParse(jobctx, str(user, "id"), jid, parseBillingTier(result), int(integer(result.Meta["pages"]))); chargeErr == nil && points > 0 {
+				s.jobProgress(jid, "charging", "已扣除 "+itoa(points)+" 积分", 98)
+			}
 		}
 		d := s.one("SELECT payload FROM ql_documents WHERE customer_id=? AND sha=?", cid, p["sha"])
 		meta := obj(str(d, "payload"))

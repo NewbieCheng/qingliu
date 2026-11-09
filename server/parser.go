@@ -245,6 +245,8 @@ func parseFile(ctx context.Context, b []byte, name, source string, ocr bool, pro
 		issues := []string{}
 		facts := []Object{}
 		textPages := 0
+		ocrPages := 0
+		visionPages := 0
 		var walletLayout []Anchor
 		for i, p := range doc.Pages {
 			if e = ctx.Err(); e != nil {
@@ -253,18 +255,16 @@ func parseFile(ctx context.Context, b []byte, name, source string, ocr bool, pro
 			progress(i+1, count)
 			words := p.words()
 			if len(words) == 0 {
-				if ocr && (source == "credit_report" || source == "other") {
-					prefix := filepath.Join(dir, fmt.Sprintf("ocr-%d", i+1))
-					_, renderErr := command(ctx, "pdftoppm", "-f", fmt.Sprint(i+1), "-singlefile", "-scale-to", "2200", "-png", file, prefix)
-					if renderErr == nil {
-						txt, ocrErr := command(ctx, "tesseract", prefix+".png", "stdout", "-l", "chi_sim+eng")
-						if ocrErr == nil {
-							facts = append(facts, Object{"page": i + 1, "text": string(txt), "kind": "OCR候选，需对照原页人工核对"})
-						}
-						os.Remove(prefix + ".png")
-					}
+				// 优先级链：文字层取不到 → 自动降级到本机 tesseract（免费）。
+				// 视觉模型（收费）不在这里自动调用，由用户在界面上确认后才走。
+				if txt, ok := localOCRPage(ctx, file, dir, i+1); ok {
+					ocrPages++
+					facts = append(facts, Object{"page": i + 1, "text": txt, "kind": "OCR候选，需对照原页人工核对"})
+					issues = append(issues, fmt.Sprintf("第%d页无文字层，已用本机 OCR 识别，请对照原页核对", i+1))
+					continue
 				}
-				issues = append(issues, fmt.Sprintf("第%d页无文本；扫描件须人工核对，OCR不自动生成金融结论", i+1))
+				visionPages++
+				issues = append(issues, fmt.Sprintf("第%d页无文字层且本机 OCR 未识别出内容，建议使用「文档视觉识别」", i+1))
 				continue
 			}
 			textPages++
@@ -288,6 +288,21 @@ func parseFile(ctx context.Context, b []byte, name, source string, ocr bool, pro
 		result.Meta["facts"] = facts
 		result.Meta["issues"] = issues
 		result.Meta["text_pages"] = textPages
+		// 解析路径与页数决定计费档位：text=纯提取，ocr=本机识别，vision=需模型兜底。
+		result.Meta["ocr_pages"] = ocrPages
+		result.Meta["vision_pages"] = visionPages
+		switch {
+		case textPages > 0 && ocrPages == 0:
+			result.Meta["method"] = "text-layer"
+		case ocrPages > 0:
+			result.Meta["method"] = "local-ocr"
+		default:
+			result.Meta["method"] = "needs-vision"
+		}
+		if visionPages > 0 {
+			issues = append(issues, fmt.Sprintf("共 %d 页需要视觉识别，可点「文档视觉识别」用模型逐页转写", visionPages))
+			result.Meta["issues"] = issues
+		}
 		if len(issues) > 0 {
 			result.Meta["status"] = "partial"
 		}
@@ -649,4 +664,29 @@ func mupdfPages(b []byte) ([]PDFPage, error) {
 		pages = append(pages, PDFPage{Width: p.Width, Height: p.Height, Items: words})
 	}
 	return pages, nil
+}
+
+// localOCRPage 用本机 tesseract 识别单页（免费路径）。
+//
+// 只做「有没有字」这一步：识别结果作为候选事实交给人工核对，不据此自动
+// 生成金融结论。返回 false 表示本机也识别不出内容，调用方应提示走视觉模型。
+func localOCRPage(ctx context.Context, pdfPath, dir string, page int) (string, bool) {
+	if _, err := exec.LookPath("tesseract"); err != nil {
+		return "", false
+	}
+	prefix := filepath.Join(dir, fmt.Sprintf("ocr-%d", page))
+	if _, renderErr := command(ctx, "pdftoppm", "-f", fmt.Sprint(page), "-singlefile", "-scale-to", "2200", "-png", pdfPath, prefix); renderErr != nil {
+		return "", false
+	}
+	defer os.Remove(prefix + ".png")
+	txt, ocrErr := command(ctx, "tesseract", prefix+".png", "stdout", "-l", "chi_sim+eng")
+	if ocrErr != nil {
+		return "", false
+	}
+	text := strings.TrimSpace(string(txt))
+	// 少于 10 个可见字符视为没识别出来，避免把噪声当成内容。
+	if len([]rune(normalize(text))) < 10 {
+		return "", false
+	}
+	return text, true
 }

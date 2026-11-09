@@ -547,3 +547,7 @@ func browserJSON(v any) any {
 	}
 	return walk(decoded)
 }
+
+// defaultTeamTenantID 是清流默认团队「今天不加班」在工作台 t_tenant 里的主键。
+// 与工作台保持一致：团队资料按这个 tenant_id 归属，个人空间用 0。
+const defaultTeamTenantID = 1
