@@ -29,3 +29,4 @@ bin/
 .gotmp/
 .gopath/
 *.exe
+.pkg/

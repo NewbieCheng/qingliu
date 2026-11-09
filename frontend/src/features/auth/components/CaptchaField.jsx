@@ -67,18 +67,66 @@ export function CaptchaField({ value, onChange, onError }) {
   function handleCanvasClick(event) {
     const group = event.target.closest?.("[data-captcha-id]");
     const id = group?.getAttribute("data-captcha-id");
+    const kind = group?.getAttribute("data-captcha-kind");
     if (!id) return;
-    setClicks((previous) => [...previous, id]);
+    setClicks((previous) => [...previous, { id, kind }]);
     setError("");
   }
 
+  // 按题型算出「用户应当依序点击的图标种类」。
+  // 服务端只认元素 id，但**点击是否算对由题型决定**：
+  //   click_sequence 必须按提示给出的种类顺序点；
+  //   click_icon 必须点中 icon_target；
+  //   尺寸类必须按大小顺序点前 4 个。
+  // 之前直接把点击到的 id 拼起来提交，用户点错顺序也照样提交，
+  // 结果是「验证码已通过」却一直登录失败。
+  function expectedSequence() {
+    if (!captcha) return [];
+    const objects = captcha.objects || [];
+    // 尺寸类题目按**面积**排序（宽高都可能不同），只按宽度会在同宽不同高时选错。
+    const area = (o) => (o.w || 0) * (o.h || 0);
+    switch (captcha.prompt) {
+      case "click_sequence":
+        return captcha.sequence || [];
+      case "click_icon":
+        return captcha.icon_target ? [captcha.icon_target] : [];
+      case "click_largest": {
+        const top = [...objects].sort((a, b) => area(b) - area(a))[0];
+        return top ? [top.kind] : [];
+      }
+      case "click_smallest": {
+        const top = [...objects].sort((a, b) => area(a) - area(b))[0];
+        return top ? [top.kind] : [];
+      }
+      case "click_second_smallest": {
+        const ranked = [...objects].sort((a, b) => area(a) - area(b));
+        return ranked[1] ? [ranked[1].kind] : [];
+      }
+      case "click_size_asc": {
+        return [...objects].sort((a, b) => area(b) - area(a)).slice(0, 4).map((o) => o.kind);
+      }
+      case "click_size_desc": {
+        return [...objects].sort((a, b) => area(a) - area(b)).slice(0, 4).map((o) => o.kind);
+      }
+      default:
+        return [];
+    }
+  }
+
   function confirm() {
-    const steps = expectedSteps(captcha);
+    const expected = expectedSequence();
+    const steps = expected.length || 1;
     if (clicks.length !== steps) {
       setError(`请依次点击 ${steps} 个图标（当前 ${clicks.length} 个）`);
       return;
     }
-    onChange?.(clicks.join(","), captcha.captcha_id);
+    // 顺序/种类不对时当场提示，不要把注定失败的答案提交上去。
+    const wrong = expected.some((kind, index) => clicks[index]?.kind !== kind);
+    if (wrong) {
+      setError("点击顺序或图标不正确，请重新完成验证");
+      return;
+    }
+    onChange?.(clicks.map((item) => item.id).join(","), captcha.captcha_id);
     setOpen(false);
     setError("");
   }

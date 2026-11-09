@@ -23,6 +23,8 @@ export function LoginForm({ onRegister }) {
   const [captchaID, setCaptchaID] = useState("");
   const [captchaKey, setCaptchaKey] = useState(0);
   const [agreed, setAgreed] = useState(true);
+  // 登录失败原因（常驻显示，不依赖 toast）
+  const [submitError, setSubmitError] = useState("");
 
   const handleCaptcha = useCallback((code, id) => {
     setCaptchaCode(code);
@@ -39,7 +41,10 @@ export function LoginForm({ onRegister }) {
             role="tab"
             aria-selected={item.value === mode}
             className={`auth-tab ${item.value === mode ? "is-active" : ""}`}
-            onClick={() => setMode(item.value)}
+            onClick={() => {
+              setMode(item.value);
+              setSubmitError("");
+            }}
           >
             {item.label}
           </button>
@@ -63,8 +68,12 @@ export function LoginForm({ onRegister }) {
           } catch (error) {
             // 验证码一次性有效：任何失败都换一张，避免用户拿旧图重试。
             setCaptchaKey((value) => value + 1);
+            // 登录页必须**常驻**显示失败原因：只弹 toast 的话，用户看到的
+            // 是「已完成人机验证」但页面毫无反应，完全不知道发生了什么。
+            setSubmitError(error?.message || "登录失败，请重试");
             throw error;
           }
+          setSubmitError("");
           rememberUsername(username, true);
           navigate("/");
         }}
@@ -107,6 +116,11 @@ export function LoginForm({ onRegister }) {
           </span>
         </label>
 
+        {submitError ? (
+          <p className="auth-error" role="alert">
+            {submitError}
+          </p>
+        ) : null}
         <button className="auth-submit" disabled={!agreed}>
           登录工作台
         </button>
