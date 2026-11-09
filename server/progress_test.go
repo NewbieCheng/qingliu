@@ -51,3 +51,46 @@ func TestLoginModeName(t *testing.T) {
 		t.Fatal("default login must map to personal")
 	}
 }
+
+// 工作台余额是嵌套在 data 里的对象。用 obj(str(data,"data")) 会把对象转成
+// 字符串再解析，永远得到空 map —— 表现是「余额恒为 0，所有上传都被拦」。
+func TestNestedPayloadExtractionKeepsNumbers(t *testing.T) {
+	envelope := Object{"data": map[string]any{"points_balance": int64(500)}}
+	payload := sub(envelope, "data")
+	if payload == nil {
+		t.Fatal("sub() must unwrap the nested data object")
+	}
+	if got := integer(payload["points_balance"]); got != 500 {
+		t.Fatalf("points_balance = %d, want 500", got)
+	}
+	// 旧的错误写法必须确实拿不到值，证明这条测试有意义。
+	if wrong := obj(str(envelope, "data")); len(wrong) != 0 {
+		t.Fatalf("expected the old obj(str(...)) form to lose the payload, got %v", wrong)
+	}
+}
+
+func TestParseCostFollowsConfiguredPricing(t *testing.T) {
+	pricing := parsePricing{Text: 1, OCR: 2, Vision: 5}
+	cases := []struct {
+		method string
+		pages  int
+		want   int64
+	}{
+		{"text", 129, 1},
+		{"ocr", 10, 20},
+		{"vision", 3, 15},
+		{"text", 0, 1},
+		{"ocr", 0, 2},
+		{"unknown", 5, 0},
+	}
+	for _, tc := range cases {
+		if got := pricing.parseCost(tc.method, tc.pages); got != tc.want {
+			t.Fatalf("parseCost(%s,%d) = %d, want %d", tc.method, tc.pages, got, tc.want)
+		}
+	}
+	// 全 0 时必须免费，不能因为乘页数冒出费用。
+	free := parsePricing{}
+	if got := free.parseCost("vision", 100); got != 0 {
+		t.Fatalf("zero pricing charged %d", got)
+	}
+}

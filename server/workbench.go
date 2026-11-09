@@ -142,7 +142,9 @@ func (c wbConfig) do(ctx context.Context, method, path string, body any, token s
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	if path == "/api/v1/service/auth/login" {
+	// 所有 /service/ 路径都是服务间调用：带服务凭证，不带用户令牌。
+	// 之前只对登录设置凭证，导致计费/计价这类服务接口一律 403。
+	if strings.HasPrefix(path, "/api/v1/service/") {
 		req.Header.Set("X-Service-Client", c.ClientID)
 		req.Header.Set("X-Service-Secret", c.Secret)
 	}
@@ -454,4 +456,44 @@ func itoa(value int64) string {
 		buf[i] = '-'
 	}
 	return string(buf[i:])
+}
+
+// tenantName 返回当前资料归属的名字。
+//
+// 团队账号：取工作台 t_tenant 的公司名（两边同一家公司，名称只有一个来源）。
+// 个人账号：显示「个人空间」，不编造公司名。
+// 团队名会缓存，避免每次 /api/me 都打一次工作台。
+func (a *App) tenantName(ctx context.Context, user Object) string {
+	if integer(user["tenant_id"]) <= 0 {
+		return "个人空间"
+	}
+	a.tenantMu.Lock()
+	if name := a.tenantNames[integer(user["tenant_id"])]; name != "" {
+		a.tenantMu.Unlock()
+		return name
+	}
+	a.tenantMu.Unlock()
+
+	status, data, err := a.wbRequest(ctx, str(user, "id"), http.MethodGet, "/api/v1/tenant/info", nil)
+	if err != nil || status != http.StatusOK {
+		return "团队"
+	}
+	payload := sub(data, "data")
+	if payload == nil {
+		payload = data
+	}
+	name := strings.TrimSpace(str(payload, "tenant_name"))
+	if name == "" {
+		name = strings.TrimSpace(str(payload, "name"))
+	}
+	if name == "" {
+		return "团队"
+	}
+	a.tenantMu.Lock()
+	if a.tenantNames == nil {
+		a.tenantNames = map[int64]string{}
+	}
+	a.tenantNames[integer(user["tenant_id"])] = name
+	a.tenantMu.Unlock()
+	return name
 }

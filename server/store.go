@@ -217,6 +217,19 @@ func (s *Store) jobProgress(jid, stage, message string, progress int) {
 	s.exec("UPDATE ql_jobs SET stage=?,message=?,progress=? WHERE id=?", stage, message, progress, jid)
 }
 
+// queuePosition 返回该任务前面还有几个待处理任务（0 表示下一个就是它）。
+//
+// 单进程串行解析，用户最关心的是「还要等几份」，而不是一个笼统的「排队中」。
+// 只统计 queued 且 seq 更小的任务，与 worker 的取任务顺序（ORDER BY seq）一致。
+func (s *Store) queuePosition(jid string) int {
+	row := s.one("SELECT seq FROM ql_jobs WHERE id=?", jid)
+	if row == nil {
+		return 0
+	}
+	ahead := s.one("SELECT COUNT(*) AS n FROM ql_jobs WHERE status='queued' AND seq<?", row["seq"])
+	return int(integer(ahead["n"]))
+}
+
 // parsePercent maps a page counter to the 5..95 band reserved for the local
 // parse step. The remaining 5 percent is the write/commit phase.
 func parsePercent(page, total int) int {

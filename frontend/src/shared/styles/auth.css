@@ -85,3 +85,94 @@
 }
 .captcha-image svg{width:100%;height:100%;display:block}
 .captcha-loading{font-size:12px;color:#7A8B85}
+
+/* ===== 紧凑单卡片登录（对齐工作台登录页节奏） ===== */
+.auth-page{
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:16px;padding:32px 16px;background:#F5F7F6;
+}
+.auth-card{
+  width:100%;max-width:420px;background:#fff;border-radius:14px;
+  border:1px solid rgba(31,61,53,.08);box-shadow:0 8px 30px rgba(31,61,53,.06);
+  padding:32px 30px 26px;
+}
+.auth-brand{display:flex;align-items:center;gap:10px;margin-bottom:26px}
+.auth-logo{width:38px;height:38px;flex:none}
+.auth-brand-text{display:flex;flex-direction:column;line-height:1.25}
+.auth-brand-name{font-size:17px;font-weight:700;color:#1F3D35;letter-spacing:.2px}
+.auth-brand-tag{font-size:10.5px;color:#8A9A94;letter-spacing:.8px;margin-top:2px}
+
+.auth-tabs{display:flex;border-bottom:1px solid rgba(31,61,53,.1);margin-bottom:22px}
+.auth-tab{
+  flex:1;background:none;border:none;padding:0 0 12px;cursor:pointer;
+  font-size:14.5px;color:#7A8B85;position:relative;
+}
+.auth-tab.is-active{color:#1F3D35;font-weight:600}
+.auth-tab.is-active::after{
+  content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:#1F3D35;
+}
+
+.auth-form{display:flex;flex-direction:column;gap:16px}
+.auth-field{display:flex;flex-direction:column;gap:7px}
+.auth-label{font-size:12.5px;color:#6B7C76;font-weight:500}
+.auth-field input{
+  height:44px;padding:0 13px;font-size:13.5px;border-radius:8px;
+  border:1px solid rgba(31,61,53,.16);background:#F3F6FA;color:#1F3D35;
+}
+.auth-field input:focus{
+  outline:none;border-color:#5E8E7E;background:#fff;
+  box-shadow:0 0 0 3px rgba(94,142,126,.12);
+}
+.auth-agree{
+  display:flex;align-items:center;gap:8px;font-size:12px;color:#5C6B66;cursor:pointer;
+}
+.auth-agree input{width:15px;height:15px;accent-color:#1F3D35}
+.auth-submit{
+  height:46px;border:none;border-radius:8px;background:#111;color:#fff;
+  font-size:14.5px;font-weight:600;cursor:pointer;margin-top:4px;
+}
+.auth-submit:disabled{opacity:.45;cursor:not-allowed}
+.auth-links{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-top:18px;font-size:12.5px;color:#7A8B85;
+}
+.auth-link{
+  background:none;border:none;padding:0 0 0 4px;color:#1F3D35;
+  font-size:12.5px;font-weight:600;text-decoration:underline;cursor:pointer;
+}
+.auth-help{color:#9AA8A3}
+.auth-foot{font-size:11.5px;color:#9AA8A3}
+
+/* 点击式验证码弹窗 */
+.captcha-trigger{
+  flex:none;height:44px;padding:0 16px;border-radius:8px;cursor:pointer;
+  border:1px solid rgba(31,61,53,.16);background:#fff;color:#1F3D35;font-size:13px;
+}
+.captcha-modal{
+  position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+  background:rgba(15,28,24,.45);padding:16px;
+}
+.captcha-dialog{
+  width:100%;max-width:560px;background:#fff;border-radius:12px;padding:20px 22px 18px;
+  box-shadow:0 20px 50px rgba(0,0,0,.2);
+}
+.captcha-head{display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:15px;color:#1F3D35}
+.captcha-close{background:none;border:none;font-size:22px;line-height:1;color:#9AA8A3;cursor:pointer}
+.captcha-desc{font-size:12px;color:#7A8B85;margin:6px 0 14px}
+.captcha-prompt{font-size:13.5px;color:#1F3D35;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:8px}
+.captcha-step{
+  background:#FDF2EC;border:1px solid #F3D6C6;border-radius:6px;
+  padding:3px 9px;font-size:12.5px;color:#B4552A;
+}
+.captcha-canvas{
+  position:relative;border:1px solid rgba(31,61,53,.14);border-radius:10px;
+  background:#FBF8F2;min-height:220px;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;cursor:crosshair;
+}
+.captcha-canvas svg{width:100%;height:auto;display:block}
+.captcha-picked{
+  position:absolute;right:10px;bottom:10px;background:rgba(31,61,53,.82);color:#fff;
+  font-size:11.5px;padding:3px 9px;border-radius:10px;
+}
+.captcha-error{color:#B4552A;font-size:12.5px;margin-top:10px}
+.captcha-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}

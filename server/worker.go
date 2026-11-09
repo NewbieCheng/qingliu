@@ -92,7 +92,9 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 	must(e)
 	defer unlock()
 	s.jobProgress(jid, "starting", "正在准备处理", 3)
-	user := s.one("SELECT id,role,display FROM ql_users WHERE id=? AND active=1", job["user_id"])
+	// tenant_id 必须一起取：授权口径是「资料所属租户」，漏了它团队账号
+	// 在后台任务里会被判成无权限（前台能进、后台任务全失败）。
+	user := s.one("SELECT id,role,display,tenant_id,tenant_role FROM ql_users WHERE id=? AND active=1", job["user_id"])
 	if user == nil || !s.allowed(user, cid) {
 		panic(fmt.Errorf("操作账号已失效或没有客户权限"))
 	}

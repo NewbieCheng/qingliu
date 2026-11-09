@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -43,11 +44,17 @@ func (a *App) loadPricing(ctx context.Context) parsePricing {
 	if !a.pricing.loadedAt.IsZero() && time.Since(a.pricing.loadedAt) < parsePricingTTL {
 		return a.pricing.value
 	}
-	status, data, err := a.wb.serviceRequest(ctx, http.MethodGet, "/api/v1/admin/finance/parse-pricing", nil)
+	status, data, err := a.wb.serviceRequest(ctx, http.MethodGet, "/api/v1/service/billing/parse-pricing", nil)
 	if err != nil || status != http.StatusOK {
+		// 读不到就沿用上次的值；首次失败时为 0（不扣费），并留下日志，
+		// 避免「运营以为在收费、实际一直免费」这种无声漏收。
+		log.Printf("parse pricing load failed: status=%d err=%v", status, err)
 		return a.pricing.value
 	}
-	payload := obj(str(data, "data"))
+	payload := sub(data, "data")
+	if payload == nil {
+		payload = data
+	}
 	pricing := parsePricing{
 		Text:   integer(payload["text_points_per_document"]),
 		OCR:    integer(payload["ocr_points_per_page"]),
@@ -88,10 +95,13 @@ func (a *App) chargeParse(ctx context.Context, userID, jobID, method string, pag
 		return 0, nil
 	}
 	account := a.wbAccount(userID)
-	if account == nil {
+	if account == nil || integer(account["workbench_user_id"]) == 0 {
+		// 本地过渡账号没有绑定工作台身份，无从扣费。记日志而不是静默跳过：
+		// 「解析成功但没扣费」必须能在运维侧看见，否则会变成长期漏收。
+		log.Printf("parse charge skipped: user=%s job=%s has no workbench identity", userID, jobID)
 		return 0, nil
 	}
-	status, _, err := a.wb.serviceRequest(ctx, http.MethodPost, "/api/v1/service/billing/charge", Object{
+	status, data, err := a.wb.serviceRequest(ctx, http.MethodPost, "/api/v1/service/billing/charge", Object{
 		"workbench_user_id": integer(account["workbench_user_id"]),
 		"batch_trace_id":    "qingliu-parse-" + jobID,
 		"points":            points,
@@ -99,11 +109,14 @@ func (a *App) chargeParse(ctx context.Context, userID, jobID, method string, pag
 		"note":              "清流文档解析：" + method + "，" + itoa(int64(pages)) + " 页",
 	})
 	if err != nil {
+		log.Printf("parse charge failed: job=%s points=%d err=%v", jobID, points, err)
 		return 0, err
 	}
 	if status < 200 || status >= 300 {
+		log.Printf("parse charge rejected: job=%s points=%d status=%d body=%s", jobID, points, status, wbMessage(data, ""))
 		return 0, errPricingChargeFailed
 	}
+	log.Printf("parse charge ok: job=%s method=%s pages=%d points=%d", jobID, method, pages, points)
 	return points, nil
 }
 
@@ -134,6 +147,11 @@ func (a *App) pointBalance(ctx context.Context, userID string) (int64, bool) {
 	if err != nil || status != http.StatusOK {
 		return 0, false
 	}
-	payload := obj(str(data, "data"))
+	// 工作台返回 {data:{points_balance:...}}；sub() 直接取嵌套对象，
+	// 用 obj(str(...)) 会把对象转成字符串再解析，永远得到空 map。
+	payload := sub(data, "data")
+	if payload == nil {
+		payload = data
+	}
 	return integer(payload["points_balance"]), true
 }

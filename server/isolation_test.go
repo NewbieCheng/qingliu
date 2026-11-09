@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -64,5 +65,51 @@ func TestTenantScopeNames(t *testing.T) {
 	}
 	if tenantScope(Object{"tenant_id": int64(0)}) != "personal" {
 		t.Fatal("tenant 0 must read as personal")
+	}
+}
+
+// 会话查询必须把 tenant_id/tenant_role 一起取出来。
+// 漏选时所有团队账号都会退化成「个人空间」，进而看到别人的资料 ——
+// 这是最危险的一类回归，因为它不报错，只是悄悄放宽了权限。
+func TestSessionQuerySelectsTenantColumns(t *testing.T) {
+	source, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	text := string(source)
+	start := strings.Index(text, "FROM ql_sessions s JOIN ql_users u")
+	if start < 0 {
+		t.Fatal("session query not found; the loader was rewritten")
+	}
+	line := text[strings.LastIndex(text[:start], "\n"):start]
+	for _, column := range []string{"u.tenant_id", "u.tenant_role"} {
+		if !strings.Contains(line, column) {
+			t.Fatalf("session query selects %s? no — missing %s means every team account degrades to personal scope",
+				"tenant", column)
+		}
+	}
+	if !strings.Contains(line, "u.tenant_id") {
+		t.Fatal("tenant_id missing from session query")
+	}
+}
+
+// 后台任务也必须带租户：worker 只查 id,role,display 时，团队账号在前台
+// 能正常操作，但一进后台任务就被判成「没有客户权限」—— 表现为上传后
+// 立即失败，且前台看不出原因。
+func TestWorkerUserQuerySelectsTenantColumns(t *testing.T) {
+	source, err := os.ReadFile("worker.go")
+	if err != nil {
+		t.Fatalf("read worker.go: %v", err)
+	}
+	text := string(source)
+	index := strings.Index(text, "FROM ql_users WHERE id=? AND active=1")
+	if index < 0 {
+		t.Fatal("worker user query not found")
+	}
+	line := text[strings.LastIndex(text[:index], "\n"):index]
+	for _, column := range []string{"tenant_id", "tenant_role"} {
+		if !strings.Contains(line, column) {
+			t.Fatalf("worker user query is missing %s; background jobs will reject team accounts", column)
+		}
 	}
 }

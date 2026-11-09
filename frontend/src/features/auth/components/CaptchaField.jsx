@@ -1,53 +1,147 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api } from "@/shared/api/client.js";
 
-// 图形验证码：与工作台同源同强度。工作台返回 SVG，这里直接以
-// dangerouslySetInnerHTML 注入 —— SVG 由服务端生成，不含用户输入。
-// 组件同时把 captcha_id/captcha_code 交给父级，父级提交时原样带给后端。
+// 人机验证：与工作台同一套点击式验证码。
+//
+// 后端返回 { captcha_id, type, svg, prompt, icon_target, sequence, objects }。
+// 用户在 SVG 上按提示依次点击图标，点击结果拼成 captcha_code 提交后端校验。
+// 这不是「输入四个字母」那种弱验证 —— 它是工作台正在用的图标序列挑战。
+
+const PROMPT_TEXT = {
+  click_largest: "请点击最大的图标",
+  click_smallest: "请点击最小的图标",
+  click_second_smallest: "请点击第二小的图标",
+  click_icon: "请点击指定图标",
+  click_sequence: "请按顺序依次点击图标",
+  click_size_asc: "请按从大到小依次点击",
+  click_size_desc: "请按从小到大依次点击",
+};
+
+const ICON_NAME = {
+  fish: "小鱼",
+  chili: "小米辣",
+  potato: "土豆",
+  onion: "洋葱",
+  garlic: "大蒜",
+  cake: "蛋糕",
+  milk: "牛奶",
+  scallion: "小葱",
+};
+
+function expectedSteps(captcha) {
+  if (!captcha) return 1;
+  if (captcha.prompt === "click_sequence") return (captcha.sequence || []).length || 1;
+  if (captcha.prompt === "click_size_asc" || captcha.prompt === "click_size_desc") return 4;
+  return 1;
+}
+
 export function CaptchaField({ value, onChange, onError }) {
+  const [open, setOpen] = useState(false);
   const [captcha, setCaptcha] = useState(null);
+  const [clicks, setClicks] = useState([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
-    onError?.("");
+    setLoading(true);
+    setError("");
     try {
-      const data = await api("/api/auth/captcha?type=image");
+      const data = await api("/api/auth/captcha?type=click");
       setCaptcha(data);
+      setClicks([]);
       onChange?.("", data?.captcha_id || "");
     } catch (requestError) {
+      setError(requestError.message);
       onError?.(requestError.message);
+    } finally {
+      setLoading(false);
     }
   }, [onChange, onError]);
 
-  // 只在挂载时拉一次；失败后由用户点击图片或父级换 key 重新挂载。
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (open && !captcha) void load();
+  }, [open, captcha, load]);
+
+  // 点击 SVG 内的图标：SVG 的每个图标都带 data-captcha-id，
+  // 用事件委托读取即可，不必自己算坐标（缩放/自适应都不会错位）。
+  function handleCanvasClick(event) {
+    const group = event.target.closest?.("[data-captcha-id]");
+    const id = group?.getAttribute("data-captcha-id");
+    if (!id) return;
+    setClicks((previous) => [...previous, id]);
+    setError("");
+  }
+
+  function confirm() {
+    const steps = expectedSteps(captcha);
+    if (clicks.length !== steps) {
+      setError(`请依次点击 ${steps} 个图标（当前 ${clicks.length} 个）`);
+      return;
+    }
+    onChange?.(clicks.join(","), captcha.captcha_id);
+    setOpen(false);
+    setError("");
+  }
+
+  const steps = expectedSteps(captcha);
+  const targetName = ICON_NAME[captcha?.icon_target] || captcha?.icon_target || "";
+  const promptText = captcha?.prompt === "click_icon" && targetName
+    ? `请点击「${targetName}」`
+    : PROMPT_TEXT[captcha?.prompt] || "请按提示依次点击图标";
 
   return (
-    <div className="captcha-row">
-      <input
-        className="captcha-input"
-        name="captcha_code"
-        autoComplete="off"
-        maxLength="8"
-        required
-        placeholder="请输入右侧字符"
-        value={value}
-        onChange={(event) => onChange?.(event.target.value, captcha?.captcha_id || "")}
-      />
-      <button
-        type="button"
-        className="captcha-image"
-        onClick={() => void load()}
-        title="看不清？点击换一张"
-        aria-label="刷新验证码"
-      >
-        {captcha?.svg ? (
-          <span dangerouslySetInnerHTML={{ __html: captcha.svg }} />
-        ) : (
-          <span className="captcha-loading">加载中…</span>
-        )}
-      </button>
-    </div>
+    <>
+      <div className="captcha-row">
+        <input
+          className="captcha-input"
+          readOnly
+          value={value ? "已完成人机验证" : ""}
+          placeholder="请先完成人机验证"
+          onClick={() => setOpen(true)}
+        />
+        <button type="button" className="captcha-trigger" onClick={() => setOpen(true)}>
+          {value ? "重新验证" : "去验证"}
+        </button>
+      </div>
+
+      {open && (
+        <div className="captcha-modal" role="dialog" aria-modal="true" aria-label="人机验证">
+          <div className="captcha-dialog">
+            <div className="captcha-head">
+              <span>真人验证</span>
+              <button type="button" className="captcha-close" onClick={() => setOpen(false)}>×</button>
+            </div>
+            <p className="captcha-desc">请完成人机验证，防止恶意登录</p>
+            <p className="captcha-prompt">
+              {captcha?.sequence?.length > 0
+                ? captcha.sequence.map((name, index) => (
+                    <span key={name} className="captcha-step">
+                      {index + 1}. {ICON_NAME[name] || name}
+                    </span>
+                  ))
+                : promptText}
+            </p>
+            <div className="captcha-canvas" onClick={handleCanvasClick}>
+              {loading && <span className="captcha-loading">加载中…</span>}
+              {!loading && captcha?.svg && (
+                <span dangerouslySetInnerHTML={{ __html: captcha.svg }} />
+              )}
+              {clicks.length > 0 && (
+                <span className="captcha-picked">已选 {clicks.length}/{steps}</span>
+              )}
+            </div>
+            {error && <p className="captcha-error">{error}</p>}
+            <div className="captcha-actions">
+              <button type="button" className="ghost" onClick={() => void load()} disabled={loading}>
+                换一张
+              </button>
+              <button type="button" className="primary" onClick={confirm} disabled={loading}>
+                确认（{clicks.length}/{steps}）
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

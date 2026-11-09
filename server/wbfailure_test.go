@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
 
 // 工作台现在会返回 reason_code/trace_id；清流必须把它们透传给用户，
 // 否则又回到“文件解析失败”这一句无法排查的提示。
@@ -38,4 +42,22 @@ func indexOf(haystack, needle string) int {
 		}
 	}
 	return -1
+}
+
+// 服务间调用必须带服务凭证：之前只对登录设置，计费与计价接口因此全部 403，
+// 表现是「解析成功但一分钱没扣」，且日志里只有一行 pricing load failed。
+func TestServicePathsCarryServiceCredentials(t *testing.T) {
+	source, err := os.ReadFile("workbench.go")
+	if err != nil {
+		t.Fatalf("read workbench.go: %v", err)
+	}
+	text := string(source)
+	if !strings.Contains(text, `strings.HasPrefix(path, "/api/v1/service/")`) {
+		t.Fatal("service credentials must be attached for every /api/v1/service/ path, not just login")
+	}
+	for _, header := range []string{"X-Service-Client", "X-Service-Secret"} {
+		if !strings.Contains(text, header) {
+			t.Fatalf("missing %s header", header)
+		}
+	}
 }

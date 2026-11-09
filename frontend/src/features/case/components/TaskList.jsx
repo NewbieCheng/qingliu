@@ -63,7 +63,11 @@ export function TaskList({ data, onRetry }) {
             )}
             {(active || job.status === "failed") && (
               <div className="task-meta">
-                <span>{STAGE_LABEL[job.stage] || JOB_STATUS[job.status]}</span>
+                <span>
+                  {job.status === "queued" && job.queue_position > 1
+                    ? `排队中 · 前面还有 ${job.queue_position - 1} 份`
+                    : STAGE_LABEL[job.stage] || JOB_STATUS[job.status]}
+                </span>
                 <span>{percent}%</span>
               </div>
             )}

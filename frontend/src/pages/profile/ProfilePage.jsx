@@ -110,11 +110,18 @@ export function ProfilePage() {
         <FormRow label="服务角色">
           <strong>{ROLES[me.service_role] || ROLES[me.role] || me.role}</strong>
         </FormRow>
-        <FormRow label="资料范围">
-          <strong>{me.scope === "team" ? "团队资料（团队内共享）" : "个人资料（仅自己可见）"}</strong>
+        <FormRow label={me.scope === "team" ? "所属团队" : "资料范围"}>
+          <strong>{me.scope === "team" ? me.tenant_name || "团队" : "个人空间（仅自己可见）"}</strong>
         </FormRow>
-        <FormRow label="工作台账号">
-          <strong>{me.workbench_linked ? "已绑定" : "本地过渡账号"}</strong>
+        {me.scope === "team" && (
+          <FormRow label="团队角色">
+            <strong>
+              {me.tenant_role === "admin" ? "团队管理员（可看本团队全部资料）" : "团队成员（可看本团队全部资料）"}
+            </strong>
+          </FormRow>
+        )}
+        <FormRow label="账号来源">
+          <strong>{me.workbench_linked ? "不加班工作台账号（统一账号）" : "本地过渡账号（建议改用工作台账号登录）"}</strong>
         </FormRow>
         <FormRow label="工作台用户 ID">
           <strong>{me.workbench_user_id || "—"}</strong>

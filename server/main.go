@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -40,6 +41,9 @@ type App struct {
 	wb     wbConfig
 	// pricing 缓存工作台「财务 → 解析计价」的三档单价，见 pricing.go。
 	pricing parsePricingCache
+	// tenantNames 缓存租户 id → 公司名，避免每次 /api/me 都请求工作台。
+	tenantMu    sync.Mutex
+	tenantNames map[int64]string
 }
 type request struct {
 	w       http.ResponseWriter
@@ -100,7 +104,9 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 		r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
 		q := &request{w: w, r: r, app: a}
 		if c, e := r.Cookie("ql_session"); e == nil {
-			q.session = a.s.one("SELECT s.token,s.csrf,u.id,u.username,u.display,u.role,w.workbench_user_id,w.service_role,w.email AS wb_email FROM ql_sessions s JOIN ql_users u ON u.id=s.user_id LEFT JOIN ql_workbench_accounts w ON w.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1", hash([]byte(c.Value)), time.Now().Unix())
+			// tenant_id/tenant_role 必须一起取出来：资料隔离的授权口径依赖它们，
+			// 漏选会让所有团队账号退化成「个人空间」，看到的是别人的资料。
+			q.session = a.s.one("SELECT s.token,s.csrf,u.id,u.username,u.display,u.role,u.tenant_id,u.tenant_role,w.workbench_user_id,w.service_role,w.email AS wb_email FROM ql_sessions s JOIN ql_users u ON u.id=s.user_id LEFT JOIN ql_workbench_accounts w ON w.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1", hash([]byte(c.Value)), time.Now().Unix())
 			q.user = q.session
 		}
 		public := r.URL.Path == "/api/login" || r.URL.Path == "/api/register" ||
@@ -244,6 +250,9 @@ func (a *App) mux() http.Handler {
 				// 资料归属维度：0=个人空间，>0=公司团队。前端据此提示当前范围。
 				"tenant_id": q.user["tenant_id"], "tenant_role": q.user["tenant_role"],
 				"scope": tenantScope(q.user),
+				// 所属团队/公司名称：账号页要明确告诉用户「你在哪个团队」。
+				// 名称以工作台 t_tenant 为准，两边是同一家公司，不另起名字。
+				"tenant_name": a.tenantName(q.r.Context(), q.user),
 			},
 			"csrf": q.session["csrf"],
 		})
@@ -273,6 +282,8 @@ func (a *App) mux() http.Handler {
 			"prompt":      str(payload, "prompt"),
 			"icon_target": str(payload, "icon_target"),
 			"sequence":    payload["sequence"],
+			// objects 是每个图标的 id/kind/尺寸，前端据此渲染可点区域。
+			"objects": payload["objects"],
 		})
 	}))
 	m.HandleFunc("POST /api/auth/verification-codes", a.route(func(q *request) {
@@ -490,7 +501,15 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("GET /api/clients/{cid}/jobs", a.route(func(q *request) {
 		cid := q.access()
-		q.json(Object{"jobs": s.query("SELECT id,kind,status,message,progress,stage,created FROM ql_jobs WHERE customer_id=? ORDER BY seq DESC LIMIT 30", cid)})
+		jobs := s.query("SELECT id,kind,status,message,progress,stage,created FROM ql_jobs WHERE customer_id=? ORDER BY seq DESC LIMIT 30", cid)
+		// 排队中的任务附带「前面还有几份」：串行解析时用户最想知道的是这个，
+		// 而不是一个笼统的「排队中」。
+		for _, job := range jobs {
+			if str(job, "status") == "queued" {
+				job["queue_position"] = s.queuePosition(str(job, "id")) + 1
+			}
+		}
+		q.json(Object{"jobs": jobs})
 	}))
 	m.HandleFunc("POST /api/clients/{cid}/upload", a.route(func(q *request) {
 		q.edit(func(cid string) {
@@ -791,7 +810,13 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("GET /api/admin", a.route(func(q *request) {
 		q.admin()
-		q.json(Object{"users": s.query("SELECT id,username,display,role,active FROM ql_users ORDER BY created")})
+		// 用户列表同样受资料隔离约束：管理员只看到自己空间的人，
+		// 否则「谁能看谁」在人员维度上又开了一个口子。
+		if tenant := integer(q.user["tenant_id"]); tenant > 0 {
+			q.json(Object{"users": s.query("SELECT id,username,display,role,active,tenant_id FROM ql_users WHERE tenant_id=? ORDER BY created", tenant)})
+			return
+		}
+		q.json(Object{"users": s.query("SELECT id,username,display,role,active,tenant_id FROM ql_users WHERE id=? ORDER BY created", str(q.user, "id"))})
 	}))
 	m.HandleFunc("GET /api/admin/audit", a.route(func(q *request) {
 		q.admin()
