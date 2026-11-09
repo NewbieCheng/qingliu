@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Loading } from "@/shared/ui/Loading.jsx";
 import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { Pagination } from "@/shared/ui/Pagination.jsx";
+import { SearchInput } from "@/shared/ui/SearchInput.jsx";
 import { EmptyState } from "@/shared/ui/EmptyState.jsx";
 import { invalidateClients, queryClients } from "@/app/queries/index.js";
 import {
@@ -29,7 +30,6 @@ export function ClientsPage() {
   return (
     <main>
       <PageHeader
-        eyebrow="客户档案"
         title="把核对工作，落到每一笔。"
         description="先确认资料归属，再核对交易，最后生成可追溯的报告。"
         actions={
@@ -50,11 +50,11 @@ export function ClientsPage() {
               setQuery(search);
             }}
           >
-            <input
+            <SearchInput
               aria-label="搜索客户代号"
               placeholder="搜索客户代号"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={setSearch}
             />
             <button>搜索</button>
             <button

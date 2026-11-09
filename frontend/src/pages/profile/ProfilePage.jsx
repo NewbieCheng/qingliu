@@ -4,18 +4,15 @@ import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { FormRow } from "@/shared/ui/FormRow.jsx";
 import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
-import { formatNumber } from "@/shared/lib/format.js";
 import { ROLES } from "@/shared/lib/constants.js";
 import { Link, navigate } from "@/shared/router/index.js";
-import { invalidateProfile, queryBalance, queryProfile } from "@/app/queries/index.js";
+import { invalidateProfile, queryProfile } from "@/app/queries/index.js";
 import { changePassword, logout } from "@/features/profile/index.js";
 
 export function ProfilePage() {
   const [me, setMe] = useState(null);
-  const [balance, setBalance] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
   async function load(force = false) {
     setError("");
@@ -23,12 +20,8 @@ export function ProfilePage() {
       if (force) {
         invalidateProfile();
       }
-      const [profile, wallet] = await Promise.all([
-        queryProfile({ force }),
-        queryBalance({ force }),
-      ]);
+      const profile = await queryProfile({ force });
       setMe(profile.user);
-      setBalance(wallet);
     } catch (requestError) {
       setError(requestError.message);
     }
@@ -71,29 +64,8 @@ export function ProfilePage() {
   return (
     <main className="account-page">
       <PageHeader
-        eyebrow="个人信息"
         title={me.display}
         description="账号由工作台统一管理；青流只保留业务角色与本地工作记录。"
-        actions={
-          <div className="account-actions">
-            <div className="balance-chip">
-              <span>可用积分</span>
-              <strong>{formatNumber(balance?.points_balance, "0")}</strong>
-            </div>
-            <button
-              type="button"
-              className="ghost"
-              disabled={refreshing}
-              onClick={async () => {
-                setRefreshing(true);
-                await load(true);
-                setRefreshing(false);
-              }}
-            >
-              {refreshing ? "刷新中…" : "刷新"}
-            </button>
-          </div>
-        }
       />
       {error && (
         <p className="error" role="alert">
@@ -120,15 +92,6 @@ export function ProfilePage() {
             </strong>
           </FormRow>
         )}
-        <FormRow label="账号来源">
-          <strong>{me.workbench_linked ? "不加班工作台账号（统一账号）" : "本地过渡账号（建议改用工作台账号登录）"}</strong>
-        </FormRow>
-        <FormRow label="工作台用户 ID">
-          <strong>{me.workbench_user_id || "—"}</strong>
-        </FormRow>
-        <FormRow label="积分余额">
-          <strong>{formatNumber(balance?.points_balance, "0")}</strong>
-        </FormRow>
       </section>
       <section className="card">
         <SectionTitle

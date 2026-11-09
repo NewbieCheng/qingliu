@@ -92,31 +92,31 @@ frontend/src/
 
 ```bash
 cd frontend
-npm install        # 首次
-npm run dev        # → http://127.0.0.1:5173
+pnpm install       # 首次
+pnpm dev           # → http://127.0.0.1:5173
 ```
 
 - 端口固定 5173（`strictPort`），`/api` 与 `/health` 由 `vite.config.js` 反向代理到生产 `https://qingliu.bujiaban.top`；本地不需要 MySQL，也不需要起 Go 服务。
 - 代理会改写 `Origin`/`Referer`，并剥掉响应 `Set-Cookie` 的 `Secure`，否则本地登录/保存会被 403、Cookie 也存不住。
 - 换环境只改 `frontend/vite.config.js` 的 `target`，换完必须**重新登录**（旧 token 属于旧库）。
-- 源码热更新即时生效；`frontend/dist` 是交付产物，发布前要重新 `npm run build`。
-- **本地登录预填**：`frontend/.env.local` 里的 `VITE_DEV_LOGIN_USERNAME` / `VITE_DEV_LOGIN_PASSWORD` 只在 `npm run dev`（`import.meta.env.DEV`）时填进登录表单，生产构建里为空（已验证构建产物不含该口令）。该文件命中 `.gitignore` 的 `*.local`，不要提交。
+- 源码热更新即时生效；`frontend/dist` 是交付产物，发布前要重新 `pnpm build`。
+- **本地登录预填**：`frontend/.env.local` 里的 `VITE_DEV_LOGIN_USERNAME` / `VITE_DEV_LOGIN_PASSWORD` 只在 `pnpm dev`（`import.meta.env.DEV`）时填进登录表单，生产构建里为空（已验证构建产物不含该口令）。该文件命中 `.gitignore` 的 `*.local`，不要提交。
 
 ## 验证基线
 
 ```bash
 cd server && go test ./... && go vet ./...
-cd ../frontend && npm ci --ignore-scripts && npm run check
+cd ../frontend && pnpm install --frozen-lockfile && pnpm check
 ```
 
-前端 `npm run check` 依次执行：ESLint、目录边界检查、Vitest、生产构建。
+前端 `pnpm check` 依次执行：ESLint、目录边界检查、Vitest、生产构建。
 涉及路由、登录或底稿流程时再执行：
 
 ```bash
-cd frontend && npm run smoke
+cd frontend && pnpm smoke
 ```
 
-`npm run smoke` 使用本机 Playwright Chromium 和 mock API，验证登录跳转、客户列表、
+`pnpm smoke` 使用本机 Playwright Chromium 和 mock API，验证登录跳转、客户列表、
 底稿步骤 URL、SPA 跳转、390px 无横向溢出和 404。真实接口仍需按
 `docs/10-本地开发与测试.md` 做浏览器回归；没有测试环境时明确说明未验证。
 

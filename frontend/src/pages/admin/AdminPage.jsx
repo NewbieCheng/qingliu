@@ -68,7 +68,6 @@ export function AdminPage() {
   return (
     <main>
       <PageHeader
-        eyebrow="团队与权限"
         title="明确分工，保留每次核对。"
         description="业务员与复核员只可访问获授权的客户。管理员可管理全部客户。"
       />

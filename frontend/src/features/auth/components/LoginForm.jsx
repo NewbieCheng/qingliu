@@ -1,9 +1,9 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { Form } from "@/shared/ui/Form.jsx";
 import { useAuth } from "../context.js";
 import { navigate } from "@/shared/router/index.js";
 import { LoginPassword } from "./LoginPassword.jsx";
-import { CaptchaField } from "./CaptchaField.jsx";
+import { CaptchaChallenge } from "./CaptchaChallenge.jsx";
 
 // 仅本地开发（vite dev）用：从 frontend/.env.local 读预填账号，构建产物里为空。
 const devUsername = import.meta.env.DEV
@@ -11,24 +11,40 @@ const devUsername = import.meta.env.DEV
   : "";
 
 // 1=个人，2=团队。团队/公司账号由工作台后台创建，清流只负责登录。
+// 默认企业登录：清流的主要使用者是评估机构的团队账号。
 const LOGIN_MODES = [
-  { value: 1, label: "个人登录" },
   { value: 2, label: "企业登录" },
+  { value: 1, label: "个人登录" },
 ];
+
+// 用户取消人机验证时用它中断提交流程：它不是错误，不该弹错误 toast。
+const CANCELLED = Object.assign(new Error("已取消人机验证"), { silent: true });
 
 export function LoginForm({ onRegister }) {
   const { login, rememberedUsername, rememberUsername } = useAuth();
-  const [mode, setMode] = useState(1);
-  const [captchaCode, setCaptchaCode] = useState("");
-  const [captchaID, setCaptchaID] = useState("");
-  const [captchaKey, setCaptchaKey] = useState(0);
+  const [mode, setMode] = useState(2);
   const [agreed, setAgreed] = useState(true);
   // 登录失败原因（常驻显示，不依赖 toast）
   const [submitError, setSubmitError] = useState("");
+  // 人机验证：只有点了「登录」才弹出；通过后拿到一次性的 captcha 凭据。
+  const [challengeOpen, setChallengeOpen] = useState(false);
+  const [captcha, setCaptcha] = useState({ id: "", code: "" });
+  const waiter = useRef(null);
 
-  const handleCaptcha = useCallback((code, id) => {
-    setCaptchaCode(code);
-    if (id) setCaptchaID(id);
+  const askCaptcha = useCallback(
+    () =>
+      new Promise((resolve) => {
+        waiter.current = resolve;
+        setChallengeOpen(true);
+      }),
+    [],
+  );
+
+  const closeChallenge = useCallback((answer) => {
+    setChallengeOpen(false);
+    const resolve = waiter.current;
+    waiter.current = null;
+    resolve?.(answer);
   }, []);
 
   return (
@@ -57,20 +73,31 @@ export function LoginForm({ onRegister }) {
         onSave={async (form) => {
           if (!agreed) throw new Error("请先阅读并同意用户协议与隐私政策");
           const username = String(form.get("username")).trim();
+
+          let answer = captcha;
+          if (!answer.code) {
+            const solved = await askCaptcha();
+            if (!solved || solved === CANCELLED) throw CANCELLED;
+            answer = solved;
+            setCaptcha(solved);
+          }
+
           try {
             await login({
               username,
               password: form.get("password"),
               login_mode: mode,
-              captcha_id: captchaID,
-              captcha_code: captchaCode.trim(),
+              captcha_id: answer.id,
+              captcha_code: String(answer.code).trim(),
             });
           } catch (error) {
-            // 验证码一次性有效：任何失败都换一张，避免用户拿旧图重试。
-            setCaptchaKey((value) => value + 1);
-            // 登录页必须**常驻**显示失败原因：只弹 toast 的话，用户看到的
-            // 是「已完成人机验证」但页面毫无反应，完全不知道发生了什么。
+            // 验证码一次性有效：任何失败都作废，下次点登录重新出题。
+            setCaptcha({ id: "", code: "" });
+            // 登录失败原因常驻显示在表单里（只弹 toast 的话，用户看到的
+            // 是「已完成人机验证」但页面毫无反应）。错误已在页内展示，
+            // 改为静默抛出，避免 Form 再弹一次同样的 toast造成双报。
             setSubmitError(error?.message || "登录失败，请重试");
+            error.silent = true;
             throw error;
           }
           setSubmitError("");
@@ -95,25 +122,13 @@ export function LoginForm({ onRegister }) {
           <LoginPassword />
         </label>
 
-        <div className="auth-field">
-          <span className="auth-label">人机验证</span>
-          <CaptchaField
-            key={captchaKey}
-            value={captchaCode}
-            onChange={handleCaptcha}
-            onError={() => {}}
-          />
-        </div>
-
         <label className="auth-agree">
           <input
             type="checkbox"
             checked={agreed}
             onChange={(event) => setAgreed(event.target.checked)}
           />
-          <span>
-            我已阅读并同意《用户协议》与《隐私政策》
-          </span>
+          <span>我已阅读并同意《用户协议》与《隐私政策》</span>
         </label>
 
         {submitError ? (
@@ -121,6 +136,7 @@ export function LoginForm({ onRegister }) {
             {submitError}
           </p>
         ) : null}
+
         <button className="auth-submit" disabled={!agreed}>
           登录工作台
         </button>
@@ -135,6 +151,17 @@ export function LoginForm({ onRegister }) {
         </span>
         <span className="auth-help">忘记密码请联系管理员</span>
       </div>
+
+      <CaptchaChallenge
+        open={challengeOpen}
+        title="登录前确认"
+        reason="这次登录需要确认由真人操作。点完提示中的图标后，会继续登录。"
+        onCancel={() => closeChallenge(CANCELLED)}
+        onSolved={(code, id) => {
+          if (!code) return;
+          closeChallenge({ id, code });
+        }}
+      />
     </>
   );
 }

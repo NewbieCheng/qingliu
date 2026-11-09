@@ -1,5 +1,6 @@
 import React from "react";
 import { Field, Form } from "@/shared/ui/Form.jsx";
+import { Select } from "@/shared/ui/FormRow.jsx";
 import { SOURCES } from "@/shared/lib/constants.js";
 
 export function RangeForm({ data, onChange }) {
@@ -10,13 +11,13 @@ export function RangeForm({ data, onChange }) {
       key={data.start + data.end + data.source}
     >
       <Field label="统计来源">
-        <select name="source" defaultValue={data.source}>
+        <Select name="source" label="统计来源" defaultValue={data.source}>
           {data.choices.map((value) => (
             <option key={value} value={value}>
               {SOURCES[value]}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
       <Field label="开始日期">
         <input name="start" type="date" defaultValue={data.start} required />

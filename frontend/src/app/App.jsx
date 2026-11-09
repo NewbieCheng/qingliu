@@ -63,6 +63,8 @@ function Workspace() {
       <WorkspaceShell
         user={user}
         pathname={location.pathname}
+        title={route.title}
+        back={route.back}
         onPassword={() => setPasswordOpen(true)}
         onLogout={async () => {
           await logout();
@@ -71,7 +73,6 @@ function Workspace() {
       >
         <main>
           <div className="card">
-            <p className="eyebrow">权限不足</p>
             <h1>当前账号没有访问此页面的权限。</h1>
             <p className="muted">请联系管理员分配对应角色或客户访问权限。</p>
           </div>
@@ -87,6 +88,8 @@ function Workspace() {
       <WorkspaceShell
         user={user}
         pathname={location.pathname}
+        title={route.title}
+        back={route.back}
         onPassword={() => setPasswordOpen(true)}
         onLogout={async () => {
           await logout();

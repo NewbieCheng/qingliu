@@ -23,7 +23,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onOpenOrigi
   }
 
   return (
-    <div className="table-wrap">
+    <div className="table-wrap table-compact">
       <table>
         <thead>
           <tr>

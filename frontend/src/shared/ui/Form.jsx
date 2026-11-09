@@ -15,7 +15,8 @@ export function Form({ onSave, children, className = "", success = "已保存" }
           await onSave(data, event.currentTarget);
           if (success) toast(success);
         } catch (error) {
-          toast(error.message, "error");
+          // silent：用户主动取消（例如关掉人机验证）不是错误，不该弹 toast。
+          if (!error?.silent) toast(error.message, "error");
         } finally {
           setBusy(false);
         }

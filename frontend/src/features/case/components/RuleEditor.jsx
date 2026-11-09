@@ -1,12 +1,17 @@
 import React, { useState } from "react";
 import { Field, Form } from "@/shared/ui/Form.jsx";
+import { Select } from "@/shared/ui/FormRow.jsx";
+import { TrashIcon } from "@/shared/ui/icons.jsx";
 
 export function RuleEditor({ rules, busy, onSave }) {
   const [related, setRelated] = useState(rules.related || []);
 
   return (
     <details className="card">
-      <summary>客户独立规则与关联名单</summary>
+      <summary>
+        客户独立规则与关联名单
+        {related.length > 0 && `（${related.length}/50）`}
+      </summary>
       <p className="muted">
         完整账号优先匹配；未填账号时使用完整姓名。规则修改会使已提交的复核失效。
       </p>
@@ -57,8 +62,9 @@ export function RuleEditor({ rules, busy, onSave }) {
                 )
               }
             />
-            <select
+            <Select
               aria-label="关联人往来处理"
+              label="关联人往来处理"
               value={person.mode}
               onChange={(event) =>
                 setRelated(
@@ -72,14 +78,17 @@ export function RuleEditor({ rules, busy, onSave }) {
             >
               <option value="pending">待核实</option>
               <option value="excluded">剔除</option>
-            </select>
+            </Select>
             <button
               type="button"
+              className="ghost relation-remove"
+              aria-label={`移除第 ${index + 1} 位关联人`}
+              title="移除"
               onClick={() =>
                 setRelated(related.filter((_, current) => index !== current))
               }
             >
-              移除
+              <TrashIcon size={14} />
             </button>
           </div>
         ))}
@@ -108,9 +117,11 @@ export function RuleEditor({ rules, busy, onSave }) {
           />
           银行卡未提供对手姓名及账号时标为待核实
         </label>
-        <button className="primary" disabled={busy}>
-          保存客户规则
-        </button>
+        <div className="actions-end">
+          <button className="primary" disabled={busy}>
+            保存客户规则
+          </button>
+        </div>
       </Form>
     </details>
   );

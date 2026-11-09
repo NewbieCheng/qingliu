@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { JOB_STATUS } from "@/shared/lib/constants.js";
 import { Form } from "@/shared/ui/Form.jsx";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
@@ -29,20 +29,45 @@ function progressOf(job) {
   return Math.max(0, Math.min(100, value));
 }
 
-export function TaskList({ data, onRetry }) {
-  const jobs = data.jobs.filter((job) =>
-    ["queued", "running", "failed", "partial", "done"].includes(job.status),
-  );
+// 进行中/失败置顶常显；已完成压成单行，默认只露 5 条。
+const VISIBLE_JOBS = 5;
+
+function isUrgent(job) {
+  return job.status === "queued" || job.status === "running" || job.status === "failed";
+}
+
+export function TaskList({ data, onRetry, onCancel }) {
+  const [expanded, setExpanded] = useState(false);
+  const [cancelling, setCancelling] = useState("");
+  const jobs = data.jobs
+    .filter((job) =>
+      ["queued", "running", "failed", "partial", "done"].includes(job.status),
+    )
+    .sort((a, b) => Number(isUrgent(b)) - Number(isUrgent(a)));
   if (!jobs.length) return null;
+  const visible = expanded ? jobs : jobs.slice(0, VISIBLE_JOBS);
+
+  async function cancel(jobId) {
+    setCancelling(jobId);
+    try {
+      await onCancel?.(jobId);
+    } finally {
+      setCancelling("");
+    }
+  }
 
   return (
     <section className="task-list card">
       <h3>后台任务</h3>
-      {jobs.slice(0, 10).map((job) => {
+      {visible.map((job) => {
         const active = job.status === "queued" || job.status === "running";
+        const done = job.status === "done" || job.status === "partial";
         const percent = progressOf(job);
         return (
-          <div className={`task ${active ? "is-active" : ""}`} key={job.id}>
+          <div
+            className={`task${active ? " is-active" : ""}${done ? " is-done" : ""}`}
+            key={job.id}
+          >
             <div className="task-head">
               <span>
                 {KIND_LABEL[job.kind] || "后台任务"} · {job.message}
@@ -71,14 +96,37 @@ export function TaskList({ data, onRetry }) {
                 <span>{percent}%</span>
               </div>
             )}
-            {job.status === "failed" && job.kind === "upload" && !data.busy && (
-              <Form success="" onSave={() => onRetry(job.id)}>
-                <button>重试</button>
-              </Form>
+            {(active || job.status === "failed") && (
+              <div className="task-actions">
+                {active && (
+                  <button
+                    type="button"
+                    className="ghost task-cancel"
+                    disabled={cancelling === job.id}
+                    onClick={() => void cancel(job.id)}
+                  >
+                    {cancelling === job.id ? "终止中…" : "终止"}
+                  </button>
+                )}
+                {job.status === "failed" && job.kind === "upload" && !data.busy && (
+                  <Form success="" onSave={() => onRetry(job.id)}>
+                    <button>重试</button>
+                  </Form>
+                )}
+              </div>
             )}
           </div>
         );
       })}
+      {jobs.length > VISIBLE_JOBS && (
+        <button
+          type="button"
+          className="ghost task-toggle"
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? "收起" : `展开全部 ${jobs.length} 条`}
+        </button>
+      )}
     </section>
   );
 }

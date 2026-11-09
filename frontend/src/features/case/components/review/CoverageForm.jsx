@@ -25,9 +25,11 @@ export function CoverageForm({ data, onSave }) {
           <input type="checkbox" name="confirmed" required />
           我已对照原件核对当前范围与完整性
         </label>
-        <button className="primary" disabled={data.busy}>
-          确认期间，查看报告
-        </button>
+        <div className="actions-end">
+          <button className="primary" disabled={data.busy}>
+            确认期间，查看报告
+          </button>
+        </div>
       </Form>
     </section>
   );

@@ -776,6 +776,20 @@ func (a *App) mux() http.Handler {
 			q.json(Object{"ok": true, "analysis": row})
 		})
 	}))
+	m.HandleFunc("POST /api/clients/{cid}/jobs/{jid}/cancel", a.route(func(q *request) {
+		cid := q.access()
+		j := s.one("SELECT * FROM ql_jobs WHERE id=? AND customer_id=?", q.r.PathValue("jid"), cid)
+		require(j != nil, "任务不存在")
+		status := str(j, "status")
+		require(status == "queued" || status == "running", "只有排队中或执行中的任务可以终止")
+		jid := str(j, "id")
+		// 取消只写终态，不试图强杀 goroutine：执行器会在下一次阶段回调
+		// 或超时后自行退出；busy() 立刻为假，用户不必等它跑完。
+		s.jobFinish(jid, "failed", "已手动终止")
+		s.exec("UPDATE ql_ai_analyses SET status='failed',stage='failed',error='已手动终止',completed=NOW(6) WHERE customer_id=? AND status IN ('queued','running','uploading')", cid)
+		s.event(str(q.user, "id"), cid, "job_cancelled", jid)
+		q.json(Object{"ok": true})
+	}))
 	m.HandleFunc("POST /api/clients/{cid}/retry/{jid}", a.route(func(q *request) {
 		q.edit(func(cid string) {
 			j := s.one("SELECT * FROM ql_jobs WHERE id=? AND customer_id=?", q.r.PathValue("jid"), cid)

@@ -19,7 +19,6 @@ export class ErrorBoundary extends React.Component {
     return (
       <main>
         <div className="card">
-          <p className="eyebrow">页面异常</p>
           <h1>当前页面没有正常加载。</h1>
           <p className="muted">{this.state.error.message}</p>
           <button

@@ -24,6 +24,7 @@ export const ROUTES = [
     path: "/clients/:cid",
     page: CasePage,
     title: "客户底稿",
+    back: { to: "/", label: "返回客户档案" },
   },
   {
     path: "/recharge",

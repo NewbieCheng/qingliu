@@ -5,7 +5,7 @@ import { StatusBadge } from "@/shared/ui/Badge.jsx";
 
 export function ClientsTable({ clients }) {
   return (
-    <div className="table-wrap">
+    <div className="table-wrap table-compact">
       <table>
         <thead>
           <tr>

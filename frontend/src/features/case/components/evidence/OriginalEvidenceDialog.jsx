@@ -1,20 +1,39 @@
-import React from "react";
+import React, { useState } from "react";
 import { TRANSACTION_LABELS } from "@/shared/lib/constants.js";
 import { formatCents } from "@/shared/lib/format.js";
 import { Modal } from "@/shared/ui/Modal.jsx";
+import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { originalPageURL } from "../../api.js";
 
 export function OriginalEvidenceDialog({ cid, original, onClose }) {
   const row = original.row;
+  const isPdf = row.filename.toLowerCase().endsWith(".pdf");
+  const total = Math.max(Number(original.pages) || row.page || 1, 1);
+  const [page, setPage] = useState(Math.min(row.page || 1, total));
 
   return (
-    <Modal title="原件与确认记录" onClose={onClose}>
+    <Modal
+      title={`原件与确认记录${isPdf && total > 1 ? `（第 ${page}/${total} 页）` : ""}`}
+      onClose={onClose}
+    >
       <div className="original">
-        {row.filename.toLowerCase().endsWith(".pdf") && (
-          <img
-            alt={`原件第${row.page}页`}
-            src={originalPageURL(cid, row.document_id, row.page)}
-          />
+        {isPdf && (
+          <>
+            <img
+              alt={`原件第${page}页`}
+              src={originalPageURL(cid, row.document_id, page)}
+            />
+            {total > 1 && (
+              <Pagination
+                page={page}
+                onPrevious={() => setPage((value) => value - 1)}
+                onNext={() => setPage((value) => value + 1)}
+                canPrevious={page > 1}
+                canNext={page < total}
+                label={`第 ${page} 页 / 共 ${total} 页`}
+              />
+            )}
+          </>
         )}
         <div>
           <dl>

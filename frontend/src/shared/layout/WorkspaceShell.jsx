@@ -6,7 +6,7 @@ import { Topbar } from "./Topbar.jsx";
 const RAIL_KEY = "ql.rail.collapsed";
 const TOPBAR_KEY = "ql.topbar.collapsed";
 
-export function WorkspaceShell({ user, pathname, onPassword, onLogout, children }) {
+export function WorkspaceShell({ user, pathname, title, back, onPassword, onLogout, children }) {
   const [railCollapsed, setRailCollapsed] = useStoredFlag(RAIL_KEY);
   const [topbarCollapsed, setTopbarCollapsed] = useStoredFlag(TOPBAR_KEY);
 
@@ -20,7 +20,6 @@ export function WorkspaceShell({ user, pathname, onPassword, onLogout, children 
         user={user}
         pathname={pathname}
         collapsed={railCollapsed}
-        onToggle={() => setRailCollapsed((value) => !value)}
         onLogout={onLogout}
         onPassword={onPassword}
       />
@@ -28,6 +27,10 @@ export function WorkspaceShell({ user, pathname, onPassword, onLogout, children 
         <Topbar
           collapsed={topbarCollapsed}
           onToggle={() => setTopbarCollapsed((value) => !value)}
+          railCollapsed={railCollapsed}
+          onToggleRail={() => setRailCollapsed((value) => !value)}
+          title={title}
+          back={back}
         />
         <div className="page-wrap">{children}</div>
         <footer>

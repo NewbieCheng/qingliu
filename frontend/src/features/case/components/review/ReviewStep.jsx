@@ -1,5 +1,7 @@
 import React from "react";
 import { Pagination } from "@/shared/ui/Pagination.jsx";
+import { SearchInput } from "@/shared/ui/SearchInput.jsx";
+import { Select } from "@/shared/ui/FormRow.jsx";
 import { AccountingSummary } from "../AccountingSummary.jsx";
 import { RangeForm } from "../RangeForm.jsx";
 import { RuleEditor } from "../RuleEditor.jsx";
@@ -44,8 +46,9 @@ export function ReviewStep({
           <h2>
             逐笔核对 <small>{data.row_count} 笔</small>
           </h2>
-          <select
+          <Select
             aria-label="交易筛选"
+            label="交易筛选"
             value={view}
             onChange={(event) => changeView(event.target.value)}
           >
@@ -53,12 +56,12 @@ export function ReviewStep({
             <option value="all">全部交易</option>
             <option value="confirmed">已人工确认</option>
             <option value="duplicate">疑似重复</option>
-          </select>
-          <input
+          </Select>
+          <SearchInput
             aria-label="搜索交易"
             placeholder="对手方、摘要或日期"
             value={query}
-            onChange={(event) => changeQuery(event.target.value)}
+            onChange={(value) => changeQuery(value)}
           />
         </div>
         <TransactionTable

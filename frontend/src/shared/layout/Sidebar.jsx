@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "@/shared/router/index.js";
 import { ROLES } from "@/shared/lib/constants.js";
-import { NavIcon, RailToggleIcon } from "@/shared/ui/icons.jsx";
+import { NavIcon } from "@/shared/ui/icons.jsx";
 import { NAVIGATION, isNavItemActive } from "./navigation.js";
 
 function NavItem({ item, pathname, collapsed }) {
@@ -18,14 +18,7 @@ function NavItem({ item, pathname, collapsed }) {
   );
 }
 
-export function Sidebar({
-  user,
-  pathname,
-  collapsed,
-  onToggle,
-  onLogout,
-  onPassword,
-}) {
+export function Sidebar({ user, pathname, collapsed, onLogout, onPassword }) {
   const initials = (user.display || "清").slice(0, 1);
 
   return (
@@ -43,16 +36,6 @@ export function Sidebar({
             alt="青流"
           />
         </Link>
-        <button
-          type="button"
-          className="topbar-sidebar"
-          aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
-          aria-expanded={!collapsed}
-          title={collapsed ? "展开侧边栏" : "收起侧边栏"}
-          onClick={onToggle}
-        >
-          <RailToggleIcon collapsed={collapsed} />
-        </button>
       </div>
       <nav className="rail-nav" aria-label="主导航">
         {NAVIGATION.filter(

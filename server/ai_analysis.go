@@ -44,7 +44,8 @@ func (a *App) startAIAnalysis(userID, cid, docID, task string) Object {
 		return nil
 	}
 	// 同一资料已有排队/运行中的分析时复用，避免重复点击产生并行任务。
-	if existing := a.s.one("SELECT * FROM ql_ai_analyses WHERE customer_id=? AND document_id=? AND status IN ('queued','running','uploading') ORDER BY created DESC LIMIT 1", cid, docID); existing != nil {
+	// 但超过 staleJobMinutes 的记录视为卡死，不复用，直接开新的一条。
+	if existing := a.s.one("SELECT * FROM ql_ai_analyses WHERE customer_id=? AND document_id=? AND status IN ('queued','running','uploading') AND created > DATE_SUB(NOW(6), INTERVAL ? MINUTE) ORDER BY created DESC LIMIT 1", cid, docID, staleJobMinutes); existing != nil {
 		return existing
 	}
 	analysisID := id()
@@ -61,13 +62,22 @@ func (a *App) startAIAnalysis(userID, cid, docID, task string) Object {
 }
 
 // runAIAnalysisJob 由 worker 调用；stage 回调把工作台/本地阶段写回两张表。
-func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid string, payload Object, report func(stage, message string, progress int)) {
+//
+// jid 是 ql_jobs 的主键：失败时必须同步把任务标成 failed，否则任务会停在
+// queued/running 占住客户，后续上传、核对、报告全部 409。
+func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, payload Object, report func(stage, message string, progress int)) {
 	analysisID := str(payload, "analysis_id")
 	docID := str(payload, "document_id")
 	name := str(payload, "name")
 	step := func(stage, message string) {
 		progress, text := analyzeStageProgress(stage)
-		report(stage, message+"（"+text+"）", progress)
+		// 调用方给的 message 常常与阶段文案相同，直接拼会得到
+		// 「正在上传原件到分析服务（正在上传原件到分析服务）」这种重复。
+		line := message
+		if message != text {
+			line = message + "（" + text + "）"
+		}
+		report(stage, line, progress)
 		dbStatus := "running"
 		switch stage {
 		case "queued":
@@ -83,6 +93,7 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid string, payload 
 		}
 		report("failed", message, 0)
 		a.s.exec("UPDATE ql_ai_analyses SET status='failed',stage='failed',error=?,completed=NOW(6) WHERE id=?", message, analysisID)
+		a.s.jobFinish(jid, "failed", message)
 	}
 	if !a.wb.Ready() {
 		fail("尚未接入工作台")

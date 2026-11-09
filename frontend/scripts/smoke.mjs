@@ -136,7 +136,7 @@ await check("redirect to /login when signed out", async () => {
     route.fulfill({ status: 401, contentType: "application/json", body: '{"error":"未登录"}' }),
   );
   await page.goto(base, { waitUntil: "networkidle" });
-  await page.waitForSelector(".login-page");
+  await page.waitForSelector(".auth-login");
   if (page.url() !== `${base}/login`) throw new Error(`unexpected url ${page.url()}`);
 });
 

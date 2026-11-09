@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "test": "vitest run",
-    "check": "npm run lint && npm run check:arch && npm run test && npm run build",
+    "check": "pnpm run lint && pnpm run check:arch && pnpm run test && pnpm run build",
     "check:arch": "node scripts/check-architecture.mjs",
     "smoke": "node scripts/smoke.mjs"
   },

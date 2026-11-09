@@ -1,5 +1,6 @@
 import React from "react";
 import { Field, Form } from "@/shared/ui/Form.jsx";
+import { Select } from "@/shared/ui/FormRow.jsx";
 import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
 import { UploadDropzone } from "@/shared/ui/UploadDropzone.jsx";
 import { SOURCES } from "@/shared/lib/constants.js";
@@ -14,25 +15,29 @@ export function UploadStep({ data, onUpload, onNext }) {
       />
       <Form onSave={async (form) => onUpload(form)}>
         <Field label="资料来源">
-          <select name="source" defaultValue="other">
+          <Select name="source" label="资料来源" defaultValue="other">
             {Object.entries(SOURCES).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <UploadDropzone name="files" disabled={data.busy} />
         <label className="check">
           <input type="checkbox" name="ocr" value="true" />
           扫描征信尝试本地识别（候选文字仍须人工核对）
         </label>
-        <button className="primary" disabled={data.busy}>
-          上传并开始识别
-        </button>
+        <div className="actions-end">
+          <button type="button" className="ghost" onClick={onNext}>
+            下一步：确认归属 →
+          </button>
+          <button className="primary" disabled={data.busy}>
+            上传并开始识别
+          </button>
+        </div>
       </Form>
       <DocumentList data={data} />
-      <button onClick={onNext}>下一步：确认归属 →</button>
     </section>
   );
 }

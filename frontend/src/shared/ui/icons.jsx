@@ -37,6 +37,50 @@ export function UserIcon({ size = 16 }) {
   );
 }
 
+export function BuildingIcon({ size = 16 }) {
+  return (
+    <Svg size={size} strokeWidth="1.5">
+      <rect x="4" y="3.5" width="12" height="13" rx="1" />
+      <path d="M7 6.5h2M11 6.5h2M7 10h2M11 10h2M7 13.5h2M11 13.5h2" />
+    </Svg>
+  );
+}
+
+export function CheckIcon({ size = 16 }) {
+  return (
+    <Svg size={size} strokeWidth="2">
+      <path d="m4 10.5 4 4 8-9" />
+    </Svg>
+  );
+}
+
+export function XIcon({ size = 16 }) {
+  return (
+    <Svg size={size} strokeWidth="1.8">
+      <path d="m5 5 10 10M15 5 5 15" />
+    </Svg>
+  );
+}
+
+export function TrashIcon({ size = 16 }) {
+  return (
+    <Svg size={size} strokeWidth="1.5">
+      <path d="M4 6h12M8.5 6V4.5A1.5 1.5 0 0 1 10 3h0A1.5 1.5 0 0 1 11.5 4.5V6" />
+      <path d="M6 6l.7 9.2A1.8 1.8 0 0 0 8.5 17h3a1.8 1.8 0 0 0 1.8-1.8L14 6" />
+      <path d="M8.5 9.5v5M11.5 9.5v5" />
+    </Svg>
+  );
+}
+
+export function DownloadIcon({ size = 16 }) {
+  return (
+    <Svg size={size} strokeWidth="1.6">
+      <path d="M10 3v9.5M6 9.5l4 4 4-4" />
+      <path d="M4 16.5h12" />
+    </Svg>
+  );
+}
+
 export function EyeIcon({ size = 17, off = false }) {
   return (
     <Svg size={size} strokeWidth="1.4">

@@ -9,8 +9,25 @@ import (
 	"time"
 )
 
-func workerLoop(ctx context.Context, s *Store, app *App) {
-	conn, e := s.db.Conn(ctx)
+// sweepStaleJobs 把超时仍停在 queued/running 的任务标成失败。
+//
+// 历史缺陷：任务失败时没有写 ql_jobs 终态，记录会永久停在 queued，
+// busy() 恒真，该客户的上传、核对、报告全部被 409 挡住。启动时和之后
+// 每 5 分钟扫一次，把这些僵尸任务收掉，并留下 event 方便回溯。
+func sweepStaleJobs(s *Store) {
+	rows := s.query("SELECT id,customer_id,user_id,kind FROM ql_jobs WHERE status IN ('queued','running') AND created < DATE_SUB(NOW(6), INTERVAL ? MINUTE)", staleJobMinutes)
+	for _, job := range rows {
+		jid := str(job, "id")
+		message := "任务超时未完成，已自动终止；可重新提交"
+		s.exec("UPDATE ql_jobs SET status='failed',message=?,stage='failed',progress=0 WHERE id=?", message, jid)
+		// AI 分析还有一张明细表，一起收掉，否则会被 startAIAnalysis 复用。
+		s.exec("UPDATE ql_ai_analyses SET status='failed',stage='failed',error=?,completed=NOW(6) WHERE customer_id=? AND status IN ('queued','running','uploading')", message, str(job, "customer_id"))
+		s.event(str(job, "user_id"), str(job, "customer_id"), "job_timeout", jid)
+		log.Printf("swept stale job %s (%s)", jid, str(job, "kind"))
+	}
+}
+
+func workerLoop(ctx context.Context, s *Store, app *App) {	conn, e := s.db.Conn(ctx)
 	if e != nil {
 		if ctx.Err() == nil {
 			log.Fatal("worker connection unavailable")
@@ -40,8 +57,13 @@ func workerLoop(ctx context.Context, s *Store, app *App) {
 		return
 	}
 	defer conn.ExecContext(context.Background(), "SELECT RELEASE_LOCK('qingliu:worker')")
-	// Only the holder of the database-wide worker lock may recover interrupted jobs.
+	// 只有持有数据库级 worker 锁的进程才做恢复：
+	// ①把上次中断的 running 放回队列；
+	// ②把超时仍停在中间态的任务标成失败——历史版本里任务失败时没有写
+	//   终态，会永久占着客户，sweepStaleJobs 负责把它们收拾掉。
 	s.exec("UPDATE ql_jobs SET status='queued',message='重启后恢复处理',progress=0,stage='queued' WHERE status='running'")
+	sweepStaleJobs(s)
+	var sweepTick int
 	for ctx.Err() == nil {
 		if e = conn.PingContext(ctx); e != nil {
 			if ctx.Err() == nil {
@@ -55,6 +77,10 @@ func workerLoop(ctx context.Context, s *Store, app *App) {
 			case <-ctx.Done():
 				return
 			case <-time.After(time.Second):
+			}
+			sweepTick++
+			if sweepTick%300 == 0 {
+				sweepStaleJobs(s)
 			}
 		}
 	}
@@ -88,10 +114,12 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 	}
 	worked = true
 	cid, jid := str(job, "customer_id"), str(job, "id")
+	// 先抢客户锁再取任务：更新之后 task 才会被标成 running，
+	// 因此这里取到的仍然是 queued 的那一条。
 	unlock, e := s.lock(ctx, "case:"+cid)
 	must(e)
 	defer unlock()
-	s.jobProgress(jid, "starting", "正在准备处理", 3)
+	s.jobStart(jid)
 	// tenant_id 必须一起取：授权口径是「资料所属租户」，漏了它团队账号
 	// 在后台任务里会被判成无权限（前台能进、后台任务全失败）。
 	user := s.one("SELECT id,role,display,tenant_id,tenant_role FROM ql_users WHERE id=? AND active=1", job["user_id"])
@@ -134,15 +162,24 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 			state = "partial"
 			message = "资料已保存，识别未完整通过，请核对提示；未通过的资料不能直接签发正式版本"
 		}
-		s.exec("UPDATE ql_jobs SET status=?,message=?,stage='done',progress=100 WHERE id=?", state, message, jid)
+		s.jobFinish(jid, state, message)
 		must(os.Remove(path))
 	} else if str(job, "kind") == "ai_analysis" {
 		if app == nil {
 			panic(fmt.Errorf("AI 分析执行器未装配"))
 		}
-		app.runAIAnalysisJob(jobctx, str(user, "id"), cid, p, func(stage, message string, progress int) {
+		// AI 分析分支必须自己写终态：之前的版本跑完就直接往下走，
+		// ql_jobs.status 停在 queued，busy() 永远为真，整个客户被锁死。
+		failed := false
+		app.runAIAnalysisJob(jobctx, str(user, "id"), cid, jid, p, func(stage, message string, progress int) {
+			if stage == "failed" {
+				failed = true
+			}
 			s.jobProgress(jid, stage, message, progress)
 		})
+		if !failed {
+			s.jobFinish(jid, "done", "AI 辅助分析已完成")
+		}
 	} else if str(job, "kind") == "report" {
 		existing := s.one("SELECT id FROM ql_reports WHERE job_id=?", jid)
 		if existing != nil {
@@ -163,7 +200,7 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 		}
 		s.jobProgress(jid, "rendering", "正在生成PDF、Excel与报告快照", 60)
 		must(generateReport(s, cid, jid, d, p))
-		s.exec("UPDATE ql_jobs SET status='done',message='报告已保存，可下载',stage='done',progress=100 WHERE id=?", jid)
+		s.jobFinish(jid, "done", "报告已保存，可下载")
 	} else {
 		panic(fmt.Errorf("未知任务类型"))
 	}

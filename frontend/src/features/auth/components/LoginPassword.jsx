@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { EyeIcon, LockIcon } from "@/shared/ui/icons.jsx";
+import { EyeIcon } from "@/shared/ui/icons.jsx";
 
 export function LoginPassword() {
   const [show, setShow] = useState(false);
@@ -8,8 +8,7 @@ export function LoginPassword() {
     ? import.meta.env.VITE_DEV_LOGIN_PASSWORD || ""
     : "";
   return (
-    <div className="login-input">
-      <LockIcon />
+    <span className="auth-input-wrap">
       <input
         name="password"
         type={show ? "text" : "password"}
@@ -21,12 +20,12 @@ export function LoginPassword() {
       />
       <button
         type="button"
-        className="login-eye"
+        className="auth-eye"
         aria-label={show ? "隐藏密码" : "显示密码"}
         onClick={() => setShow((value) => !value)}
       >
         <EyeIcon off={show} />
       </button>
-    </div>
+    </span>
   );
 }

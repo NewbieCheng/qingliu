@@ -1,11 +1,26 @@
-import React from "react";
+import React, { useState } from "react";
 import { Field, Form } from "@/shared/ui/Form.jsx";
+import { Select } from "@/shared/ui/FormRow.jsx";
+import { InputWithCheck } from "@/shared/ui/InputWithCheck.jsx";
+import { Switch } from "@/shared/ui/Switch.jsx";
+import { toast } from "@/shared/ui/toast-api.js";
 import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
 import { DocumentList } from "../DocumentList.jsx";
 
 const RELATIONSHIPS = ["本人", "配偶", "子女", "其他"];
 
+// 持有人表格默认只露 8 行，其余折叠；每行输完点 ✓ 确认后再保存。
+const VISIBLE_DOCS = 8;
+
 export function OwnershipStep({ data, onSave, onNext }) {
+  const [confirmed, setConfirmed] = useState({});
+  const [showAll, setShowAll] = useState(false);
+  const visibleDocs = showAll ? data.docs : data.docs.slice(0, VISIBLE_DOCS);
+
+  function toggleConfirmed(id) {
+    setConfirmed((previous) => ({ ...previous, [id]: !previous[id] }));
+  }
+
   return (
     <section className="card">
       <SectionTitle
@@ -15,6 +30,13 @@ export function OwnershipStep({ data, onSave, onNext }) {
       <Form
         key={data.customer.revision}
         onSave={async (form) => {
+          const unconfirmed = data.docs.filter(
+            (document) => !form.get(`holder_${document.id}`)?.trim() || !confirmed[document.id],
+          );
+          if (unconfirmed.length > 0) {
+            toast("请先逐行填写持有人并点击 ✓ 确认", "error");
+            return;
+          }
           const scopes = {};
           data.docs.forEach((document) => {
             scopes[document.id] = {
@@ -32,7 +54,7 @@ export function OwnershipStep({ data, onSave, onNext }) {
           onNext();
         }}
       >
-        <div className="table-wrap">
+        <div className="table-wrap table-compact">
           <table>
             <thead>
               <tr>
@@ -43,7 +65,7 @@ export function OwnershipStep({ data, onSave, onNext }) {
               </tr>
             </thead>
             <tbody>
-              {data.docs.map((document) => {
+              {visibleDocs.map((document) => {
                 const scope = data.fields.document_scopes?.[document.id] || {};
                 return (
                   <tr key={document.id}>
@@ -54,31 +76,34 @@ export function OwnershipStep({ data, onSave, onNext }) {
                       </small>
                     </td>
                     <td>
-                      <input
+                      <InputWithCheck
                         aria-label={`${document.name}持有人`}
                         name={`holder_${document.id}`}
                         defaultValue={
                           scope.holder || document.meta.subject_name || ""
                         }
                         required
+                        checked={!!confirmed[document.id]}
+                        onToggle={() => toggleConfirmed(document.id)}
+                        checkLabel={`确认${document.name}持有人`}
                       />
                     </td>
                     <td>
-                      <select
+                      <Select
                         aria-label={`${document.name}关系`}
                         name={`relationship_${document.id}`}
+                        label={`${document.name}关系`}
                         defaultValue={scope.relationship || "本人"}
                       >
                         {RELATIONSHIPS.map((value) => (
                           <option key={value}>{value}</option>
                         ))}
-                      </select>
+                      </Select>
                     </td>
                     <td>
-                      <input
-                        aria-label={`${document.name}纳入本次`}
-                        type="checkbox"
+                      <Switch
                         name={`include_${document.id}`}
+                        label={`${document.name}纳入本次`}
                         defaultChecked={scope.include ?? true}
                       />
                     </td>
@@ -88,6 +113,15 @@ export function OwnershipStep({ data, onSave, onNext }) {
             </tbody>
           </table>
         </div>
+        {data.docs.length > VISIBLE_DOCS && (
+          <button
+            type="button"
+            className="ghost task-toggle"
+            onClick={() => setShowAll((value) => !value)}
+          >
+            {showAll ? "收起" : `展开全部 ${data.docs.length} 份资料`}
+          </button>
+        )}
         <div className="grid2">
           <Field label="需要剔除的配偶完整姓名（选填）">
             <input
@@ -108,9 +142,11 @@ export function OwnershipStep({ data, onSave, onNext }) {
             defaultValue={data.fields.relationship_note || ""}
           />
         </Field>
-        <button className="primary" disabled={data.busy || !data.docs.length}>
-          保存归属，进入交易核对
-        </button>
+        <div className="actions-end">
+          <button className="primary" disabled={data.busy || !data.docs.length}>
+            保存归属进入交易核对
+          </button>
+        </div>
       </Form>
       <DocumentList data={data} />
     </section>

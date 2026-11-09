@@ -207,6 +207,11 @@ func (s *Store) allowed(user Object, cid string) bool {
 // jobProgress records the human-facing stage and percentage of a running
 // background job. Progress is display-only: it never drives billing, access or
 // report state, and it is re-derived from DB status after a restart.
+//
+// 注意：这里**不改 status**。任务在 worker 取走时由 jobStart 置为 running，
+// 结束时由调用方显式写 done/failed；两者都不经过本函数。曾经因为在写
+// progress 时顺手不改 status，ql_jobs.status 里永远没有 running，
+// 一旦某条分支漏写终态，任务就永久停在 queued 把整个客户锁死。
 func (s *Store) jobProgress(jid, stage, message string, progress int) {
 	if progress < 0 {
 		progress = 0
@@ -217,10 +222,37 @@ func (s *Store) jobProgress(jid, stage, message string, progress int) {
 	s.exec("UPDATE ql_jobs SET stage=?,message=?,progress=? WHERE id=?", stage, message, progress, jid)
 }
 
+// jobStart 把任务标记为执行中。worker 取到任务后必须立刻调用它，
+// 这样 busy() 与队列位置才能区分「正在跑」和「还在排队」。
+func (s *Store) jobStart(jid string) {
+	s.exec("UPDATE ql_jobs SET status='running',stage='starting',message='正在准备处理',progress=3 WHERE id=?", jid)
+}
+
+// jobFinish 写入终态。所有分支（含 AI 分析）都必须走到这里，
+// 否则任务会停在中间态永远占着客户。
+func (s *Store) jobFinish(jid, status, message string) {
+	progress := 0
+	switch status {
+	case "done", "partial":
+		progress = 100
+	case "failed":
+		progress = 0
+	default:
+		status = "failed"
+	}
+	s.exec("UPDATE ql_jobs SET status=?,message=?,stage=?,progress=? WHERE id=?", status, message, status, progress, jid)
+}
+
+// staleJobMinutes 是判定任务卡死的时限。AI 分析本身有 10 分钟超时，
+// 这里留出余量；超过这个时间仍在 queued/running 的任务一律视为失效，
+// 不再阻断该客户的写操作，并会被 sweepStaleJobs 标成失败。
+const staleJobMinutes = 30
+
 // queuePosition 返回该任务前面还有几个待处理任务（0 表示下一个就是它）。
 //
 // 单进程串行解析，用户最关心的是「还要等几份」，而不是一个笼统的「排队中」。
-// 只统计 queued 且 seq 更小的任务，与 worker 的取任务顺序（ORDER BY seq）一致。
+// 只统计排队中（queued）且 seq 更小的任务，与 worker 的取任务顺序一致；
+// 正在执行的那条已经是 running，不算在「前面还有」里。
 func (s *Store) queuePosition(jid string) int {
 	row := s.one("SELECT seq FROM ql_jobs WHERE id=?", jid)
 	if row == nil {
@@ -245,8 +277,11 @@ func parsePercent(page, total int) int {
 	return 5 + (page*90)/total
 }
 
+// busy 判断该客户是否真有在跑的任务。超过 staleJobMinutes 仍停在
+// queued/running 的记录视为卡死，不计入 busy，避免一条失败任务把
+// 上传、核对、报告等所有写操作永久挡在门外。
 func (s *Store) busy(cid string) bool {
-	return s.one("SELECT id FROM ql_jobs WHERE customer_id=? AND status IN ('queued','running') LIMIT 1", cid) != nil
+	return s.one("SELECT id FROM ql_jobs WHERE customer_id=? AND status IN ('queued','running') AND created > DATE_SUB(NOW(6), INTERVAL ? MINUTE) LIMIT 1", cid, staleJobMinutes) != nil
 }
 func (s *Store) bump(cid string) {
 	s.exec("UPDATE ql_customers SET revision=revision+1 WHERE id=?", cid)

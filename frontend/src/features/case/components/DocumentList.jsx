@@ -3,8 +3,15 @@ import { DOCUMENT_STATUS, SOURCES } from "@/shared/lib/constants.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
 
 export function DocumentList({ data }) {
+  if (!data.docs.length) return null;
+  const pending = data.docs.filter(
+    (document) => document.meta.status !== "success",
+  ).length;
   return (
     <div className="docs">
+      <p className="docs-count">
+        已上传 {data.docs.length} 份{pending > 0 && `（${pending} 份待处理）`}
+      </p>
       {data.docs.map((document) => (
         <details key={document.id}>
           <summary>

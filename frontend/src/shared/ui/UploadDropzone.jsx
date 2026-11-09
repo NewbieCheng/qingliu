@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { formatFileSize, randomId } from "@/shared/lib/format.js";
-import { UploadIcon } from "./icons.jsx";
+import { CheckIcon, UploadIcon } from "./icons.jsx";
 
 const MAX_FILES = 10;
 const MAX_EACH = 30 * 1024 * 1024;
@@ -108,8 +108,14 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
       </div>
       {files.length > 0 && (
         <ul className="upload-list">
+          <li className="upload-list-head" aria-hidden="true">
+            已选 {files.length} 份待上传（均已通过大小校验）
+          </li>
           {files.map((file, index) => (
             <li key={`${file.name}-${file.lastModified}`}>
+              <span className="upload-file-ok" aria-label="大小校验通过">
+                <CheckIcon size={13} />
+              </span>
               <span className="upload-file-name" title={file.name}>
                 {file.name}
               </span>

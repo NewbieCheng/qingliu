@@ -59,7 +59,14 @@ export function CasePage({ cid, user }) {
 
   async function openOriginal(transactionId) {
     try {
-      setOriginal(await getTransaction(cid, transactionId));
+      const detail = await getTransaction(cid, transactionId);
+      const document = data.docs.find(
+        (item) => String(item.id) === String(detail.row.document_id),
+      );
+      setOriginal({
+        ...detail,
+        pages: Number(document?.meta?.pages) || detail.row.page || 1,
+      });
     } catch (requestError) {
       toast(requestError.message, "error");
     }
@@ -74,7 +81,11 @@ export function CasePage({ cid, user }) {
           {error}
         </p>
       )}
-      <TaskList data={data} onRetry={(jobId) => mutate(`retry/${jobId}`, {})} />
+      <TaskList
+        data={data}
+        onRetry={(jobId) => mutate(`retry/${jobId}`, {})}
+        onCancel={(jobId) => mutate(`jobs/${jobId}/cancel`, {})}
+      />
 
       {step === "upload" && (
         <UploadStep

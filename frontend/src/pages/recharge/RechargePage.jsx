@@ -3,7 +3,6 @@ import QRCode from "qrcode";
 import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { Loading } from "@/shared/ui/Loading.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
-import { invalidateBalance, queryBalance } from "@/app/queries/index.js";
 import {
   CheckoutPanel,
   LedgerTable,
@@ -21,9 +20,11 @@ import {
 
 export function RechargePage() {
   const [skus, setSkus] = useState([]);
-  const [balance, setBalance] = useState(null);
   const [orders, setOrders] = useState([]);
   const [ledgers, setLedgers] = useState([]);
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerTotal, setLedgerTotal] = useState(0);
+  const LEDGER_PAGE_SIZE = 10;
   const [order, setOrder] = useState(null);
   const [qr, setQr] = useState("");
   const [busy, setBusy] = useState("");
@@ -57,20 +58,34 @@ export function RechargePage() {
     }
   }
 
+  async function loadLedgers(page) {
+    try {
+      const ledgerData = await getLedgers({ page, pageSize: LEDGER_PAGE_SIZE });
+      const items = ledgerData.items || [];
+      setLedgers(items);
+      setLedgerTotal(ledgerData.total ?? ledgerData.count ?? items.length);
+      setLedgerPage(page);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
+  // 余额牌子已收进顶栏全局显示；这里下单/支付成功后发事件通知顶栏重查。
+  function notifyBalanceChanged() {
+    window.dispatchEvent(new Event("ql:balance-changed"));
+  }
+
   async function load(resume = true) {
     try {
-      const [skuData, balanceData, orderData, ledgerData] = await Promise.all([
+      const [skuData, orderData] = await Promise.all([
         getSkus(),
-        queryBalance(),
         getOrders(),
-        getLedgers(),
       ]);
       setSkus(skuData.items || []);
-      setBalance(balanceData);
       const nextOrders = orderData.items || [];
       setOrders(nextOrders);
-      setLedgers(ledgerData.items || []);
       setError("");
+      await loadLedgers(1);
       const resumable = nextOrders.find(isResumable);
       if (resume && !orderRef.current && resumable) await openOrder(resumable);
     } catch (requestError) {
@@ -99,8 +114,8 @@ export function RechargePage() {
         if (stopped) return;
         if (next.status !== "pending" || isExpired(next)) {
           await openOrder(next);
-          invalidateBalance();
           await load(false);
+          notifyBalanceChanged();
         } else {
           orderRef.current = next;
           setOrder(next);
@@ -128,8 +143,8 @@ export function RechargePage() {
           : "订单已创建，请扫码支付",
         "info",
       );
-      invalidateBalance();
       await load(false);
+      notifyBalanceChanged();
     } catch (requestError) {
       toast(requestError.message, "error");
       setError(requestError.message);
@@ -138,7 +153,6 @@ export function RechargePage() {
     }
   }
 
-  const points = balance?.points_balance ?? 0;
   const currentExpired = isExpired(order);
 
   if (!loaded) {
@@ -156,15 +170,8 @@ export function RechargePage() {
   return (
     <main className="account-page">
       <PageHeader
-        eyebrow="账户与额度"
         title="把每一次调用，算清楚。"
         description="充值购买工作台积分；AI 解析按实际用量扣减，余额与流水以工作台为准。"
-        actions={
-          <div className="balance-chip">
-            <span>可用积分</span>
-            <strong>{Number(points).toLocaleString("zh-CN")}</strong>
-          </div>
-        }
       />
       {error && (
         <p className="error" role="alert">
@@ -179,7 +186,13 @@ export function RechargePage() {
         remaining={clock && order ? remainingText(order) : ""}
       />
       <OrdersTable orders={orders} onResume={(item) => void openOrder(item, true)} />
-      <LedgerTable ledgers={ledgers} />
+      <LedgerTable
+        ledgers={ledgers}
+        page={ledgerPage}
+        pageSize={LEDGER_PAGE_SIZE}
+        total={ledgerTotal}
+        onPageChange={(page) => void loadLedgers(page)}
+      />
     </main>
   );
 }

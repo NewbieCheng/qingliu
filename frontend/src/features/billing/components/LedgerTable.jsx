@@ -1,9 +1,10 @@
 import React from "react";
 import { formatDateTime } from "@/shared/lib/format.js";
 import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
+import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { LEDGER_CHANGE } from "../constants.js";
 
-export function LedgerTable({ ledgers }) {
+export function LedgerTable({ ledgers, page = 1, pageSize = 10, total = 0, onPageChange }) {
   return (
     <section className="card">
       <SectionTitle
@@ -41,7 +42,17 @@ export function LedgerTable({ ledgers }) {
           </tbody>
         </table>
       </div>
-      {ledgers.length === 0 && <p className="empty">还没有积分流水。</p>}
+      {ledgers.length === 0 && page <= 1 && <p className="empty">还没有积分流水。</p>}
+      {onPageChange && (ledgers.length > 0 || page > 1) && (
+        <Pagination
+          page={page}
+          onPrevious={() => onPageChange(page - 1)}
+          onNext={() => onPageChange(page + 1)}
+          canPrevious={page > 1}
+          canNext={total > 0 ? page * pageSize < total : ledgers.length >= pageSize}
+          label={total > 0 ? `第 ${page} 页 / 共 ${total} 条` : `第 ${page} 页`}
+        />
+      )}
     </section>
   );
 }

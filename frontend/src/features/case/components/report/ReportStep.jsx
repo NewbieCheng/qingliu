@@ -1,9 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { Field, Form } from "@/shared/ui/Form.jsx";
+import { toast } from "@/shared/ui/toast-api.js";
+import { Modal } from "@/shared/ui/Modal.jsx";
 import { formatCents, formatDateTime } from "@/shared/lib/format.js";
 import { SOURCES } from "@/shared/lib/constants.js";
+import { DownloadIcon, EyeIcon } from "@/shared/ui/icons.jsx";
 import { AIAnalysisPanel } from "@/features/ai-analysis/index.js";
-import { reportDownloadURL } from "../../api.js";
+import { downloadReport, previewReport } from "../../api.js";
 
 const DOWNLOADS = [
   ["report.pdf", "PDF"],
@@ -12,7 +15,14 @@ const DOWNLOADS = [
   ["report.html", "网页快照"],
 ];
 
+const VISIBLE_QUARTERS = 4;
+
 function ReportNumbers({ summary }) {
+  const [showAllQuarters, setShowAllQuarters] = useState(false);
+  const quarterEntries = Object.entries(summary.quarters);
+  const visibleQuarters = showAllQuarters
+    ? quarterEntries
+    : quarterEntries.slice(0, VISIBLE_QUARTERS);
   return (
     <section className="card">
       <h2>测算口径</h2>
@@ -57,7 +67,7 @@ function ReportNumbers({ summary }) {
             ))}
           </tbody>
         </table>
-        {Object.entries(summary.quarters).map(([quarter, interest]) => (
+        {visibleQuarters.map(([quarter, interest]) => (
           <p key={quarter}>
             {quarter} 存款结息：
             {interest == null
@@ -65,6 +75,15 @@ function ReportNumbers({ summary }) {
               : `${formatCents(interest)} 元（不计经营收入）`}
           </p>
         ))}
+        {quarterEntries.length > VISIBLE_QUARTERS && (
+          <button
+            type="button"
+            className="ghost task-toggle"
+            onClick={() => setShowAllQuarters((value) => !value)}
+          >
+            {showAllQuarters ? "收起" : `展开全部 ${quarterEntries.length} 条`}
+          </button>
+        )}
       </details>
     </section>
   );
@@ -86,9 +105,11 @@ function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal }) {
       ) : (
         <p className="success">流程核对已完成，可以提交复核。</p>
       )}
-      <div className="actions">
+      <div className="actions-end">
         <Form success="" onSave={() => onGenerate({ stage: "draft" })}>
-          <button disabled={data.busy || !data.source}>生成草稿报告</button>
+          <button className="ghost" disabled={data.busy || !data.source}>
+            生成草稿报告
+          </button>
         </Form>
         <Form success="" onSave={() => onSubmit({})}>
           <button
@@ -120,6 +141,7 @@ function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal }) {
             <input type="checkbox" name="attest" required />
             确认当前版本已核对，理解该报告不代表授信审批
           </label>
+        <div className="actions-end">
           <button
             className="primary"
             disabled={
@@ -128,13 +150,48 @@ function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal }) {
           >
             签发正式内部初筛版本
           </button>
+        </div>
         </Form>
       )}
     </section>
   );
 }
 
+const VISIBLE_REPORTS = 3;
+
 function ReportVersions({ cid, data }) {
+  const [showAll, setShowAll] = useState(false);
+  const [downloading, setDownloading] = useState("");
+  const [preview, setPreview] = useState({ open: false, title: "", html: "" });
+  const visible = showAll ? data.reports : data.reports.slice(0, VISIBLE_REPORTS);
+
+  async function onDownload(report, file) {
+    const key = `${report.id}/${file}`;
+    setDownloading(key);
+    try {
+      await downloadReport(cid, report.id, file);
+    } catch (error) {
+      toast(error.message || "下载失败请稍后重试", "error");
+    } finally {
+      setDownloading("");
+    }
+  }
+
+  async function onPreview(report) {
+    setPreview({ open: true, title: "", html: "" });
+    try {
+      const html = await previewReport(cid, report.id);
+      setPreview({
+        open: true,
+        title: `网页快照 · ${formatDateTime(report.created)}`,
+        html,
+      });
+    } catch (error) {
+      setPreview({ open: false, title: "", html: "" });
+      toast(error.message || "快照加载失败", "error");
+    }
+  }
+
   return (
     <section className="card">
       <h2>已保存的报告版本</h2>
@@ -143,7 +200,7 @@ function ReportVersions({ cid, data }) {
           生成报告后，PDF、Excel与网页快照会保存在这里。
         </p>
       )}
-      {data.reports.map((report) => (
+      {visible.map((report) => (
         <div className="report-item" key={report.id}>
           <div>
             <strong>
@@ -160,22 +217,67 @@ function ReportVersions({ cid, data }) {
             </small>
           </div>
           <div className="downloads">
-            {DOWNLOADS.map(([file, label]) => (
-              <a href={reportDownloadURL(cid, report.id, file)} key={file}>
-                {label} ↓
-              </a>
-            ))}
+            {DOWNLOADS.map(([file, label]) =>
+              file === "report.html" ? (
+                <button
+                  key={file}
+                  type="button"
+                  className="ghost download-btn"
+                  onClick={() => void onPreview(report)}
+                >
+                  <EyeIcon size={13} />
+                  {label}预览
+                </button>
+              ) : (
+                <button
+                  key={file}
+                  type="button"
+                  className="ghost download-btn"
+                  disabled={downloading === `${report.id}/${file}`}
+                  onClick={() => void onDownload(report, file)}
+                >
+                  <DownloadIcon size={13} />
+                  {downloading === `${report.id}/${file}` ? "下载中…" : label}
+                </button>
+              ),
+            )}
           </div>
         </div>
       ))}
+      {data.reports.length > VISIBLE_REPORTS && (
+        <button
+          type="button"
+          className="ghost task-toggle"
+          onClick={() => setShowAll((value) => !value)}
+        >
+          {showAll ? "收起" : `展开全部 ${data.reports.length} 个版本`}
+        </button>
+      )}
+      {preview.open && (
+        <Modal
+          title={preview.title || "网页快照"}
+          onClose={() => setPreview({ open: false, title: "", html: "" })}
+        >
+          {preview.html ? (
+            <iframe
+              className="preview-frame"
+              title={preview.title}
+              sandbox=""
+              srcDoc={preview.html}
+            />
+          ) : (
+            <p className="muted">快照加载中…</p>
+          )}
+        </Modal>
+      )}
     </section>
   );
 }
 
 export function ReportStep({ cid, data, user, summary, onGenerate, onSubmit, onFormal }) {
   return (
-    <>
-      <AIAnalysisPanel cid={cid} />
+    <div className="report-layout">
+      <div className="report-main">
       <ReportNumbers summary={summary} />
       <SubmitPanel
         data={data}
@@ -185,6 +287,10 @@ export function ReportStep({ cid, data, user, summary, onGenerate, onSubmit, onF
         onFormal={onFormal}
       />
       <ReportVersions cid={cid} data={data} />
-    </>
+      </div>
+      <aside className="report-rail" aria-label="AI 辅助分析">
+        <AIAnalysisPanel cid={cid} />
+      </aside>
+    </div>
   );
 }
