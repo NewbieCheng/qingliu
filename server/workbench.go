@@ -45,6 +45,9 @@ type wbSession struct {
 	RefreshToken string
 	ExpiresAt    time.Time
 	User         Object
+	// Space 是这次登录/刷新落点的空间（工作台响应的 current_space）。
+	// 它随会话一起写进 ql_sessions —— 本地空间的唯一落点就是那里。
+	Space spaceRef
 }
 
 // login signs in through the workbench service entry. captchaID/captchaCode are
@@ -183,16 +186,29 @@ func parseWBSession(data Object) (wbSession, error) {
 		}
 	}
 	user := sub(payload, "user")
-	// 租户决定资料归属：顶层与 user 里都可能出现，取到哪个用哪个。
-	if user != nil && integer(user["tenant_id"]) == 0 {
-		if tenant := integer(payload["tenant_id"]); tenant > 0 {
-			user["tenant_id"] = tenant
-		}
-	}
 	return wbSession{
 		AccessToken: access, RefreshToken: refresh, ExpiresAt: expires,
-		User: user,
+		User: user, Space: parseSpaceRef(payload, user),
 	}, nil
+}
+
+// parseSpaceRef 从工作台响应里读这次会话的空间。
+//
+// 唯一权威字段是顶层的 current_space（工作台契约：{kind,id}）。它是**当前
+// 空间**，而 user.tenant_id 是账号的主身份租户 —— 两者在多空间账号上不是
+// 一回事，用后者决定归属会把「切到 A 企业」的会话落进 B 企业的资料里。
+// 因此只在响应里完全没有 current_space 时，才退回 user 上的 space_kind/space_id
+// （老版本工作台）；user.tenant_id 一律不读。
+func parseSpaceRef(payload, user Object) spaceRef {
+	if current := sub(payload, "current_space"); current != nil {
+		return spaceRef{Kind: normalizeSpaceKind(str(current, "kind")), ID: integer(current["id"])}
+	}
+	if user != nil && str(user, "space_kind") != "" {
+		return spaceRef{Kind: normalizeSpaceKind(str(user, "space_kind")), ID: integer(user["space_id"])}
+	}
+	// 两边都没有：落到个人空间。个人空间只看得见自己创建的资料，
+	// 这是最小权限的兜底，也不会把一个账号错放进某个企业。
+	return spaceRef{Kind: spacePersonal}
 }
 
 func sub(o Object, key string) Object {
@@ -264,7 +280,13 @@ func (s *Store) unseal(raw []byte) []byte {
 	return plain
 }
 
-func (a *App) wbSaveLogin(userID string, session wbSession) {
+// wbSaveLogin 落库账号与令牌，并返回这次登录所在的空间。
+//
+// 空间来自工作台登录响应的 current_space（见 parseWBSession），**不读**
+// user["tenant_id"]：那个字段是账号的主身份租户，而这里要的是「这次会话落在
+// 哪个空间」。返回值由调用方交给 newSession 写进 ql_sessions —— 会话是本地
+// 空间的唯一落点（ql_users 上已经没有空间列，见 migrations/005）。
+func (a *App) wbSaveLogin(userID string, session wbSession) spaceRef {
 	user := session.User
 	email := str(user, "email")
 	display := str(user, "display_name")
@@ -280,10 +302,15 @@ func (a *App) wbSaveLogin(userID string, session wbSession) {
  display_name=VALUES(display_name),service_role=VALUES(service_role),access_token=VALUES(access_token),
  refresh_token=VALUES(refresh_token),token_expires=VALUES(token_expires),permissions=VALUES(permissions)`,
 		userID, wbID, email, display, serviceRole, a.s.seal([]byte(session.AccessToken)), a.s.seal([]byte(session.RefreshToken)), session.ExpiresAt.Unix(), js(codes))
+	return session.Space
 }
 
 // wbUpsertLocalUser reuses an existing ql_users row with the same email so
 // existing grants and audit history survive the move to workbench accounts.
+//
+// 这里**不**再决定「他属于哪个团队」：ql_users 上已经没有团队归属与团队角色两列
+// （见 migrations/005）。空间随会话走（wbSession.Space），因此同一个人切到别
+// 的空间不需要改这一行 —— 账号是同一个账号。
 func (a *App) wbUpsertLocalUser(session wbSession) string {
 	user := session.User
 	email := strings.TrimSpace(str(user, "email"))
@@ -298,27 +325,14 @@ func (a *App) wbUpsertLocalUser(session wbSession) string {
 	// 原先是「三档之外一律 sales」，让只读成员拿到了写权限；这里保持原始
 	// 服务角色，判定交给权限快照。
 	role := localRole(str(user, "service_role"))
-	tenant := integer(user["tenant_id"])
-	// 默认团队「今天不加班」承接既有管理员：工作台上还没有租户的管理员账号
-	// 首次登录清流时落到 team 1，避免管理员的资料散落在个人空间。
-	if tenant == 0 && role == "admin" && defaultTeamTenantID > 0 {
-		tenant = defaultTeamTenantID
-	}
-	tenantRole := ""
-	if tenant > 0 {
-		tenantRole = str(user, "service_role")
-		if tenantRole != "admin" {
-			tenantRole = "member"
-		}
-	}
 	if existing := a.s.one("SELECT id FROM ql_users WHERE username=?", email); existing != nil {
 		uid := str(existing, "id")
-		a.s.exec("UPDATE ql_users SET display=?,role=?,tenant_id=?,tenant_role=?,active=TRUE WHERE id=?", display, role, tenant, tenantRole, uid)
+		a.s.exec("UPDATE ql_users SET display=?,role=?,active=TRUE WHERE id=?", display, role, uid)
 		return uid
 	}
 	uid := id()
 	random, _ := bcrypt.GenerateFromPassword([]byte(id()+id()), bcrypt.DefaultCost)
-	a.s.exec("INSERT INTO ql_users(id,username,display,role,password,tenant_id,tenant_role) VALUES(?,?,?,?,?,?,?)", uid, email, display, role, string(random), tenant, tenantRole)
+	a.s.exec("INSERT INTO ql_users(id,username,display,role,password) VALUES(?,?,?,?,?)", uid, email, display, role, string(random))
 	return uid
 }
 
@@ -326,19 +340,18 @@ func (a *App) wbAccount(userID string) Object {
 	return a.s.one("SELECT * FROM ql_workbench_accounts WHERE user_id=?", userID)
 }
 
-func (a *App) newSession(q *request, userID string) {
+// newSession 建一个本会话，并记下它落在哪个空间。
+//
+// 空间由调用方给：工作台登录时是响应里的 current_space（wbSaveLogin 的返回值），
+// 本地应急登录时是个人空间 —— 账号上已经没有「所属团队」可读（见 migrations/005）。
+// 之后由 POST /api/switch-space 改写本行。
+// 显式列名而不是 VALUES(?..)：设了默认值的列不该靠表顺序撞运气。
+func (a *App) newSession(q *request, userID string, space spaceRef) {
 	a.s.exec("DELETE FROM ql_sessions WHERE expires<?", time.Now().Unix())
 	token, csrf := id()+id(), id()+id()
-	// 空间默认取用户的主身份空间：新会话先落在「我的默认空间」，
-	// 之后由 POST /api/switch-space 改写（见 migrations/004）。
-	// 显式列名而不是 VALUES(?..)：设了默认值的列不该靠表顺序撞运气。
-	home := 0
-	if row := a.s.one("SELECT tenant_id FROM ql_users WHERE id=?", userID); row != nil {
-		home = int(integer(row["tenant_id"]))
-	}
-	a.s.exec("INSERT INTO ql_sessions(token,user_id,csrf,expires,tenant_id) VALUES(?,?,?,?,?)", hash([]byte(token)), userID, csrf, time.Now().Add(8*time.Hour).Unix(), home)
+	a.s.exec("INSERT INTO ql_sessions(token,user_id,csrf,expires,space_kind,space_id) VALUES(?,?,?,?,?,?)", hash([]byte(token)), userID, csrf, time.Now().Add(8*time.Hour).Unix(), space.Kind, space.ID)
 	http.SetCookie(q.w, &http.Cookie{Name: "ql_session", Value: token, Path: "/", HttpOnly: true, Secure: a.secure, SameSite: http.SameSiteLaxMode, MaxAge: 28800})
-	a.s.event(userID, "", "login", "")
+	a.s.event(userID, "", "login", space.Kind+":"+itoa(space.ID))
 }
 
 func (a *App) wbAccessToken(userID string) string {
@@ -465,44 +478,52 @@ func itoa(value int64) string {
 	return string(buf[i:])
 }
 
-// tenantName 返回当前资料归属的名字。
-//
-// 团队账号：取工作台 t_tenant 的公司名（两边同一家公司，名称只有一个来源）。
-// 个人账号：显示「个人空间」，不编造公司名。
-// 团队名会缓存，避免每次 /api/me 都打一次工作台。
-func (a *App) tenantName(ctx context.Context, user Object) string {
-	if integer(user["tenant_id"]) <= 0 {
-		return "个人空间"
-	}
-	a.tenantMu.Lock()
-	if name := a.tenantNames[integer(user["tenant_id"])]; name != "" {
-		a.tenantMu.Unlock()
-		return name
-	}
-	a.tenantMu.Unlock()
+// spaceCaption 是空间显示所需的两件事：名字与角色标签。
+type spaceCaption struct {
+	Name string
+	Role string
+}
 
-	status, data, err := a.wbRequest(ctx, str(user, "id"), http.MethodGet, "/api/v1/tenant/info", nil)
+// spaceLabel 返回当前空间的显示名与角色标签。
+//
+// 名字的**唯一来源**是工作台的 /api/v1/me/spaces：团队名在 t_tenant，角色标签
+// （团队管理员/成员）是 t_space_membership 的 role_label。清流不自己拼
+// 「企业 #id」，也不从 ql_users 猜角色 —— 那会让同一个空间在两个系统里有两个
+// 名字、同一个人有两个角色。结果按 (kind:id) 缓存：/api/me 调用频繁，
+// 而空间名一天也变不了几次。
+func (a *App) spaceLabel(ctx context.Context, userID string, target spaceRef) (string, string) {
+	if target.Kind == spacePersonal {
+		return spaceFallbackName(target), ""
+	}
+	key := target.Kind + ":" + itoa(target.ID)
+	a.spaceMu.Lock()
+	cached, ok := a.spaceNames[key]
+	a.spaceMu.Unlock()
+	if ok && cached.Name != "" {
+		return cached.Name, cached.Role
+	}
+
+	status, data, err := a.wbRequest(ctx, userID, http.MethodGet, "/api/v1/me/spaces", nil)
 	if err != nil || status != http.StatusOK {
-		return "团队"
+		return spaceFallbackName(target), ""
 	}
-	payload := sub(data, "data")
-	if payload == nil {
-		payload = data
+	for _, item := range spaceItems(data) {
+		if normalizeSpaceKind(str(item, "kind")) != target.Kind || integer(item["id"]) != target.ID {
+			continue
+		}
+		label := spaceCaption{Name: strings.TrimSpace(str(item, "name")), Role: strings.TrimSpace(str(item, "role_label"))}
+		if label.Name == "" {
+			label.Name = spaceFallbackName(target)
+		}
+		a.spaceMu.Lock()
+		if a.spaceNames == nil {
+			a.spaceNames = map[string]spaceCaption{}
+		}
+		a.spaceNames[key] = label
+		a.spaceMu.Unlock()
+		return label.Name, label.Role
 	}
-	name := strings.TrimSpace(str(payload, "tenant_name"))
-	if name == "" {
-		name = strings.TrimSpace(str(payload, "name"))
-	}
-	if name == "" {
-		return "团队"
-	}
-	a.tenantMu.Lock()
-	if a.tenantNames == nil {
-		a.tenantNames = map[int64]string{}
-	}
-	a.tenantNames[integer(user["tenant_id"])] = name
-	a.tenantMu.Unlock()
-	return name
+	return spaceFallbackName(target), ""
 }
 
 // localRole 把工作台的服务角色收敛到清流的**粗粒度** role 列。

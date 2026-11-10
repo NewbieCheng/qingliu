@@ -41,9 +41,11 @@ type App struct {
 	wb     wbConfig
 	// pricing 缓存工作台「财务 → 解析计价」的三档单价，见 pricing.go。
 	pricing parsePricingCache
-	// tenantNames 缓存租户 id → 公司名，避免每次 /api/me 都请求工作台。
-	tenantMu    sync.Mutex
-	tenantNames map[int64]string
+	// spaceNames 缓存空间 (kind:id) → 显示名与角色标签。
+	// /api/me 与空间卡都要显示「当前在哪个团队、我是什么角色」，而这两个值
+	// 的唯一来源是工作台的 /me/spaces；缓存避免每次页面渲染都打一次工作台。
+	spaceMu    sync.Mutex
+	spaceNames map[string]spaceCaption
 }
 type request struct {
 	w       http.ResponseWriter
@@ -55,6 +57,14 @@ type request struct {
 	// 为 nil 表示「没有快照」（本地过渡账号 / 迁移前登录），此时退回
 	// ql_users.role 的三档判定，行为与改造前一致。
 	permissions map[string]bool
+}
+
+// space 返回本会话当前所在的空间（ql_sessions.space_kind/space_id）。
+//
+// 所有资料可见性判定都必须经过它：空间属于**会话**，不属于账号 ——
+// 同一个人切到团队空间就能看本企业全部资料，切回个人空间只看得见自己创建的。
+func (q *request) space() spaceRef {
+	return spaceOf(q.session)
 }
 
 func (q *request) json(v any) {
@@ -108,13 +118,11 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 		r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
 		q := &request{w: w, r: r, app: a}
 		if c, e := r.Cookie("ql_session"); e == nil {
-			// tenant_id/tenant_role 必须一起取出来：资料隔离的授权口径依赖它们，
-			// 漏选会让所有团队账号退化成「个人空间」，看到的是别人的资料。
-			// 空间以**会话**为准（s.tenant_id，见 migrations/004）：一个人在工作台
-			// 可能同时属于多个企业，也可能同时有自己的个人空间，登录时定死的那一个
-			// 只是「默认空间」，切换后必须立刻生效，否则切了等于没切。
-			// COALESCE 是给迁移前的老会话兜底：它们没有 s.tenant_id，沿用用户列。
-			q.session = a.s.one("SELECT s.token,s.csrf,s.tenant_id AS space_tenant_id,COALESCE(NULLIF(s.tenant_id,0),u.tenant_id) AS tenant_id,u.id,u.username,u.display,u.role,u.tenant_id AS home_tenant_id,u.tenant_role,w.workbench_user_id,w.service_role,w.email AS wb_email,w.permissions FROM ql_sessions s JOIN ql_users u ON u.id=s.user_id LEFT JOIN ql_workbench_accounts w ON w.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1", hash([]byte(c.Value)), time.Now().Unix())
+			// 空间的唯一落点是**会话**（s.space_kind/space_id，见 migrations/005）：
+			// 同一个人在工作台可能同时属于多个企业、也可能有自己的个人空间，
+			// 切换后必须立刻生效，否则切了等于没切。ql_users 上已经没有空间列，
+			// 所以这里也不需要 COALESCE 兜底 —— 老会话由迁移 005 回填过。
+			q.session = a.s.one("SELECT s.token,s.csrf,s.space_kind,s.space_id,u.id,u.username,u.display,u.role,w.workbench_user_id,w.service_role,w.email AS wb_email,w.permissions FROM ql_sessions s JOIN ql_users u ON u.id=s.user_id LEFT JOIN ql_workbench_accounts w ON w.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1", hash([]byte(c.Value)), time.Now().Unix())
 			q.user = q.session
 			q.permissions = parsePermissions(str(q.session, "permissions"))
 		}
@@ -154,7 +162,7 @@ func (q *request) admin() {
 }
 func (q *request) access() string {
 	cid := q.r.PathValue("cid")
-	if !q.app.s.allowed(q.user, cid) {
+	if !q.app.s.allowed(q.space(), str(q.user, "id"), cid) {
 		bad(404, "客户不存在或没有访问权限")
 	}
 	return cid
@@ -230,9 +238,9 @@ func (a *App) mux() http.Handler {
 				bad(401, err.Error())
 			}
 			uid := a.wbUpsertLocalUser(session)
-			a.wbSaveLogin(uid, session)
+			space := a.wbSaveLogin(uid, session)
 			s.exec("DELETE FROM ql_login_failures WHERE failure_key=?", key)
-			a.newSession(q, uid)
+			a.newSession(q, uid, space)
 			q.json(Object{"ok": true})
 			return
 		}
@@ -251,18 +259,26 @@ func (a *App) mux() http.Handler {
 			bad(401, "账号或密码不正确")
 		}
 		s.exec("DELETE FROM ql_login_failures WHERE failure_key=?", key)
-		a.newSession(q, str(u, "id"))
+		// 本地应急登录没有工作台会话，也就没有 current_space：落到个人空间
+		// （最小权限，只看得见自己创建的）。这条路径只在工作台不可达、
+		// 且显式开启 QINGLIU_ALLOW_LOCAL_LOGIN=1 时才会走到。
+		a.newSession(q, str(u, "id"), spaceRef{Kind: spacePersonal})
 		q.json(Object{"ok": true})
 	}))
-	// 空间：列出能进的空间、切换当前空间（见 server/space.go，migrations/004）。
-	// 切换只改**本会话**，不影响同一个人在其他设备上的登录。
+	// 空间：列出能进的空间、切换当前空间、开启一个空间（见 server/spaces.go）。
+	// 三条接口都是**透传**工作台，路径保留是因为线上前端产物还在用它们。
 	m.HandleFunc("GET /api/spaces", a.route(func(q *request) {
 		q.json(a.spaces(q))
 	}))
 	m.HandleFunc("POST /api/switch-space", a.route(func(q *request) {
 		q.json(a.switchSpace(q))
 	}))
+	m.HandleFunc("POST /api/spaces/enable", a.route(func(q *request) {
+		q.json(a.enableSpace(q))
+	}))
 	m.HandleFunc("GET /api/me", a.route(func(q *request) {
+		space := q.space()
+		name, label := a.spaceLabel(q.r.Context(), str(q.user, "id"), space)
 		q.json(Object{
 			"user": Object{
 				"id": q.user["id"], "username": q.user["username"], "display": q.user["display"], "role": q.user["role"],
@@ -272,12 +288,12 @@ func (a *App) mux() http.Handler {
 				"permissions": q.permissionList(),
 				"workbench_user_id": q.user["workbench_user_id"], "email": q.user["wb_email"],
 				"workbench_linked": integer(q.user["workbench_user_id"]) > 0,
-				// 资料归属维度：0=个人空间，>0=公司团队。前端据此提示当前范围。
-				"tenant_id": q.user["tenant_id"], "tenant_role": q.user["tenant_role"],
-				"scope": tenantScope(q.user),
-				// 所属团队/公司名称：账号页要明确告诉用户「你在哪个团队」。
-				// 名称以工作台 t_tenant 为准，两边是同一家公司，不另起名字。
-				"tenant_name": a.tenantName(q.r.Context(), q.user),
+				// 当前空间：工作台契约里的 kind（personal|team|platform）+ id。
+				// 这里**没有** tenant_id —— 一个人可以在多个空间之间切换，
+				// 「所属团队」不是账号属性，而是工作台的成员关系。
+				"space": space.Object(), "kind": space.Kind, "scope": space.Kind,
+				// 空间名与角色标签：以工作台 /me/spaces 为准，清流不另起名字。
+				"space_name": name, "role_label": label,
 			},
 			"csrf": q.session["csrf"],
 		})
@@ -346,8 +362,8 @@ func (a *App) mux() http.Handler {
 			bad(400, err.Error())
 		}
 		uid := a.wbUpsertLocalUser(session)
-		a.wbSaveLogin(uid, session)
-		a.newSession(q, uid)
+		space := a.wbSaveLogin(uid, session)
+		a.newSession(q, uid, space)
 		q.json(Object{"ok": true})
 	}))
 	m.HandleFunc("GET /api/billing/skus", a.route(func(q *request) {
@@ -458,8 +474,8 @@ func (a *App) mux() http.Handler {
 		if page < 1 {
 			page = 1
 		}
-		// 列表与 allowed() 用同一口径：团队看整个团队，个人只看自己的。
-		where, args := scopeWhere(q.user, "c")
+		// 列表与 allowed() 用同一口径：团队空间看本企业，个人空间只看自己的。
+		where, args := scopeWhere(q.space(), str(q.user, "id"), "c")
 		where += " AND c.name LIKE ?"
 		args = append(args, "%"+search+"%")
 		count := s.one("SELECT COUNT(*) AS n FROM ql_customers c WHERE "+where, args...)
@@ -475,7 +491,7 @@ func (a *App) mux() http.Handler {
 		tx, e := s.db.Begin()
 		must(e)
 		defer tx.Rollback()
-		_, e = tx.Exec("INSERT INTO ql_customers(id,name,payload,workspace_tenant_id,owner_user_id) VALUES(?,?,?,?,?)", cid, name, js(Object{"authorized": true, "company": str(b, "company"), "operator": q.user["display"], "rules": defaultRules(), "scope_required": true}), integer(q.user["tenant_id"]), str(q.user, "id"))
+		_, e = tx.Exec("INSERT INTO ql_customers(id,name,payload,workspace_tenant_id,owner_user_id) VALUES(?,?,?,?,?)", cid, name, js(Object{"authorized": true, "company": str(b, "company"), "operator": q.user["display"], "rules": defaultRules(), "scope_required": true}), q.space().teamID(), str(q.user, "id"))
 		must(e)
 		_, e = tx.Exec("INSERT INTO ql_grants VALUES(?,?)", cid, q.user["id"])
 		must(e)
@@ -600,8 +616,11 @@ func (a *App) mux() http.Handler {
 			must(e)
 			defer tx.Rollback()
 			jobIDs := []string{}
+			space := q.space()
 			for _, p := range payloads {
-				_, e = tx.Exec("INSERT INTO ql_jobs(id,customer_id,user_id,kind,status,payload,message,progress,stage,upload_batch) VALUES(?,?,?,'upload','queued',?,'已进入队列，等待解析',0,'queued',?)", p["id"], cid, q.user["id"], js(p), batch)
+				// 任务带上提交时的空间：worker 在没有会话的情况下重跑它，
+				// 必须按同一个空间判权限（见 migrations/005）。
+				_, e = tx.Exec("INSERT INTO ql_jobs(id,customer_id,user_id,kind,status,payload,message,progress,stage,upload_batch,space_kind,space_id) VALUES(?,?,?,'upload','queued',?,'已进入队列，等待解析',0,'queued',?,?,?)", p["id"], cid, q.user["id"], js(p), batch, space.Kind, space.ID)
 				must(e)
 				jobIDs = append(jobIDs, str(p, "id"))
 			}
@@ -773,7 +792,8 @@ func (a *App) mux() http.Handler {
 			}
 			jid := id()
 			payload := Object{"stage": stage, "revision": nested(d, "customer")["revision"], "source": d["source"], "start": d["start"], "end": d["end"], "statement": str(b, "statement"), "operator": q.user["display"]}
-			s.exec("INSERT INTO ql_jobs(id,customer_id,user_id,kind,status,payload,message) VALUES(?,?,?,'report','queued',?,'等待生成报告')", jid, cid, q.user["id"], js(payload))
+			space := q.space()
+			s.exec("INSERT INTO ql_jobs(id,customer_id,user_id,kind,status,payload,message,space_kind,space_id) VALUES(?,?,?,'report','queued',?,'等待生成报告',?,?)", jid, cid, q.user["id"], js(payload), space.Kind, space.ID)
 			s.event(str(q.user, "id"), cid, "report_queued", jid)
 			q.json(Object{"id": jid})
 		})
@@ -796,7 +816,7 @@ func (a *App) mux() http.Handler {
 			if task != "page_ocr" {
 				task = ""
 			}
-			row := a.startAIAnalysis(str(q.user, "id"), cid, docID, task)
+			row := a.startAIAnalysis(str(q.user, "id"), cid, docID, task, q.space())
 			require(row != nil, "资料不存在")
 			q.json(Object{"ok": true, "analysis": row})
 		})
@@ -849,13 +869,14 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("GET /api/admin", a.route(func(q *request) {
 		q.admin()
-		// 用户列表同样受资料隔离约束：管理员只看到自己空间的人，
+		// 用户列表同样受资料隔离约束：管理员只看到本空间里出现过的人，
 		// 否则「谁能看谁」在人员维度上又开了一个口子。
-		if tenant := integer(q.user["tenant_id"]); tenant > 0 {
-			q.json(Object{"users": s.query("SELECT id,username,display,role,active,tenant_id FROM ql_users WHERE tenant_id=? ORDER BY created", tenant)})
-			return
-		}
-		q.json(Object{"users": s.query("SELECT id,username,display,role,active,tenant_id FROM ql_users WHERE id=? ORDER BY created", str(q.user, "id"))})
+		//
+		// 判据从「同一个 tenant_id」改成「在同一批资料上有授权」：ql_users 上
+		// 已经没有团队列了（见 migrations/005）——「他是哪个团队的成员」是工作台
+		// 的成员关系，清流只知道自己这边谁动过这些资料。
+		where, args := scopeWhere(q.space(), str(q.user, "id"), "c")
+		q.json(Object{"users": s.query("SELECT u.id,u.username,u.display,u.role,u.active FROM ql_users u JOIN ql_grants g ON g.user_id=u.id JOIN ql_customers c ON c.id=g.customer_id WHERE "+where+" GROUP BY u.id ORDER BY u.created", args...)})
 	}))
 	m.HandleFunc("GET /api/admin/audit", a.route(func(q *request) {
 		q.admin()
@@ -1004,25 +1025,21 @@ func main() {
 	<-workerDone
 }
 
-// tenantScope 把租户维度翻译成前端可读的范围名。
-func tenantScope(user Object) string {
-	if integer(user["tenant_id"]) > 0 {
-		return "team"
-	}
-	return "personal"
-}
-
-// scopeWhere 生成「这个用户能看到哪些资料」的 SQL 条件。
+// scopeWhere 生成「当前空间能看到哪些资料」的 SQL 条件。
 //
-// 团队账号（tenant_id>0）看整个团队的资料；个人账号（tenant_id=0）只看自己
-// 创建的资料 —— 个人本身就是他自己的一个空间，与他人互不可见。
-// alias 是客户表在查询里的别名，两处调用（授权判定与列表）必须用同一口径，
+// 判据是**当前空间**，不是账号：同一个人切到团队空间就能看本企业的全部资料，
+// 切回个人空间只看得见自己创建的。因此这里读空间（kind + id），而 ql_users 上
+// 没有任何空间列 —— 账号不带空间，空间属于会话。
+//
+// alias 是客户表在查询里的别名；授权判定与列表查询必须用同一口径，
 // 否则会出现「列表里看不到、直接输 ID 却能打开」的越权。
-func scopeWhere(user Object, alias string) (string, []any) {
-	if tenant := integer(user["tenant_id"]); tenant > 0 {
-		return alias + ".workspace_tenant_id=?", []any{tenant}
+func scopeWhere(space spaceRef, userID, alias string) (string, []any) {
+	// 平台空间刻意走下面那条「只看自己创建的」：清流没有平台视图
+	// （见 spaces.go 的文件头），平台令牌在清流里绝不放宽到某个团队的全部资料。
+	if space.Kind == spaceTeam {
+		return alias + ".workspace_tenant_id=?", []any{space.ID}
 	}
-	return "(" + alias + ".workspace_tenant_id=0 AND " + alias + ".owner_user_id=?)", []any{str(user, "id")}
+	return "(" + alias + ".workspace_tenant_id=0 AND " + alias + ".owner_user_id=?)", []any{userID}
 }
 
 // localLoginAllowed 决定是否允许「本地密码」这条过渡路径。

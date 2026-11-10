@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS ql_users (
 CREATE TABLE IF NOT EXISTS ql_sessions (
  token CHAR(64) PRIMARY KEY, user_id CHAR(32) NOT NULL,
  csrf CHAR(64) NOT NULL, expires BIGINT NOT NULL,
- tenant_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '本会话所在空间，0=个人空间（见 migrations/004）',
+ space_kind VARCHAR(16) NOT NULL DEFAULT 'personal' COMMENT '本会话所在空间：personal|team|platform（见 migrations/005）',
+ space_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '团队/平台空间 id；个人空间为 0',
  FOREIGN KEY(user_id) REFERENCES ql_users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 CREATE TABLE IF NOT EXISTS ql_workbench_accounts (
@@ -57,6 +58,8 @@ CREATE TABLE IF NOT EXISTS ql_jobs (
  payload JSON NOT NULL, message VARCHAR(1000) NOT NULL,
  progress INT NOT NULL DEFAULT 0, stage VARCHAR(32) NOT NULL DEFAULT '',
  upload_batch VARCHAR(64) NOT NULL DEFAULT '',
+ space_kind VARCHAR(16) NOT NULL DEFAULT 'personal' COMMENT '任务提交时所在的空间（见 migrations/005）',
+ space_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '团队空间 id；个人空间为 0',
  created TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), INDEX(status,seq), INDEX(customer_id,upload_batch),
  FOREIGN KEY(customer_id) REFERENCES ql_customers(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;

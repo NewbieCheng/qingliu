@@ -38,7 +38,7 @@ func analyzeStageProgress(stage string) (int, string) {
 	}
 }
 
-func (a *App) startAIAnalysis(userID, cid, docID, task string) Object {
+func (a *App) startAIAnalysis(userID, cid, docID, task string, space spaceRef) Object {
 	row := a.s.one("SELECT id,name FROM ql_documents WHERE id=? AND customer_id=?", docID, cid)
 	if row == nil {
 		return nil
@@ -55,8 +55,8 @@ func (a *App) startAIAnalysis(userID, cid, docID, task string) Object {
 	payload := Object{"document_id": docID, "analysis_id": analysisID, "name": str(row, "name"), "task": task}
 	a.s.exec(`INSERT INTO ql_ai_analyses(id,customer_id,document_id,status,stage,progress) VALUES(?,?,?,?,?,?)`,
 		analysisID, cid, docID, "queued", "queued", 5)
-	a.s.exec("INSERT INTO ql_jobs(id,customer_id,user_id,kind,status,payload,message,progress,stage) VALUES(?,?,?,'ai_analysis','queued',?,?,?,?)",
-		id(), cid, userID, js(payload), "等待分析", 5, "queued")
+	a.s.exec("INSERT INTO ql_jobs(id,customer_id,user_id,kind,status,payload,message,progress,stage,space_kind,space_id) VALUES(?,?,?,'ai_analysis','queued',?,?,?,?,?,?)",
+		id(), cid, userID, js(payload), "等待分析", 5, "queued", space.Kind, space.ID)
 	a.s.event(userID, cid, "ai_analysis_queued", analysisID)
 	return a.s.one("SELECT * FROM ql_ai_analyses WHERE id=?", analysisID)
 }

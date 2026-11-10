@@ -189,17 +189,21 @@ func (s *Store) event(user, cid, action, detail string) {
 
 // allowed reports whether the caller may touch this customer.
 //
-// 授权维度是**资料空间**，不是「创建者」也不是「角色」：
-//   - 团队账号（tenant_id>0）可以看整个团队的资料；
-//   - 个人账号（tenant_id=0）只能看自己创建的资料 —— 个人本身就是他自己的
-//     一个空间，与任何团队、任何其他个人都互不可见；
+// 授权维度是**当前空间**，不是「创建者」也不是「角色」：
+//   - 团队空间可以看本企业的资料；
+//   - 个人空间只能看自己创建的资料 —— 个人本身就是他自己的一个空间，
+//     与任何团队、任何其他个人都互不可见；
 //   - 管理员也受同一约束。之前 role=="admin" 无条件放行，等于把所有公司的
 //     流水与征信摊在管理员面前，这正是团队隔离要修掉的漏洞。
 //
+// 空间由调用方给出：前台请求来自会话（ql_sessions.space_kind/space_id），
+// 后台任务来自任务行（ql_jobs 同名列）。账号上已经没有空间列 —— 「他在哪个
+// 团队」是工作台的成员关系，不是清流账号的属性。
+//
 // 条件由 scopeWhere 生成，与列表查询共用同一份实现：两处各写一遍就会分叉，
 // 典型症状是「列表里看不到，直接输 ID 却能打开」。
-func (s *Store) allowed(user Object, cid string) bool {
-	where, args := scopeWhere(user, "c")
+func (s *Store) allowed(space spaceRef, userID, cid string) bool {
+	where, args := scopeWhere(space, userID, "c")
 	args = append(args, cid)
 	return s.one("SELECT c.id FROM ql_customers c WHERE "+where+" AND c.id=?", args...) != nil
 }

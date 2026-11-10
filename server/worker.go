@@ -120,10 +120,11 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 	must(e)
 	defer unlock()
 	s.jobStart(jid)
-	// tenant_id 必须一起取：授权口径是「资料所属租户」，漏了它团队账号
-	// 在后台任务里会被判成无权限（前台能进、后台任务全失败）。
-	user := s.one("SELECT id,role,display,tenant_id,tenant_role FROM ql_users WHERE id=? AND active=1", job["user_id"])
-	if user == nil || !s.allowed(user, cid) {
+	// 空间来自**任务行**，不是账号：ql_users 上已经没有空间列（见 migrations/005），
+	// 而 worker 也没有会话。任务在提交时把 space_kind/space_id 记了下来，
+	// 按它判权限才不会出现「前台能进、后台任务全失败」。
+	user := s.one("SELECT id,role,display FROM ql_users WHERE id=? AND active=1", job["user_id"])
+	if user == nil || !s.allowed(spaceOf(job), str(user, "id"), cid) {
 		panic(fmt.Errorf("操作账号已失效或没有客户权限"))
 	}
 	p := obj(str(job, "payload"))

@@ -61,6 +61,17 @@ export function ProfilePage() {
     );
   }
 
+  // 当前空间按工作台契约读：kind（personal|team|platform）+ name + role_label。
+  // 早先的 tenant_id / tenant_role 已经删掉了 —— 一个人可以同时属于多个空间，
+  // 「所属团队」不是账号属性。
+  const kind = me.kind || me.space?.kind || "personal";
+  const scopeText =
+    kind === "team"
+      ? me.space_name || "团队"
+      : kind === "platform"
+        ? "平台空间（青流未接入，只显示自己创建的）"
+        : "个人空间（仅自己可见）";
+
   return (
     <main className="account-page">
       <PageHeader
@@ -82,14 +93,12 @@ export function ProfilePage() {
         <FormRow label="服务角色">
           <strong>{ROLES[me.service_role] || ROLES[me.role] || me.role}</strong>
         </FormRow>
-        <FormRow label={me.scope === "team" ? "所属团队" : "资料范围"}>
-          <strong>{me.scope === "team" ? me.tenant_name || "团队" : "个人空间（仅自己可见）"}</strong>
+        <FormRow label={kind === "team" ? "所属团队" : "资料范围"}>
+          <strong>{scopeText}</strong>
         </FormRow>
-        {me.scope === "team" && (
-          <FormRow label="团队角色">
-            <strong>
-              {me.tenant_role === "admin" ? "团队管理员（可看本团队全部资料）" : "团队成员（可看本团队全部资料）"}
-            </strong>
+        {kind === "team" && me.role_label && (
+          <FormRow label="空间角色">
+            <strong>{me.role_label}</strong>
           </FormRow>
         )}
       </section>
