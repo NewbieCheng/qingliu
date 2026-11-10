@@ -37,14 +37,109 @@
 .sku-points{margin:0;font-weight:600;color:var(--ql-forest)}
 .sku-card ul{margin:4px 0 12px;padding-left:18px;color:#46534d;font-size:13px;line-height:1.65}
 .sku-card button{margin-top:auto}
-.balance-strip{display:grid;gap:10px}
-.balance-strip-main{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.balance-strip-label{font-size:12px;letter-spacing:.08em;color:var(--ql-muted)}
-.balance-strip-total{font-family:"Noto Serif SC",serif;font-size:28px;line-height:1;color:var(--ql-forest);font-variant-numeric:tabular-nums}
-.balance-strip-total small{margin-left:6px;font-size:13px;font-weight:500;color:var(--ql-muted)}
-.balance-strip-split{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:#46534d}
-.balance-strip-split strong{font-variant-numeric:tabular-nums}
-.balance-strip-hint{margin:0;font-size:12px;line-height:1.6}
+.balance-strip{
+  display:grid;
+  gap:12px;
+  padding:18px 20px;
+  background:linear-gradient(180deg,#fbfcf8,#f4f7f1);
+}
+.balance-strip-body{
+  display:grid;
+  grid-template-columns:minmax(148px,auto) minmax(0,1fr);
+  gap:16px 28px;
+  align-items:stretch;
+  min-width:0;
+}
+.balance-strip-main{
+  display:grid;
+  gap:6px;
+  align-content:center;
+  min-width:0;
+}
+.balance-strip-label{
+  font-size:11px;
+  letter-spacing:.1em;
+  color:var(--ql-muted);
+  line-height:1.2;
+}
+.balance-strip-total{
+  font-family:"Noto Serif SC",serif;
+  font-size:32px;
+  line-height:1;
+  color:var(--ql-forest);
+  font-variant-numeric:tabular-nums;
+  font-weight:650;
+}
+.balance-strip-total small{
+  margin-left:6px;
+  font-size:13px;
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif;
+  font-weight:500;
+  color:var(--ql-muted);
+  letter-spacing:0;
+}
+.balance-strip-buckets{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  min-width:0;
+  border:1px solid var(--ql-line);
+  border-radius:2px;
+  background:#fff;
+  overflow:hidden;
+}
+.balance-strip-bucket{
+  display:grid;
+  gap:4px;
+  padding:12px 14px;
+  min-width:0;
+  align-content:start;
+}
+.balance-strip-bucket + .balance-strip-bucket{
+  border-left:1px solid var(--ql-line);
+}
+.balance-strip-bucket.has-period{
+  background:linear-gradient(180deg,#fff,#fbf6ef);
+}
+.balance-strip-bucket-label{
+  font-size:11px;
+  letter-spacing:.08em;
+  color:var(--ql-muted);
+  line-height:1.2;
+}
+.balance-strip-bucket-value{
+  font-family:"Noto Serif SC",serif;
+  font-size:20px;
+  line-height:1.1;
+  font-weight:650;
+  color:var(--ql-ink);
+  font-variant-numeric:tabular-nums;
+}
+.balance-strip-bucket-meta{
+  font-size:11.5px;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+.balance-strip-expire{
+  color:var(--ql-copper);
+  font-variant-numeric:tabular-nums;
+}
+.balance-strip-hint{
+  margin:0;
+  padding-top:10px;
+  border-top:1px solid var(--ql-line);
+  font-size:12px;
+  line-height:1.55;
+}
+@media(max-width:600px){
+  .balance-strip{padding:16px 14px}
+  .balance-strip-body{
+    grid-template-columns:1fr;
+    gap:12px;
+  }
+  .balance-strip-total{font-size:28px}
+  .balance-strip-bucket{padding:10px 12px}
+  .balance-strip-bucket-value{font-size:18px}
+}
 .ledger-expire td{color:#8a5a3a}
 .ledger-expire-delta{color:#a33b31!important}
 .checkout{display:flex;gap:24px;align-items:center;justify-content:space-between}
