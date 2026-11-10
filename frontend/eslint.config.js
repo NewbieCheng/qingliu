@@ -17,6 +17,7 @@ export default [
         document: "readonly",
         navigator: "readonly",
         localStorage: "readonly",
+        sessionStorage: "readonly",
         indexedDB: "readonly",
         fetch: "readonly",
         FormData: "readonly",

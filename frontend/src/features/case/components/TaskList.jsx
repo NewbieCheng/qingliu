@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { JOB_STATUS } from "@/shared/lib/constants.js";
 import { Form } from "@/shared/ui/Form.jsx";
@@ -29,7 +29,8 @@ const ETA_HINT = {
   report: "预计约 1 分钟",
 };
 
-const VISIBLE_JOBS = 5;
+const PAGE_SIZE = 5;
+const DOCK_CACHE_PREFIX = "ql.task-dock:";
 
 function progressOf(job) {
   if (job.status === "done" || job.status === "partial") return 100;
@@ -63,11 +64,36 @@ function ActivityIcon({ size = 16 }) {
   );
 }
 
+function readDockCache(cid) {
+  if (!cid || typeof sessionStorage === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(`${DOCK_CACHE_PREFIX}${cid}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDockCache(cid, next) {
+  if (!cid || typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.setItem(`${DOCK_CACHE_PREFIX}${cid}`, JSON.stringify(next));
+  } catch {
+    // 会话缓存写失败不影响任务展示
+  }
+}
+
 /**
  * 右侧悬浮任务坞（portal 到 body，避开全局 aside 样式）。
- * 默认收成角标；用户手动展开；默认最近 5 条。
+ * 默认收成角标；用户手动展开；列表分页，每页 PAGE_SIZE 条。
+ * 展开态与页码记在 sessionStorage（标签页会话内），任务数据仍走底稿内存短 TTL。
  */
 export function TaskList({ data, onRetry, onCancel }) {
+  const cid = data?.customer?.id || "";
+  const cached = useMemo(() => readDockCache(cid), [cid]);
+
   const jobs = useMemo(
     () =>
       (data.jobs || [])
@@ -81,14 +107,28 @@ export function TaskList({ data, onRetry, onCancel }) {
   const activeCount = jobs.filter(isActive).length;
   const failedCount = jobs.filter((job) => job.status === "failed").length;
   const hasUrgent = activeCount > 0 || failedCount > 0;
+  const pageCount = Math.max(1, Math.ceil(jobs.length / PAGE_SIZE));
 
-  const [open, setOpen] = useState(false);
-  const [showAll, setShowAll] = useState(false);
+  const [open, setOpen] = useState(() => Boolean(cached?.open));
+  const [page, setPage] = useState(() => {
+    const saved = Number(cached?.page) || 1;
+    return Math.max(1, saved);
+  });
   const [cancelling, setCancelling] = useState("");
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount));
+  }, [pageCount]);
+
+  useEffect(() => {
+    writeDockCache(cid, { open, page });
+  }, [cid, open, page]);
 
   if (!jobs.length || typeof document === "undefined") return null;
 
-  const visible = showAll ? jobs : jobs.slice(0, VISIBLE_JOBS);
+  const safePage = Math.min(page, pageCount);
+  const start = (safePage - 1) * PAGE_SIZE;
+  const visible = jobs.slice(start, start + PAGE_SIZE);
   const summary =
     activeCount > 0
       ? `${activeCount} 项进行中`
@@ -215,14 +255,28 @@ export function TaskList({ data, onRetry, onCancel }) {
             })}
           </div>
 
-          {jobs.length > VISIBLE_JOBS && (
-            <button
-              type="button"
-              className="ghost task-toggle"
-              onClick={() => setShowAll((value) => !value)}
-            >
-              {showAll ? "只看最近" : `展开全部 ${jobs.length} 条`}
-            </button>
+          {pageCount > 1 && (
+            <div className="task-dock-pager" role="navigation" aria-label="任务翻页">
+              <button
+                type="button"
+                className="ghost"
+                disabled={safePage <= 1}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+              >
+                上一页
+              </button>
+              <span className="task-dock-page">
+                {safePage} / {pageCount}
+              </span>
+              <button
+                type="button"
+                className="ghost"
+                disabled={safePage >= pageCount}
+                onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+              >
+                下一页
+              </button>
+            </div>
           )}
         </section>
       )}

@@ -31,7 +31,7 @@ export function OwnershipStep({ data, onSave, onNext }) {
     <section className="card ownership-card">
       <SectionTitle
         title="确认持有人与本次范围"
-        description="有几份原件就填几行；未确认的资料不进入测算。"
+        description="有几份原件就填几行；未确认的不进测算。"
       />
 
       {docs.length === 0 ? (
@@ -71,14 +71,16 @@ export function OwnershipStep({ data, onSave, onNext }) {
           }}
         >
           <div className="ownership-section">
-            <h3 className="ownership-section-title">
-              ① 逐份确认原件
-              <small>{docs.length} 份</small>
-            </h3>
-            <p className="muted ownership-section-hint">
-              「持有人」填账户实际归属人；「关系」相对本客户；关掉「纳入本次」则该份不进测算。
-            </p>
-            <div className="table-wrap table-compact">
+            <div className="ownership-section-head">
+              <h3 className="ownership-section-title">
+                逐份确认原件
+                <small>{docs.length} 份</small>
+              </h3>
+              <p className="muted ownership-section-hint">
+                持有人＝账户归属人；关系相对本客户；关「纳入本次」则不进测算。
+              </p>
+            </div>
+            <div className="table-wrap table-compact ownership-table">
               <table>
                 <thead>
                   <tr>
@@ -95,8 +97,10 @@ export function OwnershipStep({ data, onSave, onNext }) {
                     return (
                       <tr key={document.id}>
                         <td>
-                          {document.name}
-                          <small className="block">
+                          <span className="ownership-doc-name">
+                            {document.name}
+                          </span>
+                          <small className="ownership-doc-meta">
                             识别署名：
                             {document.meta.subject_name || "未识别"}
                           </small>
@@ -155,7 +159,7 @@ export function OwnershipStep({ data, onSave, onNext }) {
           </div>
 
           <FoldPanel
-            title="② 可选：家庭成员姓名（流水匹配）"
+            title="可选：家庭成员姓名（流水匹配）"
             className="ownership-extra"
           >
             <p className="muted ownership-section-hint">
