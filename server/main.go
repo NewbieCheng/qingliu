@@ -636,7 +636,7 @@ func (a *App) mux() http.Handler {
 			// 解析按档计费：余额不足就别收文件，避免用户等一轮才发现扣不了费。
 			// 读不到余额（工作台不可达）时放行，不能因为计费故障阻断业务。
 			if balance, ok := a.pointBalance(q.r.Context(), str(q.user, "id")); ok && balance <= 0 {
-				bad(402, "积分不足，无法解析；请联系管理员充值后再上传")
+				bad(402, insufficientPointsMessage)
 			}
 			// 批次幂等：浏览器生成 batch 键，断网重试同一批次直接回放，不重复建任务。
 			batch := strings.TrimSpace(q.r.FormValue("batch"))
@@ -884,6 +884,12 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("POST /api/clients/{cid}/ai-analysis", a.route(func(q *request) {
 		q.edit(func(cid string) {
+			// AI 解析按实际用量扣积分：余额为 0 时先提示充值，别让用户走到
+			// 「请先上传资料」或提交后才吃 402。与上传解析同一条口径——
+			// 读不到余额（工作台不可达）时放行。
+			if balance, ok := a.pointBalance(q.r.Context(), str(q.user, "id")); ok && balance <= 0 {
+				bad(402, insufficientPointsMessage)
+			}
 			b := q.body()
 			docID := str(b, "document_id")
 			if docID == "" {

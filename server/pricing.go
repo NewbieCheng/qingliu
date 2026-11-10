@@ -36,6 +36,11 @@ const parsePricingTTL = 60 * time.Second
 
 var errPricingChargeFailed = errors.New("积分扣费失败，请联系管理员")
 
+// insufficientPointsMessage 是所有「计费解析入口」对余额不足的统一文案。
+// 三种状态（上传解析、AI 解析、文档 OCR）共用一句话，前端按 402 拉起
+// 「前往充值」对话框，用户不需要在不同页面读不同的说法。
+const insufficientPointsMessage = "积分不足：AI 解析与文档解析按积分计费，请先充值再试"
+
 // loadPricing 拉取当前解析计价。读不到时返回 0（不扣费）而不是报错：
 // 计费配置故障不该让用户无法解析，运营可从账单侧对账。
 func (a *App) loadPricing(ctx context.Context) parsePricing {

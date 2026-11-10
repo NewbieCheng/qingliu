@@ -99,6 +99,9 @@
 .ai-entry-bar p{margin:0;font-size:12.5px;line-height:1.5;color:var(--ql-muted);max-width:56ch}
 .ai-mode-hint{margin:8px 0 0;font-size:12px;line-height:1.5;color:var(--ql-muted)}
 .ai-dialog-body{display:grid;gap:14px}
+/* 计费解析入口的「积分不足」提示条：在模态框里也要能看清，并且带一个直连充值的动作 */
+.billing-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--ql-warning);border-radius:10px;background:var(--ql-surface-2);font-size:13px;line-height:1.5;color:var(--ql-ink)}
+.billing-notice button{flex:0 0 auto}
 .review-action{justify-content:flex-end}
 /* 核对页筛选：与下方卡片同宽；压过 .card 的 20px 内边距 */
 .card.review-filter{

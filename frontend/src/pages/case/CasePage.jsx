@@ -4,6 +4,8 @@ import { Loading } from "@/shared/ui/Loading.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { CASE_STEPS } from "@/features/case/constants.js";
 import { isQingliuAdmin } from "@/shared/lib/constants.js";
+import { isInsufficientPointsError } from "@/shared/lib/billing.js";
+import { RechargeTipDialog } from "@/features/profile/index.js";
 import {
   CaseAdminGrant,
   CaseHeader,
@@ -29,6 +31,16 @@ export function CasePage({ cid, user }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [original, setOriginal] = useState(null);
+  // 解析是计费入口：积分不足时后端回 402，这里直接拉起「前往充值」，
+  // 不用让用户看着一行报错自己找充值页。
+  const [rechargeOpen, setRechargeOpen] = useState(false);
+
+  function upload(form) {
+    return mutate("upload", form).catch((requestError) => {
+      if (isInsufficientPointsError(requestError)) setRechargeOpen(true);
+      throw requestError;
+    });
+  }
 
   const range = useMemo(
     () => (period ? new URLSearchParams(period).toString() : ""),
@@ -103,7 +115,7 @@ export function CasePage({ cid, user }) {
       {step === "upload" && (
         <UploadStep
           data={data}
-          onUpload={(form) => mutate("upload", form)}
+          onUpload={upload}
           onNext={() => changeStep("ownership")}
         />
       )}
@@ -155,6 +167,7 @@ export function CasePage({ cid, user }) {
           onClose={() => setOriginal(null)}
         />
       )}
+      {rechargeOpen && <RechargeTipDialog onClose={() => setRechargeOpen(false)} />}
     </main>
   );
 }

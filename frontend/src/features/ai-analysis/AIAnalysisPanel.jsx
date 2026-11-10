@@ -7,6 +7,9 @@ import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { SegmentedControl } from "@/shared/ui/SegmentedControl.jsx";
 import { FoldPanel } from "@/shared/ui/FoldPanel.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
+import { navigate } from "@/shared/router/index.js";
+import { queryBalance } from "@/app/queries/index.js";
+import { isInsufficientPointsError } from "@/shared/lib/billing.js";
 import { getAnalyses, startAnalysis } from "./api.js";
 import { enrichAIResult, formatAISummary } from "./format-result.js";
 
@@ -106,6 +109,25 @@ function AIAnalysisDialog({ cid, onClose }) {
   const [error, setError] = useState("");
   const [resultOpen, setResultOpen] = useState(false);
   const [mode, setMode] = useState("analysis");
+  // 积分余额：AI 解析按用量扣积分，余额为 0 时先说清楚要充值，别让用户
+  // 点了「开始分析」才吃一个 402。null = 还没读到（不阻塞按钮）。
+  const [points, setPoints] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    queryBalance()
+      .then((data) => {
+        if (alive) setPoints(data?.points_balance ?? 0);
+      })
+      .catch(() => {
+        if (alive) setPoints(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [cid]);
+
+  const needRecharge = points !== null && Number(points) <= 0;
 
   async function load() {
     try {
@@ -144,6 +166,8 @@ function AIAnalysisDialog({ cid, onClose }) {
       await load();
     } catch (requestError) {
       setError(requestError.message);
+      // 402 = 积分不足：把余额归零并让「前往充值」条露出来，比只弹 toast 有用。
+      if (isInsufficientPointsError(requestError)) setPoints(0);
       toast(requestError.message, "error");
     } finally {
       setBusy(false);
@@ -173,6 +197,24 @@ function AIAnalysisDialog({ cid, onClose }) {
             <p className="error" role="alert">
               {error}
             </p>
+          ) : null}
+          {needRecharge ? (
+            <div className="billing-notice" role="status">
+              <span>
+                当前积分 {Number(points).toLocaleString("zh-CN")}
+                ，AI 解析与文档解析按用量扣积分，充值后即可提交。
+              </span>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  onClose();
+                  navigate("/recharge");
+                }}
+              >
+                前往充值
+              </button>
+            </div>
           ) : null}
           <div>
             <SegmentedControl
