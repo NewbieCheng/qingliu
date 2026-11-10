@@ -1,13 +1,17 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Loading } from "@/shared/ui/Loading.jsx";
 import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { SearchInput } from "@/shared/ui/SearchInput.jsx";
 import { EmptyState } from "@/shared/ui/EmptyState.jsx";
+import { SegmentedControl } from "@/shared/ui/SegmentedControl.jsx";
+import { RefreshIcon } from "@/shared/ui/icons.jsx";
 import { invalidateClients, queryClients } from "@/app/queries/index.js";
 import {
+  CLIENT_FILTERS,
   ClientsTable,
   CreateClientDialog,
+  filterClients,
 } from "@/features/clients/index.js";
 
 export function ClientsPage() {
@@ -15,6 +19,7 @@ export function ClientsPage() {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [filter, setFilter] = useState("all");
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -26,6 +31,11 @@ export function ClientsPage() {
         setError(requestError.message);
       });
   }, [query, page]);
+
+  const visibleClients = useMemo(
+    () => filterClients(data?.clients || [], filter),
+    [data, filter],
+  );
 
   async function refresh() {
     setRefreshing(true);
@@ -41,53 +51,68 @@ export function ClientsPage() {
   }
 
   return (
-    <main>
+    <main className="clients-page">
       <PageHeader
-        title="把核对工作，落到每一笔。"
-        description="先确认资料归属，再核对交易，最后生成可追溯的报告。"
+        title="我的客户"
         actions={
-          <button className="primary" onClick={() => setCreating(true)}>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => setCreating(true)}
+          >
             ＋ 新建客户
           </button>
         }
       />
       <div className="card">
-        <div className="toolbar">
-          <h2>
-            我的客户 <small>{data?.count ?? "—"}</small>
-          </h2>
-          <form
-            className="toolbar-search"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setPage(1);
-              setQuery(search.trim());
-            }}
-          >
-            <SearchInput
-              aria-label="搜索客户代号"
-              placeholder="搜索客户代号"
-              value={search}
-              onChange={setSearch}
-              onSearch={(value) => {
-                setPage(1);
-                setQuery(value);
-              }}
+        <div className="toolbar clients-toolbar">
+          <div className="toolbar-start">
+            <SegmentedControl
+              aria-label="客户进度筛选"
+              options={CLIENT_FILTERS}
+              value={filter}
+              onChange={setFilter}
             />
+            <span className="muted clients-count">
+              {data ? `共 ${data.count} 位` : "—"}
+            </span>
+          </div>
+          <div className="toolbar-actions">
+            <form
+              className="toolbar-search"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setPage(1);
+                setQuery(search.trim());
+              }}
+            >
+              <SearchInput
+                aria-label="搜索客户代号"
+                placeholder="搜索客户代号"
+                value={search}
+                onChange={setSearch}
+                onSearch={(value) => {
+                  setPage(1);
+                  setQuery(value);
+                }}
+              />
+            </form>
             <button
               type="button"
-              className="ghost"
+              className="ghost icon-btn"
               disabled={refreshing}
+              aria-label={refreshing ? "刷新中" : "刷新列表"}
+              title={refreshing ? "刷新中…" : "刷新"}
               onClick={() => void refresh()}
             >
-              {refreshing ? "刷新中…" : "刷新"}
+              <RefreshIcon size={15} />
             </button>
-          </form>
+          </div>
         </div>
         {error && <p className="error">{error}</p>}
         {!data && !error && <Loading compact text="正在读取客户列表…" />}
-        {data && data.clients.length > 0 && (
-          <ClientsTable clients={data.clients} />
+        {data && visibleClients.length > 0 && (
+          <ClientsTable clients={visibleClients} />
         )}
         {data?.clients.length === 0 && (
           <EmptyState title="从第一份资料开始">
@@ -98,6 +123,18 @@ export function ClientsPage() {
               onClick={() => setCreating(true)}
             >
               ＋ 新建客户
+            </button>
+          </EmptyState>
+        )}
+        {data && data.clients.length > 0 && visibleClients.length === 0 && (
+          <EmptyState title="当前筛选下没有客户">
+            <p>试试切换到「全部」，或翻到其他页。</p>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setFilter("all")}
+            >
+              查看全部
             </button>
           </EmptyState>
         )}

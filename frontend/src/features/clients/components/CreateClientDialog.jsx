@@ -30,16 +30,18 @@ export function CreateClientDialog({ onClose }) {
         <Field label="企业名称（选填）">
           <input name="company" placeholder="可选" />
         </Field>
-        <label className="check">
-          <input type="checkbox" name="authorized" required />
-          已获得客户资料处理授权
-        </label>
-        <ModalActions>
-          <button type="button" className="ghost" onClick={onClose}>
-            取消
-          </button>
-          <button className="primary">创建档案</button>
-        </ModalActions>
+        <div className="form-footer">
+          <label className="check">
+            <input type="checkbox" name="authorized" required />
+            已获得客户资料处理授权
+          </label>
+          <ModalActions className="actions-end">
+            <button type="button" className="ghost" onClick={onClose}>
+              取消
+            </button>
+            <button className="primary">创建档案</button>
+          </ModalActions>
+        </div>
       </Form>
     </Modal>
   );

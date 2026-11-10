@@ -23,6 +23,12 @@ const STAGE_LABEL = {
   failed: "失败",
 };
 
+const ETA_HINT = {
+  upload: "预计约 1–5 分钟",
+  ai_analysis: "预计约 1–3 分钟",
+  report: "预计约 1 分钟",
+};
+
 const VISIBLE_JOBS = 5;
 
 function progressOf(job) {
@@ -178,6 +184,7 @@ export function TaskList({ data, onRetry, onCancel }) {
                         {job.status === "queued" && job.queue_position > 1
                           ? `排队中 · 前面还有 ${job.queue_position - 1} 份`
                           : STAGE_LABEL[job.stage] || JOB_STATUS[job.status]}
+                        {active ? ` · ${ETA_HINT[job.kind] || "预计稍候完成"}` : ""}
                       </span>
                       <span>{percent}%</span>
                     </div>

@@ -24,7 +24,8 @@ export function useCaseData(cid, { range, view, query, page }) {
           force: force || busyRef.current,
         });
         setData(value);
-        busyRef.current = Boolean(value?.busy);
+        // busy 锁底稿；jobs_live 含 AI 分析——任务坞进度要跟着刷。
+        busyRef.current = Boolean(value?.busy || value?.jobs_live);
         setError("");
         setSelected([]);
         return value;
@@ -42,10 +43,10 @@ export function useCaseData(cid, { range, view, query, page }) {
   }, [load]);
 
   useEffect(() => {
-    if (!data?.busy) return undefined;
+    if (!data?.busy && !data?.jobs_live) return undefined;
     const timer = window.setTimeout(() => void load({ force: true }), 2000);
     return () => window.clearTimeout(timer);
-  }, [data?.busy, load]);
+  }, [data?.busy, data?.jobs_live, load]);
 
   const mutate = useCallback(
     async (action, body) => {

@@ -215,6 +215,11 @@ export function RechargePage() {
         qr={qr}
         expired={currentExpired}
         remaining={clock && order ? remainingText(order) : ""}
+        onDismiss={() => {
+          orderRef.current = null;
+          setOrder(null);
+          setQr("");
+        }}
       />
       <OrdersTable orders={orders} onResume={(item) => void openOrder(item, true)} />
       <LedgerTable

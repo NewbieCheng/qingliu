@@ -134,7 +134,6 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, pay
 
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
-	lastStage := ""
 	for {
 		select {
 		case <-ctx.Done():
@@ -156,13 +155,24 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, pay
 		}
 		remote := str(payloadData, "status")
 		if remote == "running" {
-			// 逐页 OCR 时工作台会回报真实百分比，直接透传；文本分析仍是阶段制。
+			progress := 55
+			message := "AI 正在阅读并整理流水"
 			if workbenchProgress := integer(payloadData["progress"]); workbenchProgress > 0 {
-				progress := int(40 + workbenchProgress*55/100)
-				report("running", fmt.Sprintf("AI 正在识别文档第 %d%%", workbenchProgress), progress)
-			} else if lastStage != "running" {
-				lastStage = "running"
-				step("running", "AI 正在阅读并整理流水")
+				// 工作台进度是展示用百分比；映射到清流 running 段，避免一开始就顶到 100。
+				progress = int(40 + workbenchProgress*55/100)
+				if progress > 99 {
+					progress = 99
+				}
+				message = fmt.Sprintf("AI 正在分析（工作台进度 %d%%）", workbenchProgress)
+			}
+			report("running", message, progress)
+			// 工作台分段完成后会带回中间 result（含 process/思考片段），同步到本地表，
+			// 前端轮询就能边等边看，而不是干等终态。
+			if result := payloadData["result"]; result != nil {
+				raw, _ := json.Marshal(result)
+				a.s.exec("UPDATE ql_ai_analyses SET status='running',stage='running',progress=?,result=? WHERE id=?", progress, string(raw), analysisID)
+			} else {
+				a.s.exec("UPDATE ql_ai_analyses SET status='running',stage='running',progress=? WHERE id=?", progress, analysisID)
 			}
 		}
 		switch remote {

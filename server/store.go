@@ -304,6 +304,12 @@ func parsePercent(page, total int) int {
 func (s *Store) busy(cid string) bool {
 	return s.one("SELECT id FROM ql_jobs WHERE customer_id=? AND kind IN ('upload','report') AND status IN ('queued','running') AND created > DATE_SUB(NOW(6), INTERVAL ? MINUTE) LIMIT 1", cid, staleJobMinutes) != nil
 }
+
+// jobsLive 统计任意仍在排队/执行的后台任务（含 AI 分析）。
+// 前端用它轮询任务坞进度，但不会像 busy 那样锁住底稿编辑。
+func (s *Store) jobsLive(cid string) bool {
+	return s.one("SELECT id FROM ql_jobs WHERE customer_id=? AND status IN ('queued','running') AND created > DATE_SUB(NOW(6), INTERVAL ? MINUTE) LIMIT 1", cid, staleJobMinutes) != nil
+}
 func (s *Store) bump(cid string) {
 	s.exec("UPDATE ql_customers SET revision=revision+1 WHERE id=?", cid)
 	s.exec("DELETE FROM ql_submissions WHERE customer_id=?", cid)
@@ -491,7 +497,13 @@ func (s *Store) caseData(cid, source, start, end string) Object {
 	}
 	sub := s.one("SELECT revision,payload FROM ql_submissions WHERE customer_id=?", cid)
 	submitted := sub != nil && integer(sub["revision"]) == integer(c["revision"]) && str(obj(str(sub, "payload")), "source") == source && str(obj(str(sub, "payload")), "start") == start && str(obj(str(sub, "payload")), "end") == end
-	return Object{"customer": c, "fields": fields, "docs": docs, "rows": rows, "source": source, "start": start, "end": end, "choices": choices, "summary": result, "problems": problems, "reports": reports, "submitted_current": submitted, "busy": s.busy(cid), "jobs": s.query("SELECT id,kind,status,message,created FROM ql_jobs WHERE customer_id=? ORDER BY seq DESC LIMIT 30", cid)}
+	jobs := s.query("SELECT id,kind,status,message,progress,stage,created FROM ql_jobs WHERE customer_id=? ORDER BY seq DESC LIMIT 30", cid)
+	for _, job := range jobs {
+		if str(job, "status") == "queued" {
+			job["queue_position"] = s.queuePosition(str(job, "id")) + 1
+		}
+	}
+	return Object{"customer": c, "fields": fields, "docs": docs, "rows": rows, "source": source, "start": start, "end": end, "choices": choices, "summary": result, "problems": problems, "reports": reports, "submitted_current": submitted, "busy": s.busy(cid), "jobs_live": s.jobsLive(cid), "jobs": jobs}
 }
 func must(e error) {
 	if e != nil {

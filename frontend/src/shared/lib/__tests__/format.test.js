@@ -4,6 +4,7 @@ import {
   formatCurrencyFen,
   formatFileSize,
   formatNumber,
+  formatRelativeTime,
 } from "../format.js";
 
 describe("format helpers", () => {
@@ -21,5 +22,19 @@ describe("format helpers", () => {
   it("formats yuan and file sizes", () => {
     expect(formatCurrencyFen(19900)).toBe("¥199.00");
     expect(formatFileSize(1024 * 1024)).toBe("1.0 MB");
+  });
+
+  it("formats relative list times", () => {
+    const now = new Date("2026-11-10T20:30:00");
+    expect(
+      formatRelativeTime("2026-11-10T08:05:00", "—", now.getTime()),
+    ).toBe("今天 08:05");
+    expect(
+      formatRelativeTime("2026-11-09T19:24:00", "—", now.getTime()),
+    ).toBe("昨天 19:24");
+    expect(
+      formatRelativeTime("2026-11-07T10:00:00", "—", now.getTime()),
+    ).toBe("3 天前");
+    expect(formatRelativeTime(null)).toBe("—");
   });
 });

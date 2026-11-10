@@ -1,45 +1,64 @@
 import React from "react";
-import { Link } from "@/shared/router/index.js";
-import { formatDateTime } from "@/shared/lib/format.js";
+import { navigate } from "@/shared/router/index.js";
+import { formatRelativeTime } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
+import { clientNextStep } from "../clientStatus.js";
+
+function openClient(clientId) {
+  navigate(`/clients/${clientId}`);
+}
 
 export function ClientsTable({ clients }) {
   return (
     <div className="table-wrap table-compact">
-      <table>
+      <table className="clients-table">
         <thead>
           <tr>
-            <th>客户代号</th>
-            <th>资料</th>
-            <th>处理状态</th>
-            <th>创建时间</th>
-            <th>操作</th>
+            <th>客户</th>
+            <th>进度</th>
+            <th>更新时间</th>
           </tr>
         </thead>
         <tbody>
-          {clients.map((client) => (
-            <tr key={client.id}>
-              <td>
-                <Link className="client-name" to={`/clients/${client.id}`}>
-                  {client.name}
-                </Link>
-              </td>
-              <td>{client.doc_count} 份</td>
-              <td>
-                <StatusBadge tone={client.running ? "amber" : "default"}>
-                  {client.running
-                    ? "后台处理中"
-                    : client.doc_count
-                      ? "打开后继续核对"
-                      : "等待上传"}
-                </StatusBadge>
-              </td>
-              <td className="muted">{formatDateTime(client.created)}</td>
-              <td>
-                <Link to={`/clients/${client.id}`}>打开档案 →</Link>
-              </td>
-            </tr>
-          ))}
+          {clients.map((client) => {
+            const step = clientNextStep(client);
+            return (
+              <tr
+                key={client.id}
+                className="clients-row is-clickable"
+                tabIndex={0}
+                role="link"
+                aria-label={`打开 ${client.name}`}
+                onClick={() => openClient(client.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openClient(client.id);
+                  }
+                }}
+              >
+                <td>
+                  <span className="client-name">{client.name}</span>
+                </td>
+                <td>
+                  <div className="clients-progress">
+                    <StatusBadge tone={step.tone}>{step.label}</StatusBadge>
+                    {step.docs > 0 && (
+                      <span className="clients-progress-meta">
+                        {step.docs} 份
+                      </span>
+                    )}
+                    {step.action ? (
+                      <span className="clients-progress-action">
+                        {step.action}
+                      </span>
+                    ) : null}
+                  </div>
+                </td>
+                <td className="muted">{formatRelativeTime(client.created)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

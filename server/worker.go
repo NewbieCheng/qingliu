@@ -100,7 +100,15 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 				if len(message) > 900 {
 					message = message[:900]
 				}
-				_, _ = s.db.Exec("UPDATE ql_jobs SET status='failed',message=? WHERE id=?", message, job["id"])
+				_, _ = s.db.Exec("UPDATE ql_jobs SET status='failed',message=?,stage='failed',progress=0 WHERE id=?", message, job["id"])
+				// AI 分析有两张表：任务坞读 ql_jobs，入口卡读 ql_ai_analyses。
+				// panic 只写前者时会出现「上面分析中 10%，下面已失败」的错位。
+				if str(job, "kind") == "ai_analysis" {
+					analysisID := str(obj(str(job, "payload")), "analysis_id")
+					if analysisID != "" {
+						_, _ = s.db.Exec("UPDATE ql_ai_analyses SET status='failed',stage='failed',error=?,completed=NOW(6) WHERE id=? AND status IN ('queued','running','uploading')", message, analysisID)
+					}
+				}
 				log.Printf("job %s failed: %T", str(job, "id"), v)
 			} else {
 				log.Printf("worker query failed: %T", v)

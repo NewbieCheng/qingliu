@@ -1,15 +1,22 @@
 import React from "react";
 import { formatCurrencyFen, formatDateTime, formatNumber } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
+import { CheckIcon } from "@/shared/ui/icons.jsx";
 import { orderStatusLabel, remainingMs } from "../lib/order.js";
 
-export function CheckoutPanel({ order, qr, expired, remaining }) {
+export function CheckoutPanel({ order, qr, expired, remaining, onDismiss }) {
   if (!order) return null;
   const pending = order.status === "pending";
+  const paid = order.status === "paid";
   const hasMockCode = !order.code_url || order.code_url.startsWith("mock://");
+  const showQr = Boolean(qr && !expired);
+  const showDismiss = paid && typeof onDismiss === "function";
 
   return (
-    <section className="card checkout">
+    <section
+      className={`card checkout${paid ? " checkout--paid" : ""}`}
+      aria-live={paid ? "polite" : undefined}
+    >
       <div className="checkout-main">
         <p className="eyebrow">订单 {order.order_no}</p>
         <h2>{order.sku_name}</h2>
@@ -18,7 +25,7 @@ export function CheckoutPanel({ order, qr, expired, remaining }) {
           {formatNumber(order.points, "0")} 积分
           {order.bonus_points ? ` + ${order.bonus_points}` : ""}
         </p>
-        <StatusBadge tone={order.status === "paid" ? "default" : "amber"}>
+        <StatusBadge tone={paid ? "default" : "amber"}>
           {orderStatusLabel(order)}
         </StatusBadge>
         {pending && !expired && (
@@ -45,15 +52,33 @@ export function CheckoutPanel({ order, qr, expired, remaining }) {
             二维码已过期，订单已关闭。请重新选择套餐下单。
           </p>
         )}
-        {order.status === "paid" && (
-          <p className="success">积分已到账，余额已刷新。</p>
+        {paid && (
+          <p className="checkout-result-lead">
+            <span className="checkout-result-mark" aria-hidden="true">
+              <CheckIcon size={14} />
+            </span>
+            积分已到账，余额已刷新。
+          </p>
         )}
         {order.status === "closed" && !expired && (
           <p className="muted">订单已关闭，请重新选择套餐下单。</p>
         )}
       </div>
-      {qr && !expired && (
-        <img className="checkout-qr" src={qr} alt="微信支付二维码" />
+      {(showQr || showDismiss) && (
+        <div className="checkout-aside">
+          {showQr && (
+            <img className="checkout-qr" src={qr} alt="微信支付二维码" />
+          )}
+          {showDismiss && (
+            <button
+              type="button"
+              className="primary checkout-done"
+              onClick={onDismiss}
+            >
+              完成
+            </button>
+          )}
+        </div>
       )}
     </section>
   );

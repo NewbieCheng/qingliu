@@ -49,7 +49,18 @@
 .ledger-expire-delta{color:#a33b31!important}
 .checkout{display:flex;gap:24px;align-items:center;justify-content:space-between}
 .checkout-main{flex:1;min-width:0}
+.checkout-aside{flex:0 0 auto;display:flex;align-items:center;justify-content:flex-end;gap:12px}
 .checkout-qr{width:190px;height:190px;border:1px solid var(--ql-line);padding:8px;background:#fff}
+.checkout--paid{align-items:center}
+.checkout-result-lead{
+  display:flex;align-items:center;gap:8px;margin:12px 0 0;
+  font-size:13.5px;font-weight:650;line-height:1.45;color:var(--ql-forest);
+}
+.checkout-result-mark{
+  flex:none;display:inline-grid;place-items:center;width:22px;height:22px;
+  border:1px solid rgba(30,74,64,.28);border-radius:2px;background:#eef5f0;color:var(--ql-forest);
+}
+.checkout-done{min-width:96px;padding:10px 22px;font-weight:650}
 .profile-form{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end}
 .profile-form>*{min-width:0}
 .profile-form>button{white-space:nowrap}
@@ -109,6 +120,17 @@
 .ai-entry-bar p{margin:0;font-size:12.5px;line-height:1.5;color:var(--ql-muted);max-width:56ch}
 .ai-mode-hint{margin:8px 0 0;font-size:12px;line-height:1.5;color:var(--ql-muted)}
 .ai-dialog-body{display:grid;gap:14px}
+.ai-process{display:grid;gap:6px;padding:10px 12px;border:1px solid var(--ql-line,#d7ddd6);border-radius:8px;background:#fbfaf6}
+.ai-process h3{margin:0;font-size:12px;letter-spacing:.06em;color:var(--ql-muted)}
+.ai-process ol{margin:0;padding-left:18px;display:grid;gap:4px;font-size:12.5px;line-height:1.55;color:var(--ql-ink)}
+.ai-result-actions{display:flex;flex-wrap:wrap;gap:8px}
+.ai-result-actions--top{margin-bottom:10px}
+.ai-process{border:1px solid color-mix(in srgb,var(--ql-line,#d7ddd6) 85%,transparent);border-radius:10px;padding:10px 12px;background:#fbfcfa}
+.ai-process.is-live{border-color:color-mix(in srgb,var(--ql-copper,#9a6b3f) 35%,transparent)}
+.ai-process h3{margin:0 0 6px;font-size:12px;letter-spacing:.06em;color:var(--ql-muted);font-weight:650}
+.ai-process ol{margin:0;padding-left:18px;display:grid;gap:4px;font-size:12.5px;line-height:1.55;color:var(--ql-ink)}
+.ai-process ol li:last-child{font-weight:600}
+.ai-result-actions{display:flex;flex-wrap:wrap;gap:8px}
 /* 计费解析入口的「积分不足」提示条：在模态框里也要能看清，并且带一个直连充值的动作 */
 .billing-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--ql-warning);border-radius:10px;background:var(--ql-surface-2);font-size:13px;line-height:1.5;color:var(--ql-ink)}
 .billing-notice button{flex:0 0 auto}
@@ -252,7 +274,9 @@
 .account-balance-value.is-muted{font-size:15px;font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ql-muted);font-weight:500}
 .number.positive{color:var(--ql-forest)}
 @media(max-width:760px){
-  .checkout{flex-direction:column;align-items:flex-start}
+  .checkout{flex-direction:column;align-items:stretch}
+  .checkout-aside{align-self:stretch;width:100%;justify-content:flex-end}
+  .checkout-qr{align-self:center}
 }
 @media(max-width:600px){
   .profile-form{grid-template-columns:1fr}
@@ -733,6 +757,8 @@ td,th{padding:11px 10px}
 .checkout-expiry{margin:6px 0 8px;color:var(--ql-muted);font-size:12px;font-variant-numeric:tabular-nums}
 .checkout-expiry strong{color:var(--ql-forest);font-family:"SFMono-Regular",Consolas,monospace;font-size:13px}
 .checkout-expiry-warning{color:var(--ql-alert)}
+.checkout-result-lead{margin-top:14px;font-size:14px}
+.checkout-done{min-width:104px}
 .order-resume{padding:2px 0!important;font-size:12px!important;color:var(--ql-copper)!important;border:0!important;background:transparent!important}
 .order-resume:hover{text-decoration:underline}
 .case-page .page-title{margin-bottom:10px}
@@ -1174,3 +1200,73 @@ details>summary::before{content:none;display:none}
   }
   .workspace.is-phone .case-page .page-title h1{font-size:24px}
 }
+
+/* —— 客户列表：工具头 + 可点行 —— */
+.clients-page .page-title{margin-bottom:14px}
+.clients-toolbar{
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px 12px;
+}
+.clients-toolbar .toolbar-start{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex:1 1 auto;
+  min-width:0;
+  flex-wrap:wrap;
+}
+.clients-toolbar .toolbar-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:0 1 auto;
+  margin-left:auto;
+}
+.clients-toolbar .toolbar-search{
+  display:flex;
+  min-width:min(220px,100%);
+  width:220px;
+}
+.clients-count{font-size:12.5px;white-space:nowrap}
+.clients-toolbar .icon-btn{
+  display:inline-grid;
+  place-items:center;
+  width:36px;
+  height:36px;
+  padding:0;
+  border:1px solid var(--ql-line);
+  border-radius:6px;
+  background:#fff;
+  color:var(--ql-muted);
+}
+.clients-toolbar .icon-btn:hover{background:var(--ql-surface-2);color:var(--ql-ink)}
+.clients-toolbar .icon-btn:disabled{opacity:.45}
+.clients-progress{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.clients-progress-meta{font-size:12px;color:var(--ql-muted)}
+.clients-progress-action{
+  font-size:12px;
+  color:var(--ql-forest);
+  font-weight:600;
+}
+.clients-row.is-clickable{cursor:pointer}
+.clients-row.is-clickable:hover{background:#f3f7f4}
+.clients-row.is-clickable:focus-visible{
+  outline:2px solid rgba(30,74,64,.28);
+  outline-offset:-2px;
+}
+.clients-table th:nth-child(2),
+.clients-table td:nth-child(2){width:34%}
+.clients-table th:nth-child(3),
+.clients-table td:nth-child(3){width:18%;white-space:nowrap}
+@media (max-width:680px){
+  .clients-toolbar .toolbar-actions{width:100%;margin-left:0}
+  .clients-toolbar .toolbar-search{width:100%;flex:1 1 auto}
+  .clients-toolbar .toolbar-actions > .primary{margin-left:auto}
+}
+

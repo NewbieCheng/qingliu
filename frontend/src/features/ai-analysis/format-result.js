@@ -51,7 +51,84 @@ export function enrichAIResult(result) {
   next.income_structure = income;
   next.anomalies = anomalies;
   next.questions = questions;
+  next.process = normalizeProcess(result.process);
   return next;
+}
+
+/** 过程/思考条目：工作台写入的 process 数组，兼容纯字符串。 */
+export function normalizeProcess(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === "string") return item.trim();
+      if (item && typeof item === "object") {
+        return String(item.text || item.message || "").trim();
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
+/** 复制/导出用的纯文本：摘要 + 过程 + 明细。 */
+export function formatAIExportText(result) {
+  const enriched = enrichAIResult(result);
+  if (!enriched || typeof enriched !== "object") return "";
+  const blocks = [];
+  const summary = formatAISummary(enriched) || enriched.summary || "";
+  if (summary) blocks.push("【摘要】\n" + summary);
+  if (enriched.process?.length) {
+    blocks.push("【思考过程】\n" + enriched.process.map((line) => `· ${line}`).join("\n"));
+  }
+  const sections = [
+    ["收入结构", enriched.income_structure],
+    ["异常点", enriched.anomalies],
+    ["建议核实", enriched.questions],
+  ];
+  for (const [label, rows] of sections) {
+    if (!rows?.length) continue;
+    const lines = rows.map((row) => {
+      if (typeof row === "string") return `· ${row}`;
+      const head = row.item || row.source || "";
+      const amount = row.amount ? ` · ${row.amount}` : "";
+      const evidence = row.evidence ? `（${row.evidence}）` : "";
+      return `· ${head}${amount}${evidence}`.trim();
+    });
+    blocks.push(`【${label}】\n` + lines.join("\n"));
+  }
+  if (enriched.disclaimer) blocks.push(String(enriched.disclaimer));
+  return blocks.join("\n\n").trim();
+}
+
+export async function copyText(text) {
+  const value = String(text || "");
+  if (!value) throw new Error("没有可复制的内容");
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const area = document.createElement("textarea");
+  area.value = value;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.left = "-9999px";
+  document.body.appendChild(area);
+  area.select();
+  document.execCommand("copy");
+  document.body.removeChild(area);
+}
+
+export function downloadText(filename, text) {
+  const value = String(text || "");
+  if (!value) throw new Error("没有可导出的内容");
+  const blob = new Blob([value], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename || "ai-analysis.txt";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function appendScoped(target, value, scope) {
