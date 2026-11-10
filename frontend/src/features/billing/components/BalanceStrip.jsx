@@ -13,36 +13,51 @@ export function BalanceStrip({ balance }) {
   const permanent = permanentPoints(balance);
   const period = periodPoints(balance);
   const expires = periodExpiresAt(balance);
+  const hasPeriod = period > 0;
 
   return (
     <section className="card balance-strip" aria-label="当前积分">
-      <div className="balance-strip-main">
-        <span className="balance-strip-label">可用积分</span>
-        <strong className="balance-strip-total">
-          {formatNumber(total)}
-          <small>积分</small>
-        </strong>
+      <div className="balance-strip-body">
+        <div className="balance-strip-main">
+          <span className="balance-strip-label">可用积分</span>
+          <strong className="balance-strip-total">
+            {formatNumber(total)}
+            <small>积分</small>
+          </strong>
+        </div>
+
+        <div className="balance-strip-buckets" role="list">
+          <div className="balance-strip-bucket" role="listitem">
+            <span className="balance-strip-bucket-label">永久</span>
+            <strong className="balance-strip-bucket-value">
+              {formatNumber(permanent)}
+            </strong>
+            <span className="balance-strip-bucket-meta muted">不过期</span>
+          </div>
+          <div
+            className={`balance-strip-bucket${hasPeriod ? " has-period" : ""}`}
+            role="listitem"
+          >
+            <span className="balance-strip-bucket-label">临时</span>
+            <strong className="balance-strip-bucket-value">
+              {formatNumber(period)}
+            </strong>
+            {hasPeriod && expires ? (
+              <span className="balance-strip-bucket-meta balance-strip-expire">
+                至 {formatDateTime(expires)}
+              </span>
+            ) : (
+              <span className="balance-strip-bucket-meta muted">暂无</span>
+            )}
+          </div>
+        </div>
       </div>
-      <div className="balance-strip-split">
-        <span>
-          永久 <strong>{formatNumber(permanent)}</strong>
-        </span>
-        <span>
-          本期 <strong>{formatNumber(period)}</strong>
-          {period > 0 && expires ? (
-            <small className="muted"> · 至 {formatDateTime(expires)}</small>
-          ) : null}
-        </span>
-      </div>
-      {period > 0 ? (
-        <p className="balance-strip-hint muted">
-          本期额度到期未用完将作废；扣费先扣本期，再扣永久。
-        </p>
-      ) : (
-        <p className="balance-strip-hint muted">
-          永久积分不过期。订阅套餐到账后会出现本期额度与到期时间。
-        </p>
-      )}
+
+      <p className="balance-strip-hint muted">
+        {hasPeriod
+          ? "临时到期未用完将作废。扣费先扣临时，再扣永久。"
+          : "永久积分不过期。订阅到账后会出现临时额度与到期时间。"}
+      </p>
     </section>
   );
 }

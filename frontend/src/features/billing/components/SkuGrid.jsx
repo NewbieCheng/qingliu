@@ -88,7 +88,7 @@ export function SkuGrid({ skus, busy, onChoose, defaultTab = "personal" }) {
               <p className="sku-points">
                 {isPeriod ? "到账 " : "到账 "}
                 {formatNumber(sku.points)} 积分
-                {isPeriod ? "（本期额度）" : "（永久有效）"}
+                {isPeriod ? "（临时积分）" : "（永久有效）"}
                 {sku.bonus_points ? ` · 赠 ${sku.bonus_points}` : ""}
               </p>
               <ul>

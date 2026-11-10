@@ -272,6 +272,8 @@
 .account-balance-value{font-family:"Noto Serif SC",serif;font-size:34px;line-height:1;color:var(--ql-forest);font-variant-numeric:tabular-nums}
 .account-balance-value small{margin-left:8px;font-size:13px;font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ql-muted);font-weight:500}
 .account-balance-value.is-muted{font-size:15px;font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ql-muted);font-weight:500}
+.account-balance-split{margin:10px 0 0;font-size:12px;line-height:1.6;color:var(--ql-ink)}
+.account-balance-split.is-muted{color:var(--ql-muted)}
 .number.positive{color:var(--ql-forest)}
 @media(max-width:760px){
   .checkout{flex-direction:column;align-items:stretch}
@@ -400,6 +402,7 @@ footer{border-top:1px solid var(--ql-line);color:var(--ql-muted)}
 /* 顶栏全局积分：各页页头的牌子已收拢到这里，单行紧凑显示 */
 .topbar-balance{display:inline-flex;align-items:baseline;gap:7px;font-size:11px;letter-spacing:.1em;color:var(--ql-muted);white-space:nowrap}
 .topbar-balance strong{font-family:"Noto Serif SC",serif;font-size:17px;line-height:1;color:var(--ql-forest);font-variant-numeric:tabular-nums;letter-spacing:0}
+.topbar-balance-period{font-size:11px;color:var(--ql-warning)}
 .topbar-refresh{padding:2px 0!important;font-size:12px!important;color:var(--ql-muted)!important}
 .topbar-refresh:hover{color:var(--ql-forest)!important}
 .topbar-page-title{font-size:12px;font-weight:700;color:#c79a6b;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}

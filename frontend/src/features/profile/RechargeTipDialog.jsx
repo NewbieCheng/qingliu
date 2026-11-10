@@ -2,10 +2,15 @@ import React, { useEffect, useState } from "react";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { navigate } from "@/shared/router/index.js";
 import { queryBalance } from "@/app/queries/index.js";
-import { availablePoints } from "@/features/billing/index.js";
+import {
+  availablePoints,
+  periodExpiresAt,
+  periodPoints,
+  permanentPoints,
+} from "@/features/billing/index.js";
 
 export function RechargeTipDialog({ onClose }) {
-  const [points, setPoints] = useState(null);
+  const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -15,7 +20,7 @@ export function RechargeTipDialog({ onClose }) {
       try {
         const data = await queryBalance();
         if (!alive) return;
-        setPoints(availablePoints(data) ?? 0);
+        setBalance(data);
       } catch (requestError) {
         if (!alive) return;
         setError(requestError.message || "余额读取失败");
@@ -27,6 +32,11 @@ export function RechargeTipDialog({ onClose }) {
       alive = false;
     };
   }, []);
+
+  const points = availablePoints(balance);
+  const permanent = permanentPoints(balance);
+  const period = periodPoints(balance);
+  const expires = periodExpiresAt(balance);
 
   return (
     <Modal title="充值积分" onClose={onClose}>
@@ -41,10 +51,30 @@ export function RechargeTipDialog({ onClose }) {
         ) : error ? (
           <strong className="account-balance-value is-muted">{error}</strong>
         ) : (
-          <strong className="account-balance-value">
-            {Number(points).toLocaleString("zh-CN")}
-            <small>积分</small>
-          </strong>
+          <>
+            <strong className="account-balance-value">
+              {Number(points ?? 0).toLocaleString("zh-CN")}
+              <small>积分</small>
+            </strong>
+            {/* 可用额度由两个桶组成：永久不过期，临时有到期日 —— 必须分开写，
+                否则「明明还有额度却提示不足 / 月底突然清零」没法解释。 */}
+            <p className="account-balance-split">
+              永久 {Number(permanent).toLocaleString("zh-CN")} · 临时{" "}
+              {Number(period).toLocaleString("zh-CN")}
+              {period > 0 && expires
+                ? `（${expires.toLocaleString("zh-CN", {
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })} 到期作废）`
+                : ""}
+            </p>
+            <p className="account-balance-split is-muted">
+              扣费先扣临时积分，再扣永久积分。
+            </p>
+          </>
         )}
       </div>
 

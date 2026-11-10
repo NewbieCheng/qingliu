@@ -26,7 +26,7 @@ export function LedgerTable({ ledgers, page = 1, pageSize = 10, total = 0, onPag
               const isExpire = Number(ledger.change_type) === 7;
               const reason =
                 ledger.reason ||
-                (isExpire ? "本期额度到期未用完，已作废" : "—");
+                (isExpire ? "临时积分到期未用完，已作废" : "—");
               return (
                 <tr
                   key={ledger.ledger_id}
