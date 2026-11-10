@@ -4,11 +4,11 @@ import { SOURCES } from "@/shared/lib/constants.js";
 
 export function CoverageForm({ data, onSave }) {
   return (
-    <section className="card">
+    <section className="card coverage-card">
       <h2>确认统计期间与完整性</h2>
-      <p className="muted">
+      <p className="muted coverage-lead">
         当前：{SOURCES[data.source]}，{data.start} 至 {data.end}
-        。请核对原件声明期间、缺页及完整性，不能仅凭有交易的月份推断覆盖。
+        。请核对原件声明期间、缺页及完整性。
       </p>
       <Form
         onSave={async (form) => {
@@ -21,14 +21,16 @@ export function CoverageForm({ data, onSave }) {
         <Field label="核对说明">
           <input name="note" defaultValue={data.fields.coverage_note || ""} />
         </Field>
-        <label className="check">
-          <input type="checkbox" name="confirmed" required />
-          我已对照原件核对当前范围与完整性
-        </label>
-        <div className="actions-end">
-          <button className="primary" disabled={data.busy}>
-            确认期间，查看报告
-          </button>
+        <div className="form-footer">
+          <label className="check">
+            <input type="checkbox" name="confirmed" required />
+            我已对照原件核对当前范围与完整性
+          </label>
+          <div className="actions-end">
+            <button className="primary" disabled={data.busy}>
+              确认期间，查看报告
+            </button>
+          </div>
         </div>
       </Form>
     </section>

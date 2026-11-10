@@ -11,3 +11,4 @@ export {
   getSkus,
 } from "./api.js";
 export { isExpired, isResumable, remainingMs, remainingText } from "./lib/order.js";
+export { filterSkusByAudience, orderOwnerForSku, skuAudience } from "./lib/sku.js";

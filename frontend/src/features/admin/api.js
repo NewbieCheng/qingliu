@@ -15,3 +15,7 @@ export function createMember(payload) {
 export function toggleMember(userId) {
   return api(`/api/admin/users/${userId}/toggle`, {});
 }
+
+export function deleteMember(userId, password) {
+  return api(`/api/admin/users/${userId}/delete`, { password });
+}

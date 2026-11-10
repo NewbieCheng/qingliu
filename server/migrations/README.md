@@ -13,6 +13,8 @@
 | `003-tenant-isolation.sql` | 资料归属（`ql_customers.workspace_tenant_id`） | |
 | `004-session-space.sql` | 会话空间坐标 + 工作台权限快照 | 后被 005 改写为 `space_kind/space_id` |
 | `005-drop-local-space-columns.sql` | 加 `ql_sessions/ql_jobs.space_kind/space_id`，删清流自有的空间列 | **必须执行**，否则新版二进制每个请求都会 1054 报错 |
+| `006-event-space.sql` | `ql_events.space_kind/space_id` + 回填；审计按空间收口 | **必须执行**，否则新二进制写审计会缺列 1054，且旧查询仍可能全库可见 |
+| `007-grant-workbench-binding.sql` | `ql_grants.workbench_user_id` + 回填；团队非管理员按工作台身份授权 | **必须执行**，否则授权写入会缺列，业务员看不到被授权客户 |
 
 ## 上线顺序（顺序不能换）
 
@@ -26,7 +28,7 @@
    ```bash
    mysql -uroot "$DB" < server/migrations/00N-xxx.sql
    ```
-3. 部署新二进制与前端（见 `docs/05-部署与服务器.md`）
+3. 部署新二进制与前端（见 `docs/05-部署与运维.md`）
 4. 验证：打开 `/profile` 与 `/admin`，确认没有「处理失败，请联系管理员」
 
 ## 踩过的坑（2026-11-10）

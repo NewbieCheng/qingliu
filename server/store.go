@@ -10,20 +10,31 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	mysql "github.com/go-sql-driver/mysql"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
+
+	mysql "github.com/go-sql-driver/mysql"
 )
 
 //go:embed schema.sql
 var schema string
 
+// rowsCacheEntry 缓存「已评估」的交易行，避免翻页/筛选反复全表读 + evaluate。
+// 键为客户 id；revision 变化（bump）即失效。
+type rowsCacheEntry struct {
+	revision int64
+	rows     []Object
+}
+
 type Store struct {
-	db    *sql.DB
-	root  string
-	vault cipher.AEAD
+	db        *sql.DB
+	root      string
+	vault     cipher.AEAD
+	rowsMu    sync.Mutex
+	rowsCache map[string]rowsCacheEntry
 }
 
 func openStore() (*Store, error) {
@@ -79,7 +90,7 @@ func openStore() (*Store, error) {
 	}
 	block, _ := aes.NewCipher(raw)
 	aead, _ := cipher.NewGCM(block)
-	return &Store{db, root, aead}, nil
+	return &Store{db: db, root: root, vault: aead}, nil
 }
 func (s *Store) exec(q string, args ...any) {
 	if _, e := s.db.Exec(q, args...); e != nil {
@@ -176,7 +187,11 @@ func (s *Store) read(path string) ([]byte, error) {
 	}
 	return s.vault.Open(nil, b[6:6+s.vault.NonceSize()], b[6+s.vault.NonceSize():], nil)
 }
-func (s *Store) event(user, cid, action, detail string) {
+func (s *Store) event(space spaceRef, user, cid, action, detail string) {
+	// 唯一写入闸门：不在白名单的动作（切空间、翻原件、任务完成码等）直接丢弃。
+	if !auditShouldPersist(action) {
+		return
+	}
 	var c any
 	if cid != "" {
 		c = cid
@@ -184,26 +199,25 @@ func (s *Store) event(user, cid, action, detail string) {
 	if len(detail) > 500 {
 		detail = detail[:500]
 	}
-	s.exec("INSERT INTO ql_events(user_id,customer_id,action,detail) VALUES(?,?,?,?)", user, c, action, detail)
+	space = spaceOf(Object{"space_kind": space.Kind, "space_id": space.ID})
+	s.exec(
+		"INSERT INTO ql_events(user_id,customer_id,action,detail,space_kind,space_id) VALUES(?,?,?,?,?,?)",
+		user, c, action, detail, space.Kind, space.ID,
+	)
 }
 
 // allowed reports whether the caller may touch this customer.
 //
-// 授权维度是**当前空间**，不是「创建者」也不是「角色」：
-//   - 团队空间可以看本企业的资料；
-//   - 个人空间只能看自己创建的资料 —— 个人本身就是他自己的一个空间，
-//     与任何团队、任何其他个人都互不可见；
-//   - 管理员也受同一约束。之前 role=="admin" 无条件放行，等于把所有公司的
-//     流水与征信摊在管理员面前，这正是团队隔离要修掉的漏洞。
+// 授权维度是**当前空间 + 工作台身份**，不是清流本地角色：
+//   - 团队管理员：本企业全部资料；
+//   - 团队非管理员：仅 ql_grants 绑了自己 workbench_user_id 的客户；
+//   - 个人空间：自己创建的，或被显式授权的；
+//   - 管理员不能跨企业 —— 之前 role=="admin" 无条件放行的漏洞已修掉。
 //
-// 空间由调用方给出：前台请求来自会话（ql_sessions.space_kind/space_id），
-// 后台任务来自任务行（ql_jobs 同名列）。账号上已经没有空间列 —— 「他在哪个
-// 团队」是工作台的成员关系，不是清流账号的属性。
-//
-// 条件由 scopeWhere 生成，与列表查询共用同一份实现：两处各写一遍就会分叉，
-// 典型症状是「列表里看不到，直接输 ID 却能打开」。
-func (s *Store) allowed(space spaceRef, userID, cid string) bool {
-	where, args := scopeWhere(space, userID, "c")
+// 空间由调用方给出：前台请求来自会话，后台任务来自任务行。
+// 条件由 scopeWhere 生成，与列表查询共用同一份实现。
+func (s *Store) allowed(access customerAccess, cid string) bool {
+	where, args := scopeWhere(access, "c")
 	args = append(args, cid)
 	return s.one("SELECT c.id FROM ql_customers c WHERE "+where+" AND c.id=?", args...) != nil
 }
@@ -284,36 +298,70 @@ func parsePercent(page, total int) int {
 // busy 判断该客户是否真有在跑的任务。超过 staleJobMinutes 仍停在
 // queued/running 的记录视为卡死，不计入 busy，避免一条失败任务把
 // 上传、核对、报告等所有写操作永久挡在门外。
+// busy 只统计会改底稿/报告产物的任务（upload / report）。
+// AI 辅助分析是旁路意见，跑着时仍应允许核对勾选与归属确认；
+// 否则「开始分析」会把整页复选框和保存处理一起锁死，看起来像勾选坏了。
 func (s *Store) busy(cid string) bool {
-	return s.one("SELECT id FROM ql_jobs WHERE customer_id=? AND status IN ('queued','running') AND created > DATE_SUB(NOW(6), INTERVAL ? MINUTE) LIMIT 1", cid, staleJobMinutes) != nil
+	return s.one("SELECT id FROM ql_jobs WHERE customer_id=? AND kind IN ('upload','report') AND status IN ('queued','running') AND created > DATE_SUB(NOW(6), INTERVAL ? MINUTE) LIMIT 1", cid, staleJobMinutes) != nil
 }
 func (s *Store) bump(cid string) {
 	s.exec("UPDATE ql_customers SET revision=revision+1 WHERE id=?", cid)
 	s.exec("DELETE FROM ql_submissions WHERE customer_id=?", cid)
+	s.invalidateRows(cid)
 }
+
+func (s *Store) invalidateRows(cid string) {
+	s.rowsMu.Lock()
+	defer s.rowsMu.Unlock()
+	if s.rowsCache != nil {
+		delete(s.rowsCache, cid)
+	}
+}
+
 func (s *Store) rows(cid string) []Object {
-	stored := s.query("SELECT payload FROM ql_transactions WHERE customer_id=? ORDER BY seq", cid)
-	reviews := s.query("SELECT r.* FROM ql_reviews r JOIN ql_transactions t ON r.transaction_id=t.id WHERE t.customer_id=? ORDER BY r.seq", cid)
-	latest := map[string]Object{}
-	for _, r := range reviews {
-		latest[str(r, "transaction_id")] = r
-	}
-	rows := []Object{}
-	for _, r := range stored {
-		t := obj(str(r, "payload"))
-		if a := latest[str(t, "id")]; a != nil && str(a, "label") != "unreviewed" {
-			t["review_label"] = a["label"]
-			t["review_operator"] = a["operator"]
-			t["review_reason"] = a["reason"]
+	rev := int64(0)
+	if c := s.one("SELECT revision,payload FROM ql_customers WHERE id=?", cid); c != nil {
+		rev = integer(c["revision"])
+		s.rowsMu.Lock()
+		if s.rowsCache != nil {
+			if hit, ok := s.rowsCache[cid]; ok && hit.revision == rev {
+				out := hit.rows
+				s.rowsMu.Unlock()
+				return out
+			}
 		}
-		rows = append(rows, t)
+		s.rowsMu.Unlock()
+		fields := obj(str(c, "payload"))
+		rules := nested(fields, "rules")
+		if len(rules) == 0 {
+			rules = defaultRules()
+		}
+		stored := s.query("SELECT payload FROM ql_transactions WHERE customer_id=? ORDER BY seq", cid)
+		reviews := s.query("SELECT r.* FROM ql_reviews r JOIN ql_transactions t ON r.transaction_id=t.id WHERE t.customer_id=? ORDER BY r.seq", cid)
+		latest := map[string]Object{}
+		for _, r := range reviews {
+			latest[str(r, "transaction_id")] = r
+		}
+		rows := []Object{}
+		for _, r := range stored {
+			t := obj(str(r, "payload"))
+			if a := latest[str(t, "id")]; a != nil && str(a, "label") != "unreviewed" {
+				t["review_label"] = a["label"]
+				t["review_operator"] = a["operator"]
+				t["review_reason"] = a["reason"]
+			}
+			rows = append(rows, t)
+		}
+		evaluated := evaluate(rows, rules, fields)
+		s.rowsMu.Lock()
+		if s.rowsCache == nil {
+			s.rowsCache = map[string]rowsCacheEntry{}
+		}
+		s.rowsCache[cid] = rowsCacheEntry{revision: rev, rows: evaluated}
+		s.rowsMu.Unlock()
+		return evaluated
 	}
-	fields := obj(str(s.one("SELECT payload FROM ql_customers WHERE id=?", cid), "payload"))
-	rules := nested(fields, "rules")
-	if len(rules) == 0 {
-		rules = defaultRules()
-	}
-	return evaluate(rows, rules, fields)
+	return []Object{}
 }
 func (s *Store) documents(cid string) []Object {
 	docs := s.query("SELECT id,name,sha,payload,created FROM ql_documents WHERE customer_id=? ORDER BY created,id", cid)

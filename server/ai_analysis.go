@@ -57,7 +57,7 @@ func (a *App) startAIAnalysis(userID, cid, docID, task string, space spaceRef) O
 		analysisID, cid, docID, "queued", "queued", 5)
 	a.s.exec("INSERT INTO ql_jobs(id,customer_id,user_id,kind,status,payload,message,progress,stage,space_kind,space_id) VALUES(?,?,?,'ai_analysis','queued',?,?,?,?,?,?)",
 		id(), cid, userID, js(payload), "等待分析", 5, "queued", space.Kind, space.ID)
-	a.s.event(userID, cid, "ai_analysis_queued", analysisID)
+	a.s.event(space, userID, cid, "ai_analysis_queued", analysisID)
 	return a.s.one("SELECT * FROM ql_ai_analyses WHERE id=?", analysisID)
 }
 

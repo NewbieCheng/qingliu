@@ -1,15 +1,48 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { TRANSACTION_LABELS } from "@/shared/lib/constants.js";
 import { formatCents } from "@/shared/lib/format.js";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { originalPageURL } from "../../api.js";
+import { loadPagePreview } from "../../lib/page-preview-cache.js";
 
 export function OriginalEvidenceDialog({ cid, original, onClose }) {
   const row = original.row;
   const isPdf = row.filename.toLowerCase().endsWith(".pdf");
   const total = Math.max(Number(original.pages) || row.page || 1, 1);
   const [page, setPage] = useState(Math.min(row.page || 1, total));
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewError, setPreviewError] = useState("");
+
+  useEffect(() => {
+    if (!isPdf) return undefined;
+    let cancelled = false;
+    let objectUrl = "";
+    setPreviewError("");
+    setPreviewUrl("");
+    void loadPagePreview(
+      cid,
+      row.document_id,
+      page,
+      original.sha || "",
+      originalPageURL(cid, row.document_id, page),
+    )
+      .then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        setPreviewUrl(url);
+      })
+      .catch((error) => {
+        if (!cancelled) setPreviewError(error.message || "原件页加载失败");
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [cid, isPdf, original.sha, page, row.document_id]);
 
   return (
     <Modal
@@ -19,10 +52,15 @@ export function OriginalEvidenceDialog({ cid, original, onClose }) {
       <div className="original">
         {isPdf && (
           <>
-            <img
-              alt={`原件第${page}页`}
-              src={originalPageURL(cid, row.document_id, page)}
-            />
+            {previewError ? (
+              <p className="error" role="alert">
+                {previewError}
+              </p>
+            ) : previewUrl ? (
+              <img alt={`原件第${page}页`} src={previewUrl} />
+            ) : (
+              <p style={{ color: "var(--muted)" }}>正在加载原件页…</p>
+            )}
             {total > 1 && (
               <Pagination
                 page={page}

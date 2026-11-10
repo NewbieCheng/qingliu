@@ -3,12 +3,12 @@ import React from "react";
 export function PageHeader({ eyebrow, title, description, actions, className = "" }) {
   return (
     <div className={`page-title ${className}`.trim()}>
-      <div>
+      <div className="page-title-copy">
         {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1>{title}</h1>
         {description && <p className="muted">{description}</p>}
       </div>
-      {actions}
+      {actions ? <div className="page-title-actions">{actions}</div> : null}
     </div>
   );
 }

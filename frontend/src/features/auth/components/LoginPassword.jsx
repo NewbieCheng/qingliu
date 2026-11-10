@@ -1,19 +1,18 @@
 import React, { useState } from "react";
 import { EyeIcon } from "@/shared/ui/icons.jsx";
 
-export function LoginPassword() {
+export function LoginPassword({ value, onChange, defaultValue = "" }) {
   const [show, setShow] = useState(false);
-  // 仅本地开发（vite dev）用：从 frontend/.env.local 读预填密码，构建产物里为空。
-  const devPassword = import.meta.env.DEV
-    ? import.meta.env.VITE_DEV_LOGIN_PASSWORD || ""
-    : "";
+  const controlled = value !== undefined;
   return (
     <span className="auth-input-wrap">
       <input
         name="password"
         type={show ? "text" : "password"}
         autoComplete="current-password"
-        defaultValue={devPassword}
+        {...(controlled
+          ? { value, onChange }
+          : { defaultValue })}
         required
         maxLength="72"
         placeholder="请输入密码"
@@ -22,7 +21,7 @@ export function LoginPassword() {
         type="button"
         className="auth-eye"
         aria-label={show ? "隐藏密码" : "显示密码"}
-        onClick={() => setShow((value) => !value)}
+        onClick={() => setShow((current) => !current)}
       >
         <EyeIcon off={show} />
       </button>

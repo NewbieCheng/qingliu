@@ -1,13 +1,14 @@
 import React from "react";
 import { Field, Form } from "@/shared/ui/Form.jsx";
 import { Modal } from "@/shared/ui/Modal.jsx";
+import { ModalActions } from "@/shared/ui/ModalActions.jsx";
 import { createClient } from "../api.js";
 import { invalidateClients } from "@/app/queries/index.js";
 import { navigate } from "@/shared/router/index.js";
 
 export function CreateClientDialog({ onClose }) {
   return (
-    <Modal title="新建客户档案" onClose={onClose}>
+    <Modal title="新建客户档案" onClose={onClose} className="modal--sm">
       <Form
         onSave={async (form) => {
           const data = await createClient({
@@ -27,13 +28,18 @@ export function CreateClientDialog({ onClose }) {
           />
         </Field>
         <Field label="企业名称（选填）">
-          <input name="company" />
+          <input name="company" placeholder="可选" />
         </Field>
         <label className="check">
           <input type="checkbox" name="authorized" required />
           已获得客户资料处理授权
         </label>
-        <button className="primary">创建档案</button>
+        <ModalActions>
+          <button type="button" className="ghost" onClick={onClose}>
+            取消
+          </button>
+          <button className="primary">创建档案</button>
+        </ModalActions>
       </Form>
     </Modal>
   );

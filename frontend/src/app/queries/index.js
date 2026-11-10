@@ -2,6 +2,7 @@ import { cacheQuery, dropCache } from "@/shared/api/cache.js";
 import { listClients } from "@/features/clients/api.js";
 import { getAdminOverview, listAuditEvents } from "@/features/admin/api.js";
 import { getBalance } from "@/features/billing/api.js";
+import { getCase } from "@/features/case/api.js";
 import { getProfile, listSpaces } from "@/features/profile/api.js";
 
 const TTL = {
@@ -10,6 +11,8 @@ const TTL = {
   clients: 10_000,
   adminUsers: 15_000,
   audit: 15_000,
+  // 底稿页短去重：翻页/筛选连点不重复打；busy 轮询与写后走 force
+  case: 8_000,
 };
 
 export function queryClients({ query, page, force = false }) {
@@ -55,8 +58,30 @@ export function querySpaces({ force = false } = {}) {
   return cacheQuery(listSpaces, { key: "profile:spaces", ttlMs: TTL.adminUsers, force });
 }
 
+/**
+ * 底稿详情：内存短 TTL 去重。权威仍在服务端；IndexedDB 只缓存原件页 PNG。
+ */
+export function queryCase(
+  cid,
+  { range, view, query, page, signal, force = false } = {},
+) {
+  const rangeKey = typeof range === "string" ? range : new URLSearchParams(range || {}).toString();
+  return cacheQuery(
+    () => getCase(cid, { range: rangeKey, view, query, page, signal }),
+    {
+      key: `case:${cid}:${rangeKey}:${view}:${query}:${page}`,
+      ttlMs: TTL.case,
+      force,
+    },
+  );
+}
+
 export function invalidateClients() {
   dropCache("clients:");
+}
+
+export function invalidateCase(cid) {
+  dropCache(cid ? `case:${cid}:` : "case:");
 }
 
 export function invalidateAdmin() {

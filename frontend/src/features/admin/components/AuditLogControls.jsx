@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Pagination } from "@/shared/ui/Pagination.jsx";
+import { SearchInput } from "@/shared/ui/SearchInput.jsx";
+import { Select } from "@/shared/ui/Select.jsx";
+import { RefreshIcon } from "@/shared/ui/icons.jsx";
 
 export function AuditLogControls({
   search,
@@ -7,10 +9,7 @@ export function AuditLogControls({
   actions,
   onSearchChange,
   onActionChange,
-  page,
-  pageSize,
   count,
-  onPageChange,
   onRefresh,
   refreshing,
 }) {
@@ -21,54 +20,50 @@ export function AuditLogControls({
   }, [search]);
 
   return (
-    <>
-      <div className="toolbar audit-toolbar">
-        <h2>
-          最近操作记录 <small>{count}</small>
-        </h2>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSearchChange(draft.trim());
-          }}
+    <div className="toolbar audit-toolbar">
+      <h2>
+        最近操作记录 <small>{count}</small>
+      </h2>
+      <form
+        className="audit-toolbar-tools"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSearchChange(draft.trim());
+        }}
+      >
+        <SearchInput
+          aria-label="搜索操作记录"
+          placeholder="搜索成员、详情或动作"
+          value={draft}
+          onChange={setDraft}
+          onSearch={(value) => onSearchChange(value)}
+        />
+        <Select
+          aria-label="按操作类型筛选"
+          label="按操作类型筛选"
+          className="audit-action-select"
+          value={action}
+          onChange={(event) => onActionChange(event.target.value)}
         >
-          <input
-            aria-label="搜索操作记录"
-            placeholder="搜索成员、详情或动作"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-          />
-          <select
-            aria-label="按操作类型筛选"
-            value={action}
-            onChange={(event) => onActionChange(event.target.value)}
-          >
-            <option value="">全部操作</option>
-            {actions.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          <button type="submit">搜索</button>
-          <button
-            type="button"
-            className="ghost"
-            disabled={refreshing}
-            onClick={onRefresh}
-          >
-            {refreshing ? "刷新中…" : "刷新"}
-          </button>
-        </form>
-      </div>
-      <Pagination
-        page={page}
-        canPrevious={page > 1}
-        canNext={page * pageSize < count}
-        onPrevious={() => onPageChange(page - 1)}
-        onNext={() => onPageChange(page + 1)}
-        label={`第 ${page} 页 · 每页 ${pageSize} 条`}
-      />
-    </>
+          <option value="">全部操作</option>
+          {actions.map((item) => (
+            <option key={item.value} value={item.value}>
+              {item.label}
+            </option>
+          ))}
+        </Select>
+        <button
+          type="button"
+          className="btn-chip"
+          disabled={refreshing}
+          title={refreshing ? "刷新中…" : "刷新操作记录"}
+          aria-label={refreshing ? "刷新中" : "刷新"}
+          onClick={onRefresh}
+        >
+          <RefreshIcon size={14} />
+          <span>{refreshing ? "刷新中" : "刷新"}</span>
+        </button>
+      </form>
+    </div>
   );
 }

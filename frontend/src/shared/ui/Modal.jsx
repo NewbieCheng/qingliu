@@ -1,15 +1,22 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
+import { XIcon } from "@/shared/ui/icons.jsx";
 
 export function Modal({ title, onClose, children, className = "" }) {
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key === "Escape") onClose();
     };
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div
       className="overlay"
       onClick={(event) => {
@@ -22,14 +29,21 @@ export function Modal({ title, onClose, children, className = "" }) {
         aria-label={title}
         className={`modal ${className}`.trim()}
       >
-        <header>
+        <header className="modal-header">
           <h2>{title}</h2>
-          <button type="button" className="ghost" onClick={onClose} autoFocus>
-            关闭 ×
+          <button
+            type="button"
+            className="modal-close"
+            onClick={onClose}
+            aria-label="关闭"
+            autoFocus
+          >
+            <XIcon size={16} />
           </button>
         </header>
         {children}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

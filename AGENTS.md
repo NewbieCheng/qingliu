@@ -1,129 +1,167 @@
 # 清流项目工作区约定
 
-本仓库是**清流 Qingliu** 专用开发工作区。进入后先读 `README.md`、`docs/00-项目总览.md`，部署前读 `docs/05-部署与服务器.md`。
+本仓库是**清流 Qingliu** 专用开发工作区。本文同时是**交给 AI 的开工前必读硬约束**；规则是硬约束，不是建议。与业主当次口头要求冲突时，先指出冲突点由业主决定，不得自行放宽。
 
-## 环境（务必分清）
+## 一、这是什么项目
 
-| 环境 | 清流前端 | 工作台后端（`WORKBENCH_BASE_URL`） | 服务器 | 数据库 |
-|---|---|---|---|---|
-| **生产** | `https://qingliu.bujiaban.top` | `https://worker.bujiaban.top` | `115.191.68.41` | 独立的一套 `qingliu` + `intelligent_team` |
-| **测试** | 尚未单独部署（`qingliu.no996ai.cn` 无 DNS 记录）；联调时改本地 `vite.config.js` 的 target 指向 118 | `https://worker.no996ai.cn` | `118.196.106.85` | 另一套独立库 |
+清流是面向业务员 / 复核员 / 管理员的**内部客户资料与流水初筛工作台**。
 
-- **`bujiaban.top` = 生产，`no996ai.cn` = 测试**。两套 MySQL 完全独立：套餐、价格、账号、余额、订单互不同步，改一边另一边不会变。
-- `qingliu.bujiaban.top` 的 `WORKBENCH_BASE_URL` 必须是同环境的 `https://worker.bujiaban.top`；**禁止**指向 `worker.no996ai.cn`（测试）。指错就会读到测试库，测试后台新建/上架的套餐在清流永远查不到。2026-11-09 已由 `worker.no996ai.cn` 切换到 `worker.bujiaban.top`（备份在服务器 `/root/qingliu.env.bak-*`）。
-- 测试后台没有微信支付配置（`WECHAT_PAY_*` 全空，只注册了 `manual` 渠道）。`provider=wechat_native` 的套餐在测试环境下单会返回「支付未配置」；要在测试走完整下单流程，把测试库 SKU 的 `provider` 改成 `manual`，再由管理员在后台标记已支付。
-- 切换 `WORKBENCH_BASE_URL` 之后必须重新登录：`ql_workbench_accounts` 里存的 access/refresh token 属于旧库，会全部失效；而且账号必须存在于目标工作台库（`t_user.email` 匹配、`service_code=qingliu`），否则登录会静默回落到本地密码，随后 `balance` / `orders` / `ledgers` 全部 503「请重新登录工作台账号」。
-- 套餐在**对应环境**的控制台维护：生产 `https://worker.bujiaban.top/console/platform/packages`，测试 `https://worker.no996ai.cn/console/platform/packages`。
+- 不做贷款资格结论，报告仅供内部初筛，不替代银行审批。
+- **单体应用**：一个 Go 二进制同时提供 API + React 静态文件；没有 Node 常驻进程、没有第二个服务。
+- 登录 / 计费 / 支付订单**全部通过工作台后台**（另一个仓库），本仓库只做代理和界面。
 
-## 边界
+## 二、技术栈（不准换）
 
-- 本仓库只维护清流前端（React）和清流 Go 服务；工作台后台是另一个仓库，不在本仓库内改。
-- 清流的登录、计费、支付订单都通过工作台后台服务完成；本仓库只做代理和界面，**不要**在清流里另建账号、支付或订单库。
-- `frontend/dist` 是交付构建产物；修改前端源码后必须重新构建，不能只改 dist。
-- `bin/` 是本机构建产物，默认不提交；发布时用 `deploy/build.sh` 重新生成。
-- 生产服务器信息、密码、`VAULT_KEY`、SSH 私钥只在 `.secrets/` 或密码管理器；不要把真实值写进 README、提交记录、截图或日志。
+| 层 | 选型 | 硬性要求 |
+| --- | --- | --- |
+| 前端 | React 19 + Vite 7，原生 CSS | **不引入** UI 框架、路由库、状态库、请求库 |
+| 前端语言 | JavaScript（`.js` / `.jsx`，ESM） | 不上 TypeScript |
+| 后端 | Go 1.26，标准库 `net/http` | **不用** Web 框架，**不用** ORM |
+| 数据库 | MySQL 8，库名 `qingliu`，表前缀 `ql_` | 不与工作台共用表 |
+| 后台任务 | Go 进程内单执行器 | 不引入 Redis / 消息队列 / 第二个常驻服务 |
+| 文件 | `DATA_DIR` + QLGO1（AES-256-GCM，`VAULT_KEY`） | 必须走 Store 读写 |
 
-## 前端架构
+现有依赖只有 `mysql`、`fpdf`、`excelize`、`x/crypto`、`x/text`、`qrcode`；新增依赖前必须说明理由。包管理器是 **pnpm**（有 `pnpm-lock.yaml`，没有 `package-lock.json`）。
 
-前端目录已按 `app → pages → features → shared` 分层，禁止恢复单文件大组件：
+## 三、边界
+
+- 本仓库只维护清流前端和清流 Go 服务；工作台后台是另一个仓库，不在这里改。
+- 不要在清流里另建账号、支付或订单库。
+- `frontend/dist` 是交付产物，改源码后必须重新构建，不能只改 dist。`bin/` 不提交。
+- 服务器信息、密码、`VAULT_KEY`、SSH 私钥只在 `.secrets/` 或密码管理器；不写进文档、提交记录、截图或日志。
+
+## 四、环境（写错会读到错的库）
+
+| 环境 | 清流 | 工作台后端（`WORKBENCH_BASE_URL`） | 服务器 |
+|---|---|---|---|
+| **生产** | `https://qingliu.bujiaban.top` | `https://worker.bujiaban.top` | `115.191.68.41` |
+| **测试** | 尚未单独部署 | `https://worker.no996ai.cn` | `118.196.106.85` |
+
+`bujiaban.top` = 生产，`no996ai.cn` = 测试；两套 MySQL 完全独立，**禁止交叉指向**。切换 `WORKBENCH_BASE_URL` 后必须重新登录（旧 token 属于旧库）。测试后台没有微信支付配置，只有 `manual` 渠道。
+
+## 五、前端架构
+
+分层固定 `app → pages → features → shared`，禁止恢复单文件大组件：
 
 ```text
 frontend/src/
-  main.jsx          只挂载 React
-  app/              应用总装、routes.jsx、登录守卫、错误边界
-  pages/            页面组合：login/clients/case/recharge/profile/admin/not-found
-  features/         业务域：auth/clients/case/billing/ai-analysis/profile/admin
-  shared/           api/router/layout/ui/hooks/lib/styles
+  main.jsx   只挂载 React
+  app/       总装、routes.jsx、登录守卫、ErrorBoundary、queries/
+  pages/     页面组合：login clients case recharge profile admin not-found
+  features/  业务域：auth clients case billing ai-analysis profile admin
+  shared/    api/ router/ layout/ ui/ hooks/ lib/ styles/
 ```
 
-强制规则：
-
-- `shared` 不得依赖 `features` 或 `pages`。
-- feature 内部用相对路径；跨 feature 只能引用对方 `index.js`。
-- 页面不得直接 `fetch` 或引用 `shared/api/client.js`，必须调用 feature 的 `api.js`。
-- 所有业务请求经 `shared/api/client.js`；CSRF、401、ApiError 只在这一层处理。
-- 金额、日期、角色名、状态文案只在 `shared/lib` 或 feature `constants.js` 定义一次。
-- 图标统一放 `shared/ui/icons.jsx`，不要用字符拼图标。
-- 内部跳转必须用 `navigate()` / `<Link>`，禁止 `window.location.href` 造成整页刷新。
-- 表单成功/失败统一走 `shared/ui/toast-api.js` 的 `toast()`；需要自定义提示时给 `Form` 传 `success=""`。
-- 客户底稿四步走 `?step=` URL；新增功能加到对应 step/feature，不要堆回 `CasePage`。
-- 颜色、字体、间距优先使用 `shared/styles/tokens.css`，保留现有深松绿/账本纸设计语言。
-- 新增页面：加 `pages/<name>/`、必要时加 `features/<domain>/`、在 `app/routes.jsx` 注册，再按需改 `shared/layout/navigation.js`。
-- 列表查询必须服务端分页；相同查询的复用和 TTL 只放在 `app/queries/index.js`，缓存原语只在 `shared/api/cache.js`。
-- 写操作成功后先失效相关查询缓存再刷新；退出登录和 401 必须清空全部前端缓存。
-- 缓存只放浏览器内存，不要写 localStorage/sessionStorage，也不要用于资金、权限、报告签发的最终判断。
-- **权限以工作台为准**：判定走 `server/permissions.go` 的 `q.can(code)`（读登录时存下的工作台权限码快照）。`ql_users.role` 只是默认值/兜底，**不要**在 handler 里再写 `role == "admin"` 这类硬编码；新权限先加成常量再映射到 `rolePermissions`。
-- **空间是会话属性**：`ql_sessions.tenant_id` 决定「这个会话在看哪个空间」，`scopeWhere` 读它。切换走 `POST /api/switch-space`（先问工作台 `GET /api/v1/me/spaces` 再写库），不要新增第二套「团队」概念。
-- 操作记录统一走 `GET /api/admin/audit`，支持分页与筛选；不要再在 `/api/admin` 里附带全量事件。
-
-## 开发约定
-
-- 前端保持单页路由：`frontend/src/app/routes.jsx` 负责路由表，`shared/router` 负责 `pushState` 和全局链接拦截；不要新增导致整页刷新的内部链接。
-- 表单消息统一走 Toast，不要恢复表单内绿色“已保存”或红色原始错误条。
-- Go 侧保持单进程、标准库 `net/http`、MySQL、进程内单执行器；不要引入 Redis、消息中间件或第二个常驻服务。
-- 客户原始资料/报告落盘前使用现有 `VAULT_KEY` 认证加密；不要绕过 Store 自己写文件。
-- 数据库结构变更要版本化；目前 `schema.sql` 是 `CREATE TABLE IF NOT EXISTS` 启动建表，不能直接改线上表后不回写。已有库按 `server/migrations/NNN-*.sql` **手动**执行（无独立迁移工具），每个脚本必须可重复执行（用 `information_schema` 判存在），并同步改 `schema.sql`。
-- **给工作台造账号不能只写 `t_user`**：工作台判断「这个账号能用哪个产品」读的是 `t_user_service`（不是 `t_user.service_code`），密码校验只认 `$argon2id`（bcrypt 一律判错）。跨库搬账号时三件事缺一不可：`t_user` + `t_user_service`（`qingliu`/`workbench` 各一条）+ 用 `auth.HashPassword` 重新生成哈希。
-
-## 本地 Go 构建
-
-- 本机 `C:\Users\<user>\AppData\Local\go-build` 可能不可写，构建/测试请把缓存指到工作区内：
-  `GOCACHE=$PWD/.gocache GOTMPDIR=$PWD/.gotmp GOPATH=$PWD/.gopath TMP=$PWD/.gotmp TEMP=$PWD/.gotmp go test ./...`
-- Windows 下 `syscall.Umask` 不可用，权限收紧走 `umask_windows.go`；不要把它加回 `main.go`。
-
-## 文档索引
-
-| 文档 | 内容 |
+| 规则 | 违反后果 |
 | --- | --- |
-| [00-项目总览](docs/00-项目总览.md) | 产品边界、角色、流程、代码地图 |
-| [01-前端开发](docs/01-前端开发.md) | 路由、Shell、登录、页面、Toast、品牌资源 |
-| [02-后端开发](docs/02-后端开发.md) | Go 进程、Store、加密、执行器、报告、工作台桥接 |
-| [03-数据模型](docs/03-数据模型.md) | `ql_*` 表、字段语义、迁移注意 |
-| [04-接口清单](docs/04-接口清单.md) | 清流 API、Cookie/CSRF、上游工作台接口 |
-| [05-部署与服务器](docs/05-部署与服务器.md) | systemd、Nginx、构建、发布、回滚 |
-| [06-支付与套餐](docs/06-支付与套餐.md) | 套餐、SKU、订单、二维码恢复 |
-| [07-运维手册](docs/07-运维手册.md) | 日志、备份、恢复、证书、故障处理 |
-| [08-交接清单](docs/08-交接清单.md) | 已完成/待验证/账号/服务器 |
-| [09-路线图](docs/09-路线图.md) | 未完成事项 |
-| [10-本地开发与测试](docs/10-本地开发与测试.md) | 本地 MySQL、测试、浏览器回归 |
-| [11-工作台后台](docs/11-工作台后台.md) | 清流依赖的后台仓库、接口、两套环境与发布 |
-| [12-查询与缓存](docs/12-查询与缓存.md) | 服务端分页、操作记录接口、前端缓存 TTL 与失效策略 |
-| [16-空间与权限投影](docs/16-空间与权限投影.md) | 会话空间、切换接口、工作台权限码投影与角色映射（2026-11 起） |
+| `shared` 不得 import `features` / `pages` | `pnpm check:arch` 直接失败 |
+| `pages` 不得 `fetch`，也不得直接 import `shared/api/client.js` | 同上 |
+| 同一 feature 内部用**相对路径**；跨 feature 只能引对方 `@/features/<name>/index.js` | 同上 |
+| 内部跳转只能用 `navigate()` / `<Link>` | 同上（会整页刷新） |
+| 金额/日期/角色名/状态文案只在 `shared/lib` 或 feature `constants.js` 定义一次 | code review 驳回 |
+| 图标统一 `shared/ui/icons.jsx`，不用字符拼 | 同上 |
 
-早期交付记录（`部署与交接.md`、`架构核查与迁移.md`、`验收记录.md`）已于 2026-11-09 删除：内容与 docs/05 和 README 重复，且其中的 Docker 默认、旧环境指向已失效。需要历史时看 git log。
+- 所有业务请求经 `shared/api/client.js`；CSRF、401、`ApiError` **只**在这一层处理。
+- 查询 key 与 TTL 只在 `app/queries/index.js`，缓存原语只在 `shared/api/cache.js`；列表**必须服务端分页**。
+- 写成功后**先失效再刷新**；退出/401/切换空间清空全部缓存。缓存只放内存，**不得**用于资金、权限、报告签发的判断。
+- 表单成功/失败统一 `toast()`；需要自定义提示时给 `Form` 传 `success=""`。
+- 客户底稿四步走 `?step=` URL；新功能加到对应 step/feature，不要堆回 `CasePage`。
+- 新增页面：`pages/<name>/` → 必要时 `features/<domain>/` → `app/routes.jsx` 注册 → 改 `shared/layout/navigation.js`。
+- 样式优先 `shared/styles/tokens.css`，保留深松绿/账本纸语言，不引 CSS 框架、不写内联魔法值。390px 不得横向溢出。
 
-## 快速启动前端（5173 直连生产）
+## 六、后端约束
+
+| 规则 | 说明 |
+| --- | --- |
+| 路由 | 只在 `main.go` 的 `mux()` 内 `m.HandleFunc("METHOD /api/...", a.route(...))`，用 `{cid}` 路径变量 |
+| 中间件 | `a.route()` 统一处理 panic→JSON、安全头、并发槽位、`MaxBytesReader`、会话 Cookie、401、Origin + `X-CSRF-Token`；**顺序不要动** |
+| 错误 | 用 `bad(code, "中文提示")` / `require(cond, msg)`，不 `http.Error`、不裸 500；不暴露 SQL/路径/堆栈 |
+| 权限 | 客户级 `q.access()`（无权限返回 **404** 而非 403，避免探测）；管理 `q.admin()`；写数据 `q.edit()`；判定用 `q.can(code)`，**不写 `role == "admin"`** |
+| 数据 | 全部经 `Store`（`exec`/`query`/`one`/`lock`/`event`/`write`/`read`）；参数永远用 `?`，**禁止拼接 SQL** |
+| 审计 | 关键写操作调 `s.event(...)`；只有 `auditActionCatalog` 里的动作落库 |
+| 任务 | 长任务投递 `worker.go`（`ql_jobs`），不阻塞 HTTP，不用裸 goroutine |
+| 文件 | 落盘必须走 `Store.write/read`，不绕过 Store 自己写文件 |
+| 报告 | 正式报告是**快照**，后续资料变化不覆盖已签发报告 |
+
+- **权限以工作台为准**：判定走 `q.can(code)`（登录时存下的权限码快照）；`ql_users.role` 只是兜底。新权限先加常量再映射 `rolePermissions`。
+- **空间是会话属性**：`ql_sessions.space_kind/space_id` 决定会话在看哪个空间，`scopeWhere` 读它。切换走 `POST /api/switch-space`。不要新增第二套「团队」概念。
+- **账号真相在工作台**：`ql_users` 只是影子行；客户授权唯一绑定是 `ql_grants.workbench_user_id`。
+
+## 七、数据库变更
+
+`schema.sql` 是 `CREATE TABLE IF NOT EXISTS`，只给新库建表，**不会给已有表补列**。给已有表加字段/索引：
+
+1. 测试库执行并回归
+2. 更新 `schema.sql` 供新环境
+3. 在 `server/migrations/` 加 `NNN-xxx.sql`（必须幂等，用 `information_schema` 判存在）
+4. 更新 `migrations/README.md`，发布时**用 root 手动按序执行**（应用账号没有 `ALTER` 权限）
+
+漏执行会让带登录态的请求全部 1054。禁止直接改线上表而不回写迁移。
+
+## 八、本地 Go 构建
+
+本机 go-build 缓存目录可能不可写，把缓存指到工作区内：
 
 ```bash
-cd frontend
-pnpm install       # 首次
-pnpm dev           # → http://127.0.0.1:5173
+GOCACHE=$PWD/.gocache GOTMPDIR=$PWD/.gotmp GOPATH=$PWD/.gopath \
+  TMP=$PWD/.gotmp TEMP=$PWD/.gotmp go test ./...
 ```
 
-- 端口固定 5173（`strictPort`），`/api` 与 `/health` 由 `vite.config.js` 反向代理到生产 `https://qingliu.bujiaban.top`；本地不需要 MySQL，也不需要起 Go 服务。
-- 代理会改写 `Origin`/`Referer`，并剥掉响应 `Set-Cookie` 的 `Secure`，否则本地登录/保存会被 403、Cookie 也存不住。
-- 换环境只改 `frontend/vite.config.js` 的 `target`，换完必须**重新登录**（旧 token 属于旧库）。
-- 源码热更新即时生效；`frontend/dist` 是交付产物，发布前要重新 `pnpm build`。
-- **本地登录预填**：`frontend/.env.local` 里的 `VITE_DEV_LOGIN_USERNAME` / `VITE_DEV_LOGIN_PASSWORD` 只在 `pnpm dev`（`import.meta.env.DEV`）时填进登录表单，生产构建里为空（已验证构建产物不含该口令）。该文件命中 `.gitignore` 的 `*.local`，不要提交。
+Windows 下 `syscall.Umask` 不可用，权限收紧走 `umask_windows.go`，不要加回 `main.go`。
 
-## 验证基线
+## 九、验证基线
 
 ```bash
 cd server && go test ./... && go vet ./...
 cd ../frontend && pnpm install --frozen-lockfile && pnpm check
 ```
 
-前端 `pnpm check` 依次执行：ESLint、目录边界检查、Vitest、生产构建。
-涉及路由、登录或底稿流程时再执行：
+`pnpm check` 依次跑 ESLint、目录边界、Vitest、生产构建。涉及路由/登录/底稿流程再跑 `pnpm smoke`（本机 Playwright + mock API：登录跳转、客户列表、底稿步骤 URL、SPA 跳转、390px、404）。真实接口仍需按 [10-本地开发与测试](docs/10-本地开发与测试.md) 做浏览器回归。
 
-```bash
-cd frontend && pnpm smoke
-```
+改完**至少**跑对应检查，全绿才算完成。无法验证（如无测试环境）必须**明确说明未验证**，不得声称已验证。
 
-`pnpm smoke` 使用本机 Playwright Chromium 和 mock API，验证登录跳转、客户列表、
-底稿步骤 URL、SPA 跳转、390px 无横向溢出和 404。真实接口仍需按
-`docs/10-本地开发与测试.md` 做浏览器回归；没有测试环境时明确说明未验证。
+## 十、红线
 
-## 发布
+1. ❌ 在清流里另建账号 / 支付 / 订单库，或绕开工作台改计费
+2. ❌ 引入 Redis、消息队列、第二个常驻服务
+3. ❌ 恢复单文件大组件；把业务逻辑塞回 `pages`
+4. ❌ 页面直接 `fetch` / 直接 import `shared/api/client.js`
+5. ❌ 前端缓存写 localStorage，或用它做资金/权限的最终判断
+6. ❌ 字符串拼接 SQL；绕过 Store 直接写文件
+7. ❌ 把真实密钥、服务器密码、客户资料写进代码或提交
+8. ❌ 自动 `git commit` / `push` / 部署生产（除非业主明确说"上线/发布/部署"）
+9. ❌ 提交 `node_modules`、无关的 `dist` 改动、`.env.local`、`.secrets/`
+10. ❌ 未经确认改接口字段名、状态码、Cookie/CSRF 机制
 
-默认**只改本地**，不自动提交、推送或部署。用户明确说“上线/发布/部署生产”时才按 `docs/05-部署与服务器.md` 操作；发布前备份数据库、数据目录和旧二进制。
+## 十一、开工流程
+
+1. **读**：本文 → `README.md` → `docs/00-项目总览.md`（涉及部署再读 `docs/05`）
+2. **定位**：先查代码图/搜索定位符号与调用链，不凭猜改文件
+3. **复述**：3–5 行输出「需求理解 + 环境 + 拟改文件清单 + 是否触碰红线」，**等业主确认**
+4. **最小改动**：只改点名的地方，不顺手重构、不补无关测试、不改无关文档
+5. **自检**：跑第九节；架构检查失败先修边界
+6. **交付说明**：改了哪些文件、为什么、怎么验证、哪些没验证
+
+## 十二、发布
+
+默认**只改本地**，不自动提交、推送或部署。用户明确说"上线/发布/部署生产"时才按 [05-部署与运维](docs/05-部署与运维.md) 操作；发布前备份数据库、数据目录和旧二进制。
+
+## 文档索引
+
+| 文档 | 内容 |
+| --- | --- |
+| [00-项目总览](docs/00-项目总览.md) | 产品边界、角色、流程、代码地图、交接状态 |
+| [01-前端开发](docs/01-前端开发.md) | 路由、Shell、登录、页面、公共 UI、样式 |
+| [02-后端开发](docs/02-后端开发.md) | Go 进程、Store、加密、执行器、授权、工作台桥接 |
+| [03-数据模型](docs/03-数据模型.md) | `ql_*` 表、字段语义、迁移 |
+| [04-接口清单](docs/04-接口清单.md) | 清流 API、Cookie/CSRF、上游工作台接口 |
+| [05-部署与运维](docs/05-部署与运维.md) | 拓扑、发布、回滚、Nginx、备份、故障处理 |
+| [09-AI全流程计划](docs/09-AI全流程计划.md) | AI 辅助分析的未开工设计与验收表 |
+| [19-AI全链路运作图与字段清单](docs/19-AI全链路运作图与字段清单.md) | 主链路脑图、字段契约、分段喂模型、当前/优化对照、代码落点 |
+| [计划-AI全流程融入与百页解析](docs/计划-AI全流程融入与百页解析.md) | AI 全流程产品设计与阶段门禁 |
+| [测试表-AI全流程与百页解析](docs/测试表-AI全流程与百页解析.md) | 本机/夹具验收勾选表 |
+| [10-本地开发与测试](docs/10-本地开发与测试.md) | 本地 MySQL、前端代理、测试、浏览器回归 |
+| [11-工作台后台](docs/11-工作台后台.md) | 清流依赖的后台仓库、接口、套餐与支付 |
+| [12-查询缓存与操作记录](docs/12-查询缓存与操作记录.md) | 服务端分页、缓存 TTL、审计白名单与留存 |
+
+Docker 部署文件、一次性迁移执行单、早期交付记录（`部署与交接.md`、`架构核查与迁移.md`、`验收记录.md`）与重复的 AI 规范副本已于 2026-11 清理：内容与本索引重复或已失效。需要历史时看 git log。

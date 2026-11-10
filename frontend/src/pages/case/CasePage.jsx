@@ -3,6 +3,7 @@ import { useSearchParams } from "@/shared/router/index.js";
 import { Loading } from "@/shared/ui/Loading.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { CASE_STEPS } from "@/features/case/constants.js";
+import { isQingliuAdmin } from "@/shared/lib/constants.js";
 import {
   CaseAdminGrant,
   CaseHeader,
@@ -66,6 +67,7 @@ export function CasePage({ cid, user }) {
       setOriginal({
         ...detail,
         pages: Number(document?.meta?.pages) || detail.row.page || 1,
+        sha: document?.sha || "",
       });
     } catch (requestError) {
       toast(requestError.message, "error");
@@ -74,7 +76,18 @@ export function CasePage({ cid, user }) {
 
   return (
     <main className="case-page">
-      <CaseHeader data={data} />
+      <CaseHeader
+        data={data}
+        adminAction={
+          isQingliuAdmin(user) &&
+          (user.kind || user.space?.kind) === "team" ? (
+            <CaseAdminGrant
+              onGrant={(payload) => mutate("grant", payload)}
+              onError={(message) => toast(message, "error")}
+            />
+          ) : null
+        }
+      />
       <CaseSteps step={step} onChange={changeStep} />
       {error && (
         <p className="error" role="alert">
@@ -133,12 +146,6 @@ export function CasePage({ cid, user }) {
           onGenerate={(payload) => mutate("report", payload)}
           onSubmit={() => mutate("submit", {})}
           onFormal={(payload) => mutate("report", payload)}
-        />
-      )}
-      {user.role === "admin" && (
-        <CaseAdminGrant
-          onGrant={(payload) => mutate("grant", payload)}
-          onError={(message) => toast(message, "error")}
         />
       )}
       {original && (

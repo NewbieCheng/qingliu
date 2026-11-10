@@ -62,12 +62,70 @@ export function XIcon({ size = 16 }) {
   );
 }
 
+export function SearchIcon({ size = 16 }) {
+  return (
+    <Svg size={size} strokeWidth="1.6">
+      <circle cx="9" cy="9" r="5.2" />
+      <path d="M13.2 13.2 17 17" />
+    </Svg>
+  );
+}
+
+/** 圆圈感叹号，用于口径/说明悬停提示。 */
+export function AlertIcon({ size = 16 }) {
+  return (
+    <Svg size={size} strokeWidth="1.6">
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 6.4v5M10 13.6h.01" />
+    </Svg>
+  );
+}
+
 export function TrashIcon({ size = 16 }) {
   return (
-    <Svg size={size} strokeWidth="1.5">
-      <path d="M4 6h12M8.5 6V4.5A1.5 1.5 0 0 1 10 3h0A1.5 1.5 0 0 1 11.5 4.5V6" />
-      <path d="M6 6l.7 9.2A1.8 1.8 0 0 0 8.5 17h3a1.8 1.8 0 0 0 1.8-1.8L14 6" />
-      <path d="M8.5 9.5v5M11.5 9.5v5" />
+    <Svg size={size} strokeWidth="1.9" viewBox="0 0 20 20">
+      <path d="M3.5 5.5h13" />
+      <path d="M8 5.5V4h4v1.5" />
+      <path d="M5.5 5.5l.7 11h7.6l.7-11" />
+      <path d="M8.2 9v5.2M11.8 9v5.2" />
+    </Svg>
+  );
+}
+
+export function RefreshIcon({ size = 16 }) {
+  return (
+    <Svg size={size} strokeWidth="1.7">
+      <path d="M4.2 8.2A6 6 0 0 1 16 9.5" />
+      <path d="M15.8 11.8A6 6 0 0 1 4 10.5" />
+      <path d="M15.5 5.5V9h-3.5M4.5 14.5V11H8" />
+    </Svg>
+  );
+}
+
+export function UserPlusIcon({ size = 16 }) {
+  return (
+    <Svg size={size} strokeWidth="1.6">
+      <circle cx="8.2" cy="6.8" r="2.6" />
+      <path d="M3.5 16.2c.6-2.6 2.3-3.9 4.7-3.9s4.1 1.3 4.7 3.9" />
+      <path d="M14.2 7.2v5M11.7 9.7h5" />
+    </Svg>
+  );
+}
+
+export function BanIcon({ size = 16 }) {
+  return (
+    <Svg size={size} strokeWidth="1.6">
+      <circle cx="10" cy="10" r="6.5" />
+      <path d="m6 14 8-8" />
+    </Svg>
+  );
+}
+
+export function PlayIcon({ size = 16 }) {
+  return (
+    <Svg size={size} strokeWidth="1.6">
+      <circle cx="10" cy="10" r="6.5" />
+      <path d="M8.4 7.2 13.2 10 8.4 12.8Z" fill="currentColor" stroke="none" />
     </Svg>
   );
 }
@@ -99,10 +157,18 @@ export function ArrowRightIcon({ size = 14 }) {
   );
 }
 
+export function ArrowLeftIcon({ size = 13 }) {
+  return (
+    <Svg size={size} strokeWidth="1.6">
+      <path d="M17 10H8M11.5 6.5 8 10l3.5 3.5" />
+    </Svg>
+  );
+}
+
 export function ChevronLeftIcon({ size = 13 }) {
   return (
     <Svg size={size} strokeWidth="1.6">
-      <path d="M9.5 3.5 5 8l4.5 4.5" />
+      <path d="M12 5.5 7.5 10 12 14.5" />
     </Svg>
   );
 }

@@ -6,6 +6,7 @@ import { formatCents, formatDateTime } from "@/shared/lib/format.js";
 import { SOURCES } from "@/shared/lib/constants.js";
 import { DownloadIcon, EyeIcon } from "@/shared/ui/icons.jsx";
 import { AIAnalysisPanel } from "@/features/ai-analysis/index.js";
+import { FoldPanel } from "@/shared/ui/FoldPanel.jsx";
 import { downloadReport, previewReport } from "../../api.js";
 
 const DOWNLOADS = [
@@ -45,8 +46,7 @@ function ReportNumbers({ summary }) {
           <p>只统计范围内 {summary.complete_month_count} 个完整自然月。</p>
         </div>
       </div>
-      <details>
-        <summary>查看月度与季度结息</summary>
+      <FoldPanel title="查看月度与季度结息" className="report-interest">
         <table>
           <thead>
             <tr>
@@ -84,7 +84,7 @@ function ReportNumbers({ summary }) {
             {showAllQuarters ? "收起" : `展开全部 ${quarterEntries.length} 条`}
           </button>
         )}
-      </details>
+      </FoldPanel>
     </section>
   );
 }
@@ -137,20 +137,24 @@ function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal }) {
               placeholder="填写原件核对与签发依据"
             />
           </Field>
-          <label className="check">
-            <input type="checkbox" name="attest" required />
-            确认当前版本已核对，理解该报告不代表授信审批
-          </label>
-        <div className="actions-end">
-          <button
-            className="primary"
-            disabled={
-              data.busy || !data.submitted_current || data.problems.length > 0
-            }
-          >
-            签发正式内部初筛版本
-          </button>
-        </div>
+          <div className="form-footer">
+            <label className="check">
+              <input type="checkbox" name="attest" required />
+              确认当前版本已核对，理解该报告不代表授信审批
+            </label>
+            <div className="actions-end">
+              <button
+                className="primary"
+                disabled={
+                  data.busy ||
+                  !data.submitted_current ||
+                  data.problems.length > 0
+                }
+              >
+                签发正式内部初筛版本
+              </button>
+            </div>
+          </div>
         </Form>
       )}
     </section>
@@ -277,7 +281,9 @@ function ReportVersions({ cid, data }) {
 export function ReportStep({ cid, data, user, summary, onGenerate, onSubmit, onFormal }) {
   return (
     <div className="report-layout">
-      <div className="report-main">
+      <section className="card ai-entry-card" aria-label="AI 辅助分析">
+        <AIAnalysisPanel cid={cid} />
+      </section>
       <ReportNumbers summary={summary} />
       <SubmitPanel
         data={data}
@@ -287,10 +293,6 @@ export function ReportStep({ cid, data, user, summary, onGenerate, onSubmit, onF
         onFormal={onFormal}
       />
       <ReportVersions cid={cid} data={data} />
-      </div>
-      <aside className="report-rail" aria-label="AI 辅助分析">
-        <AIAnalysisPanel cid={cid} />
-      </aside>
     </div>
   );
 }

@@ -27,6 +27,19 @@ export function ClientsPage() {
       });
   }, [query, page]);
 
+  async function refresh() {
+    setRefreshing(true);
+    invalidateClients();
+    try {
+      setData(await queryClients({ query, page, force: true }));
+      setError("");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   return (
     <main>
       <PageHeader
@@ -44,10 +57,11 @@ export function ClientsPage() {
             我的客户 <small>{data?.count ?? "—"}</small>
           </h2>
           <form
+            className="toolbar-search"
             onSubmit={(event) => {
               event.preventDefault();
               setPage(1);
-              setQuery(search);
+              setQuery(search.trim());
             }}
           >
             <SearchInput
@@ -55,23 +69,16 @@ export function ClientsPage() {
               placeholder="搜索客户代号"
               value={search}
               onChange={setSearch}
+              onSearch={(value) => {
+                setPage(1);
+                setQuery(value);
+              }}
             />
-            <button>搜索</button>
             <button
               type="button"
               className="ghost"
               disabled={refreshing}
-              onClick={async () => {
-                setRefreshing(true);
-                invalidateClients();
-                try {
-                  setData(await queryClients({ query, page, force: true }));
-                } catch (requestError) {
-                  setError(requestError.message);
-                } finally {
-                  setRefreshing(false);
-                }
-              }}
+              onClick={() => void refresh()}
             >
               {refreshing ? "刷新中…" : "刷新"}
             </button>
@@ -85,6 +92,13 @@ export function ClientsPage() {
         {data?.clients.length === 0 && (
           <EmptyState title="从第一份资料开始">
             <p>新建客户并确认资料处理授权，然后上传流水或征信。</p>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => setCreating(true)}
+            >
+              ＋ 新建客户
+            </button>
           </EmptyState>
         )}
         <Pagination

@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { Loading } from "@/shared/ui/Loading.jsx";
-import { PageHeader } from "@/shared/ui/PageHeader.jsx";
-import { FormRow } from "@/shared/ui/FormRow.jsx";
-import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
-import { toast } from "@/shared/ui/toast-api.js";
+import { PageHeader, SectionTitle } from "@/shared/ui/PageHeader.jsx";
 import { ROLES } from "@/shared/lib/constants.js";
-import { Link, navigate } from "@/shared/router/index.js";
 import { invalidateProfile, queryProfile } from "@/app/queries/index.js";
-import { changePassword, logout, SpaceCard } from "@/features/profile/index.js";
+import { ChangePasswordDialog } from "@/app/ChangePasswordDialog.jsx";
+import {
+  LogoutConfirmDialog,
+  RechargeTipDialog,
+} from "@/features/profile/index.js";
 
 export function ProfilePage() {
   const [me, setMe] = useState(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [dialog, setDialog] = useState(""); // password | recharge | logout
 
   async function load(force = false) {
     setError("");
@@ -31,28 +31,6 @@ export function ProfilePage() {
     void load();
   }, []);
 
-  async function onChangePassword(event) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setBusy(true);
-    setError("");
-    try {
-      await changePassword({
-        current_password: form.get("current_password"),
-        new_password: form.get("new_password"),
-      });
-      event.currentTarget.reset();
-      toast("密码已更新，请使用新密码重新登录");
-      await logout();
-      navigate("/login");
-    } catch (requestError) {
-      toast(requestError.message, "error");
-      setError(requestError.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   if (!me) {
     return (
       <main className="account-page">
@@ -62,8 +40,6 @@ export function ProfilePage() {
   }
 
   // 当前空间按工作台契约读：kind（personal|team|platform）+ name + role_label。
-  // 早先的 tenant_id / tenant_role 已经删掉了 —— 一个人可以同时属于多个空间，
-  // 「所属团队」不是账号属性。
   const kind = me.kind || me.space?.kind || "personal";
   const scopeText =
     kind === "team"
@@ -83,73 +59,76 @@ export function ProfilePage() {
           {error}
         </p>
       )}
-      <section className="card">
-        <FormRow label="登录账号">
-          <strong>{me.email || me.username}</strong>
-        </FormRow>
-        <FormRow label="显示名">
-          <strong>{me.display || "—"}</strong>
-        </FormRow>
-        <FormRow label="服务角色">
-          <strong>{ROLES[me.service_role] || ROLES[me.role] || me.role}</strong>
-        </FormRow>
-        <FormRow label={kind === "team" ? "所属团队" : "资料范围"}>
-          <strong>{scopeText}</strong>
-        </FormRow>
-        {kind === "team" && me.role_label && (
-          <FormRow label="空间角色">
-            <strong>{me.role_label}</strong>
-          </FormRow>
-        )}
+
+      <section className="card account-identity" aria-label="账号信息">
+        <dl className="account-identity-grid">
+          <div className="account-identity-item">
+            <dt>登录账号</dt>
+            <dd>{me.email || me.username}</dd>
+          </div>
+          <div className="account-identity-item">
+            <dt>显示名</dt>
+            <dd>{me.display || "—"}</dd>
+          </div>
+          <div className="account-identity-item">
+            <dt>服务角色</dt>
+            <dd>{ROLES[me.service_role] || ROLES[me.role] || me.role}</dd>
+          </div>
+          <div className="account-identity-item">
+            <dt>{kind === "team" ? "所属团队" : "资料范围"}</dt>
+            <dd>{scopeText}</dd>
+          </div>
+          {kind === "team" && me.role_label ? (
+            <div className="account-identity-item">
+              <dt>空间角色</dt>
+              <dd>{me.role_label}</dd>
+            </div>
+          ) : null}
+        </dl>
       </section>
-      {/* 一个人可以同时属于企业空间与自己的个人空间；切换入口只在会员关系
-          多于一个时才有意义，因此由 SpaceCard 自己决定是否显示提示。 */}
-      <SpaceCard />
+
       <section className="card">
         <SectionTitle
-          title="修改密码"
-          description="已绑定工作台时，密码修改会同步到工作台账号。"
+          title="账号操作"
+          description="改密、充值与退出都通过弹窗确认，避免误触。"
         />
-        <form className="profile-form" onSubmit={onChangePassword}>
-          <label className="field">
-            <span>当前密码</span>
-            <input
-              name="current_password"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-          </label>
-          <label className="field">
-            <span>新密码（10 至 72 字节）</span>
-            <input
-              name="new_password"
-              type="password"
-              minLength="10"
-              maxLength="72"
-              autoComplete="new-password"
-              required
-            />
-          </label>
-          <button className="primary" disabled={busy}>
-            {busy ? "正在保存…" : "更新密码"}
+        <div className="account-action-grid">
+          <button
+            type="button"
+            className="account-action"
+            onClick={() => setDialog("password")}
+          >
+            <strong>修改密码</strong>
+            <span>验证当前密码后设置新密码，成功后需重新登录</span>
           </button>
-        </form>
+          <button
+            type="button"
+            className="account-action"
+            onClick={() => setDialog("recharge")}
+          >
+            <strong>去充值</strong>
+            <span>查看当前积分额度，前往购买工作台积分</span>
+          </button>
+          <button
+            type="button"
+            className="account-action is-danger"
+            onClick={() => setDialog("logout")}
+          >
+            <strong>退出登录</strong>
+            <span>结束当前设备会话，不影响其他已登录设备</span>
+          </button>
+        </div>
       </section>
-      <section className="card actions-row">
-        <Link className="button-link" to="/recharge">
-          去充值
-        </Link>
-        <button
-          className="ghost"
-          onClick={async () => {
-            await logout();
-            navigate("/login");
-          }}
-        >
-          退出登录
-        </button>
-      </section>
+
+      {dialog === "password" ? (
+        <ChangePasswordDialog onClose={() => setDialog("")} />
+      ) : null}
+      {dialog === "recharge" ? (
+        <RechargeTipDialog onClose={() => setDialog("")} />
+      ) : null}
+      {dialog === "logout" ? (
+        <LogoutConfirmDialog onClose={() => setDialog("")} />
+      ) : null}
     </main>
   );
 }

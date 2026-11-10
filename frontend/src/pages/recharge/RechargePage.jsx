@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { Loading } from "@/shared/ui/Loading.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
+import { useAuth } from "@/features/auth/index.js";
 import {
   CheckoutPanel,
   LedgerTable,
@@ -17,8 +18,11 @@ import {
   isResumable,
   remainingText,
 } from "@/features/billing/index.js";
+import { orderOwnerForSku } from "@/features/billing/lib/sku.js";
 
 export function RechargePage() {
+  const { user } = useAuth();
+  const space = user?.space || { kind: user?.kind || "personal", id: 0 };
   const [skus, setSkus] = useState([]);
   const [orders, setOrders] = useState([]);
   const [ledgers, setLedgers] = useState([]);
@@ -65,34 +69,37 @@ export function RechargePage() {
       setLedgers(items);
       setLedgerTotal(ledgerData.total ?? ledgerData.count ?? items.length);
       setLedgerPage(page);
+      return null;
     } catch (requestError) {
-      setError(requestError.message);
+      return requestError.message;
     }
   }
 
-  // 余额牌子已收进顶栏全局显示；这里下单/支付成功后发事件通知顶栏重查。
   function notifyBalanceChanged() {
     window.dispatchEvent(new Event("ql:balance-changed"));
   }
 
   async function load(resume = true) {
+    const failures = [];
     try {
-      const [skuData, orderData] = await Promise.all([
-        getSkus(),
-        getOrders(),
-      ]);
+      const skuData = await getSkus();
       setSkus(skuData.items || []);
+    } catch (requestError) {
+      failures.push(requestError.message);
+    }
+    try {
+      const orderData = await getOrders();
       const nextOrders = orderData.items || [];
       setOrders(nextOrders);
-      setError("");
-      await loadLedgers(1);
       const resumable = nextOrders.find(isResumable);
       if (resume && !orderRef.current && resumable) await openOrder(resumable);
     } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoaded(true);
+      failures.push(requestError.message);
     }
+    const ledgerError = await loadLedgers(1);
+    if (ledgerError) failures.push(ledgerError);
+    setError(failures[0] || "");
+    setLoaded(true);
   }
 
   useEffect(() => {
@@ -131,10 +138,19 @@ export function RechargePage() {
   }, [order?.order_no, order?.status]);
 
   async function choose(sku) {
+    const owner = orderOwnerForSku(sku, space);
+    if (!owner.ok) {
+      toast(owner.message, "error");
+      setError(owner.message);
+      return;
+    }
     setBusy(sku.code);
     setError("");
     try {
-      const created = await createOrder(sku.code);
+      const created = await createOrder(sku.code, {
+        ownerType: owner.owner_type,
+        ownerId: owner.owner_id,
+      });
       const reused = orderRef.current?.order_no === created.order_no;
       await openOrder(created);
       toast(
@@ -154,6 +170,7 @@ export function RechargePage() {
   }
 
   const currentExpired = isExpired(order);
+  const defaultTab = space?.kind === "team" ? "team" : "personal";
 
   if (!loaded) {
     return (
@@ -178,7 +195,12 @@ export function RechargePage() {
           {error}
         </p>
       )}
-      <SkuGrid skus={skus} busy={busy} onChoose={(sku) => void choose(sku)} />
+      <SkuGrid
+        skus={skus}
+        busy={busy}
+        defaultTab={defaultTab}
+        onChoose={(sku) => void choose(sku)}
+      />
       <CheckoutPanel
         order={order}
         qr={qr}

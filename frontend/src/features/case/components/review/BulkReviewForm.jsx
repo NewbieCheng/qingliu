@@ -21,7 +21,11 @@ export function BulkReviewForm({ selectedCount, busy, onSave }) {
           placeholder="填写适用于每笔交易的原件或凭证依据"
           required
         />
-        <button className="primary" disabled={busy || !selectedCount}>
+        <button
+          className="primary"
+          disabled={busy || !selectedCount}
+          type="submit"
+        >
           保存处理
         </button>
       </div>

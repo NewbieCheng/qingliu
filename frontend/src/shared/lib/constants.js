@@ -25,6 +25,19 @@ export const ROLES = {
   readonly: "只读成员",
 };
 
+/** 团队与权限 / 成员管理：只认工作台投影的 qingliu.admin（role 仅兜底）。 */
+export function isQingliuAdmin(user) {
+  if (!user) return false;
+  const permissions = user.permissions;
+  if (Array.isArray(permissions) && permissions.includes("qingliu.admin")) {
+    return true;
+  }
+  if (permissions && typeof permissions === "object" && !Array.isArray(permissions)) {
+    return Boolean(permissions["qingliu.admin"]);
+  }
+  return user.role === "admin";
+}
+
 export const DOCUMENT_STATUS = {
   success: "识别完成",
   partial: "部分可用 / 待核对",

@@ -67,6 +67,14 @@ func (q *request) space() spaceRef {
 	return spaceOf(q.session)
 }
 
+// event 把当前会话空间一起写入操作记录，避免审计跨空间越权。
+func (q *request) event(cid, action, detail string) {
+	if q == nil || q.app == nil || q.app.s == nil || q.user == nil {
+		return
+	}
+	q.app.s.event(q.space(), str(q.user, "id"), cid, action, detail)
+}
+
 func (q *request) json(v any) {
 	q.w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	must(json.NewEncoder(q.w).Encode(browserJSON(v)))
@@ -128,16 +136,21 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 		}
 		public := r.URL.Path == "/api/login" || r.URL.Path == "/api/register" ||
 			r.URL.Path == "/api/auth/captcha" || r.URL.Path == "/api/auth/verification-codes" ||
-			r.URL.Path == "/health"
+			r.URL.Path == "/api/auth/reset-password" ||
+			r.URL.Path == "/health" ||
+			isServiceAPI(r.URL.Path)
 		if strings.HasPrefix(r.URL.Path, "/api/") && !public && q.user == nil {
 			bad(401, "请先登录")
 		}
 		if r.Method != "GET" && r.Method != "HEAD" {
 			// Same-origin JSON login and session-bound CSRF for every authenticated write.
-			if origin := r.Header.Get("Origin"); origin != "" && origin != a.origin {
+			// 服务间调用（/api/service/**）用共享密钥鉴权，不走浏览器 CSRF。
+			if isServiceAPI(r.URL.Path) {
+				// fall through to handler
+			} else if origin := r.Header.Get("Origin"); origin != "" && origin != a.origin {
 				bad(403, "请求来源不允许")
-			}
-			if r.URL.Path == "/api/login" || r.URL.Path == "/api/register" || r.URL.Path == "/api/auth/verification-codes" {
+			} else if r.URL.Path == "/api/login" || r.URL.Path == "/api/register" ||
+				r.URL.Path == "/api/auth/verification-codes" || r.URL.Path == "/api/auth/reset-password" {
 				if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 					bad(400, "请求格式无效")
 				}
@@ -160,12 +173,31 @@ func (q *request) admin() {
 		bad(403, "仅管理员可操作")
 	}
 }
+
+// requireTeamSpace 挡住个人/平台空间上的团队成员写操作。
+// 个人账号没有「团队新建成员」语义；要管理成员须先开通或切换到团队空间。
+func (q *request) requireTeamSpace() {
+	if q.space().Kind != spaceTeam {
+		bad(403, "个人空间不支持团队成员管理，请开通或切换到团队空间后再操作")
+	}
+}
 func (q *request) access() string {
 	cid := q.r.PathValue("cid")
-	if !q.app.s.allowed(q.space(), str(q.user, "id"), cid) {
+	if !q.app.s.allowed(q.customerAccess(), cid) {
 		bad(404, "客户不存在或没有访问权限")
 	}
 	return cid
+}
+
+// customerAccess 把「当前会话能看哪些客户」所需坐标打成一份，
+// 交给 scopeWhere / allowed，避免列表与单客户判定各写一套。
+func (q *request) customerAccess() customerAccess {
+	return customerAccess{
+		Space:    q.space(),
+		UserID:   str(q.user, "id"),
+		WBUserID: integer(q.user["workbench_user_id"]),
+		Admin:    q.isAdmin(),
+	}
 }
 func (q *request) edit(fn func(string)) {
 	cid := q.access()
@@ -196,22 +228,15 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("POST /api/login", a.route(func(q *request) {
 		b := q.body()
-		name, pass := strings.TrimSpace(str(b, "username")), str(b, "password")
+		name, pass, code := strings.TrimSpace(str(b, "username")), str(b, "password"), strings.TrimSpace(str(b, "code"))
 		if name == "" {
 			name = strings.TrimSpace(str(b, "email"))
 		}
 		if name == "" {
 			name = strings.TrimSpace(str(b, "phone"))
 		}
-		require(len(name) <= 120 && len(pass) <= 72, "账号或密码格式无效")
-		// 登录模式：1=个人，2=团队。团队账号由工作台后台创建，清流只负责登录。
-		mode := integer(b["login_mode"])
-		if mode == 0 {
-			mode = integer(b["mode"])
-		}
-		if mode != 2 {
-			mode = 1
-		}
+		require(len(name) <= 120, "账号格式无效")
+		require(code != "" || (pass != "" && len(pass) <= 72), "请填写密码或邮箱验证码")
 		ip := q.r.RemoteAddr
 		key := hash([]byte(ipHost(ip) + "/" + name))
 		unlock, e := s.lock(q.r.Context(), "login:"+key)
@@ -230,9 +255,12 @@ func (a *App) mux() http.Handler {
 		// 工作台是唯一身份来源。这里**不再静默回退**到本地密码：
 		// 之前 wb.login 失败会被吞掉、接着走本地 bcrypt 校验，结果是
 		// 「工作台要求验证码、本地密码却能直接登进来」——验证码形同虚设。
+		// 空间落点由工作台按 membership 决定，不再传 login_mode。
 		if a.wb.Ready() {
-			captchaID, captchaCode := str(b, "captcha_id"), str(b, "captcha_code")
-			session, err := a.wb.login(q.r.Context(), name, pass, int(mode), captchaID, captchaCode)
+			session, err := a.wb.login(q.r.Context(), loginArgs{
+				Email: name, Password: pass, Code: code,
+				CaptchaID: str(b, "captcha_id"), CaptchaCode: str(b, "captcha_code"),
+			})
 			if err != nil {
 				s.exec("INSERT INTO ql_login_failures VALUES(?,?)", key, time.Now().Unix())
 				bad(401, err.Error())
@@ -243,6 +271,9 @@ func (a *App) mux() http.Handler {
 			a.newSession(q, uid, space)
 			q.json(Object{"ok": true})
 			return
+		}
+		if code != "" {
+			bad(503, "邮箱验证码登录需要接入工作台")
 		}
 		if !a.localLoginAllowed() {
 			bad(503, "尚未接入工作台，请联系管理员")
@@ -341,6 +372,27 @@ func (a *App) mux() http.Handler {
 		}
 		q.json(wbPayload(data))
 	}))
+	m.HandleFunc("POST /api/auth/reset-password", a.route(func(q *request) {
+		if !a.wb.Ready() {
+			bad(503, "尚未接入工作台")
+		}
+		b := q.body()
+		email := strings.TrimSpace(str(b, "email"))
+		require(email != "", "请填写邮箱")
+		require(strings.TrimSpace(str(b, "code")) != "", "请填写验证码")
+		require(str(b, "new_password") != "", "请填写新密码")
+		status, data, err := a.wb.resetPassword(q.r.Context(), Object{
+			"email": email, "code": strings.TrimSpace(str(b, "code")),
+			"new_password": str(b, "new_password"),
+		})
+		if err != nil {
+			bad(503, err.Error())
+		}
+		if status < 200 || status >= 300 {
+			bad(status, wbMessage(data, "重置密码失败"))
+		}
+		q.json(Object{"ok": true})
+	}))
 	m.HandleFunc("POST /api/register", a.route(func(q *request) {
 		if !a.wb.Ready() {
 			bad(503, "尚未接入工作台")
@@ -355,8 +407,8 @@ func (a *App) mux() http.Handler {
 			"invite_code":  strings.TrimSpace(str(b, "invite_code")),
 			"service_code": "qingliu",
 		}
-		// 团队注册暂不开放：公司由工作台后台创建，清流只提供团队登录。
-		require(integer(b["login_mode"]) != 2, "团队账号请由管理员在工作台后台创建")
+		// 公共注册只建个人身份；企业/团队账号仍由工作台后台创建或邀请开通。
+		// 不再读 login_mode：空间模型改造后客户端没有「个人/团队登录模式」可传。
 		session, err := a.wb.register(q.r.Context(), body)
 		if err != nil {
 			bad(400, err.Error())
@@ -381,7 +433,20 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("POST /api/billing/orders", a.route(func(q *request) {
 		b := q.body()
-		status, data, err := a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodPost, "/api/v1/payment/orders", Object{"sku_code": str(b, "sku_code"), "service_code": "qingliu"})
+		payload := Object{"sku_code": str(b, "sku_code"), "service_code": "qingliu"}
+		// owner_type/owner_id 决定充进个人池还是团队池；缺省保持旧客户端兼容（个人）。
+		if ot := integer(b["owner_type"]); ot == 1 || ot == 2 {
+			payload["owner_type"] = ot
+			if ot == 2 {
+				oid := integer(b["owner_id"])
+				if oid <= 0 {
+					oid = q.space().teamID()
+				}
+				require(oid > 0, "团队套餐需要先切换到团队空间")
+				payload["owner_id"] = oid
+			}
+		}
+		status, data, err := a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodPost, "/api/v1/payment/orders", payload)
 		if err != nil {
 			bad(503, err.Error())
 		}
@@ -454,7 +519,7 @@ func (a *App) mux() http.Handler {
 			if err != nil || status != http.StatusOK {
 				bad(400, wbMessage(data, "当前密码不正确"))
 			}
-			s.event(str(q.user, "id"), "", "change_password", "workbench")
+			q.event("", "change_password", "workbench")
 			q.json(Object{"ok": true})
 			return
 		}
@@ -464,7 +529,7 @@ func (a *App) mux() http.Handler {
 		must(e)
 		s.exec("UPDATE ql_users SET password=? WHERE id=?", string(h), q.user["id"])
 		s.exec("DELETE FROM ql_sessions WHERE user_id=?", q.user["id"])
-		s.event(str(q.user, "id"), "", "change_password", "")
+		q.event("", "change_password", "")
 		q.json(Object{"ok": true})
 	}))
 	m.HandleFunc("GET /api/clients", a.route(func(q *request) {
@@ -474,8 +539,8 @@ func (a *App) mux() http.Handler {
 		if page < 1 {
 			page = 1
 		}
-		// 列表与 allowed() 用同一口径：团队空间看本企业，个人空间只看自己的。
-		where, args := scopeWhere(q.space(), str(q.user, "id"), "c")
+		// 列表与 allowed() 用同一口径（团队管理员看企业全部；非管理员看授权；个人看自己的）。
+		where, args := scopeWhere(q.customerAccess(), "c")
 		where += " AND c.name LIKE ?"
 		args = append(args, "%"+search+"%")
 		count := s.one("SELECT COUNT(*) AS n FROM ql_customers c WHERE "+where, args...)
@@ -493,10 +558,16 @@ func (a *App) mux() http.Handler {
 		defer tx.Rollback()
 		_, e = tx.Exec("INSERT INTO ql_customers(id,name,payload,workspace_tenant_id,owner_user_id) VALUES(?,?,?,?,?)", cid, name, js(Object{"authorized": true, "company": str(b, "company"), "operator": q.user["display"], "rules": defaultRules(), "scope_required": true}), q.space().teamID(), str(q.user, "id"))
 		must(e)
-		_, e = tx.Exec("INSERT INTO ql_grants VALUES(?,?)", cid, q.user["id"])
+		// 创建者自带授权；团队可见性按 workbench_user_id 判。
+		wbID := integer(q.user["workbench_user_id"])
+		if wbID > 0 {
+			_, e = tx.Exec("INSERT INTO ql_grants(customer_id,user_id,workbench_user_id) VALUES(?,?,?)", cid, q.user["id"], wbID)
+		} else {
+			_, e = tx.Exec("INSERT INTO ql_grants(customer_id,user_id) VALUES(?,?)", cid, q.user["id"])
+		}
 		must(e)
 		must(tx.Commit())
-		s.event(str(q.user, "id"), cid, "create_customer", "")
+		q.event(cid, "create_customer", "")
 		q.json(Object{"id": cid})
 	}))
 	m.HandleFunc("GET /api/clients/{cid}", a.route(func(q *request) {
@@ -627,7 +698,7 @@ func (a *App) mux() http.Handler {
 			must(tx.Commit())
 			committed = true
 			s.bump(cid)
-			s.event(str(q.user, "id"), cid, "upload_queued", fmt.Sprint(len(payloads)))
+			q.event(cid, "upload_queued", fmt.Sprint(len(payloads)))
 			result := Object{"ok": true, "jobs": jobIDs, "batch": batch}
 			if batch != "" {
 				s.exec("INSERT INTO ql_upload_batches(customer_id,batch,payload) VALUES(?,?,?) ON DUPLICATE KEY UPDATE payload=payload", cid, batch, js(result))
@@ -657,7 +728,7 @@ func (a *App) mux() http.Handler {
 			fields["coverage_confirmed"] = false
 			s.exec("UPDATE ql_customers SET payload=? WHERE id=?", js(fields), cid)
 			s.bump(cid)
-			s.event(str(q.user, "id"), cid, "confirm_ownership", "")
+			q.event(cid, "confirm_ownership", "")
 			q.json(Object{"ok": true})
 		})
 	}))
@@ -672,7 +743,7 @@ func (a *App) mux() http.Handler {
 			fields["web_period"] = Object{"source": data["source"], "start": data["start"], "end": data["end"]}
 			s.exec("UPDATE ql_customers SET payload=? WHERE id=?", js(fields), cid)
 			s.bump(cid)
-			s.event(str(q.user, "id"), cid, "confirm_period", js(fields["web_period"]))
+			q.event(cid, "confirm_period", js(fields["web_period"]))
 			q.json(Object{"ok": true})
 		})
 	}))
@@ -686,7 +757,7 @@ func (a *App) mux() http.Handler {
 			fields["rules"] = b
 			s.exec("UPDATE ql_customers SET payload=? WHERE id=?", js(fields), cid)
 			s.bump(cid)
-			s.event(str(q.user, "id"), cid, "update_rules", "")
+			q.event(cid, "update_rules", "")
 			q.json(Object{"ok": true})
 		})
 	}))
@@ -731,7 +802,7 @@ func (a *App) mux() http.Handler {
 			}
 			must(tx.Commit())
 			s.bump(cid)
-			s.event(str(q.user, "id"), cid, "review_transactions", fmt.Sprint(len(changes)))
+			q.event(cid, "review_transactions", fmt.Sprint(len(changes)))
 			q.json(Object{"ok": true})
 		})
 	}))
@@ -739,7 +810,7 @@ func (a *App) mux() http.Handler {
 		cid := q.access()
 		for _, t := range s.rows(cid) {
 			if str(t, "id") == q.r.PathValue("tid") {
-				s.event(str(q.user, "id"), cid, "view_original", str(t, "id"))
+				q.event(cid, "view_original", str(t, "id"))
 				q.json(Object{"row": t, "audits": s.query("SELECT label,operator,reason,created FROM ql_reviews WHERE transaction_id=? ORDER BY seq", t["id"])})
 				return
 			}
@@ -748,7 +819,8 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("GET /api/clients/{cid}/original/{did}/{page}", a.route(func(q *request) {
 		cid := q.access()
-		d := s.one("SELECT name,payload FROM ql_documents WHERE customer_id=? AND id=?", cid, q.r.PathValue("did"))
+		did := q.r.PathValue("did")
+		d := s.one("SELECT name,sha,payload FROM ql_documents WHERE customer_id=? AND id=?", cid, did)
 		if d == nil || strings.ToLower(filepath.Ext(str(d, "name"))) != ".pdf" {
 			bad(404, "原PDF不存在")
 		}
@@ -756,13 +828,21 @@ func (a *App) mux() http.Handler {
 		if e != nil || page < 1 || page > int(integer(obj(str(d, "payload"))["pages"])) {
 			bad(404, "页码无效")
 		}
-		b, e := s.read(filepath.Join(s.root, "uploads", cid, q.r.PathValue("did")))
+		etag := `"` + str(d, "sha") + ":" + fmt.Sprint(page) + `"`
+		q.w.Header().Set("ETag", etag)
+		q.w.Header().Set("X-Document-SHA", str(d, "sha"))
+		q.w.Header().Set("Cache-Control", "private, max-age=3600")
+		if match := strings.TrimSpace(q.r.Header.Get("If-None-Match")); match != "" && match == etag {
+			q.w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		b, e := s.read(filepath.Join(s.root, "uploads", cid, did))
 		must(e)
 		ctx, cancel := context.WithTimeout(q.r.Context(), 30*time.Second)
 		defer cancel()
 		png, e := pdfPage(ctx, b, page)
 		must(e)
-		s.event(str(q.user, "id"), cid, "view_original_page", q.r.PathValue("did")+":"+fmt.Sprint(page))
+		q.event(cid, "view_original_page", did+":"+fmt.Sprint(page))
 		q.w.Header().Set("Content-Type", "image/png")
 		_, e = q.w.Write(png)
 		must(e)
@@ -773,7 +853,7 @@ func (a *App) mux() http.Handler {
 			require(len(d["problems"].([]string)) == 0, strings.Join(d["problems"].([]string), "；"))
 			c := d["customer"].(Object)
 			s.exec("INSERT INTO ql_submissions VALUES(?,?,?) ON DUPLICATE KEY UPDATE revision=VALUES(revision),payload=VALUES(payload)", cid, c["revision"], js(Object{"source": d["source"], "start": d["start"], "end": d["end"], "operator": q.user["display"]}))
-			s.event(str(q.user, "id"), cid, "submit_review", "")
+			q.event(cid, "submit_review", "")
 			q.json(Object{"ok": true})
 		})
 	}))
@@ -794,7 +874,7 @@ func (a *App) mux() http.Handler {
 			payload := Object{"stage": stage, "revision": nested(d, "customer")["revision"], "source": d["source"], "start": d["start"], "end": d["end"], "statement": str(b, "statement"), "operator": q.user["display"]}
 			space := q.space()
 			s.exec("INSERT INTO ql_jobs(id,customer_id,user_id,kind,status,payload,message,space_kind,space_id) VALUES(?,?,?,'report','queued',?,'等待生成报告',?,?)", jid, cid, q.user["id"], js(payload), space.Kind, space.ID)
-			s.event(str(q.user, "id"), cid, "report_queued", jid)
+			q.event(cid, "report_queued", jid)
 			q.json(Object{"id": jid})
 		})
 	}))
@@ -832,7 +912,7 @@ func (a *App) mux() http.Handler {
 		// 或超时后自行退出；busy() 立刻为假，用户不必等它跑完。
 		s.jobFinish(jid, "failed", "已手动终止")
 		s.exec("UPDATE ql_ai_analyses SET status='failed',stage='failed',error='已手动终止',completed=NOW(6) WHERE customer_id=? AND status IN ('queued','running','uploading')", cid)
-		s.event(str(q.user, "id"), cid, "job_cancelled", jid)
+		q.event(cid, "job_cancelled", jid)
 		q.json(Object{"ok": true})
 	}))
 	m.HandleFunc("POST /api/clients/{cid}/retry/{jid}", a.route(func(q *request) {
@@ -861,7 +941,7 @@ func (a *App) mux() http.Handler {
 		if hash(b) != str(nested(obj(str(r, "payload")), "sha256"), filename) {
 			bad(500, "报告完整性校验失败")
 		}
-		s.event(str(q.user, "id"), cid, "download_report", q.r.PathValue("rid")+"/"+filename)
+		q.event(cid, "download_report", q.r.PathValue("rid")+"/"+filename)
 		q.w.Header().Set("Content-Type", mime)
 		q.w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 		_, e = q.w.Write(b)
@@ -869,52 +949,56 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("GET /api/admin", a.route(func(q *request) {
 		q.admin()
-		// 用户列表同样受资料隔离约束：管理员只看到本空间里出现过的人，
-		// 否则「谁能看谁」在人员维度上又开了一个口子。
-		//
-		// 判据从「同一个 tenant_id」改成「在同一批资料上有授权」：ql_users 上
-		// 已经没有团队列了（见 migrations/005）——「他是哪个团队的成员」是工作台
-		// 的成员关系，清流只知道自己这边谁动过这些资料。
-		where, args := scopeWhere(q.space(), str(q.user, "id"), "c")
-		q.json(Object{"users": s.query("SELECT u.id,u.username,u.display,u.role,u.active FROM ql_users u JOIN ql_grants g ON g.user_id=u.id JOIN ql_customers c ON c.id=g.customer_id WHERE "+where+" GROUP BY u.id ORDER BY u.created", args...)})
+		// 「他是哪个团队的成员」以工作台为准；清流只同步本地账号供授权表引用。
+		// 旧实现 JOIN ql_grants，没被授过客户权的成员永远不出现。
+		q.json(Object{"users": a.listWorkbenchMembers(q)})
 	}))
 	m.HandleFunc("GET /api/admin/audit", a.route(func(q *request) {
 		q.admin()
 		query := parseAuditQuery(q)
+		query.Space = q.space()
+		query.Actor = str(q.user, "id")
 		require(len(query.Search) <= 120, "检索文字过长")
 		result := auditEventsPage(s, query)
 		result["actions"] = auditActionOptions()
 		q.json(result)
 	}))
+	a.registerServiceAuditRoutes(m)
 	m.HandleFunc("POST /api/admin/users", a.route(func(q *request) {
 		q.admin()
 		b := q.body()
-		if e := s.addUser(str(b, "username"), str(b, "display"), str(b, "password"), str(b, "role")); e != nil {
-			bad(400, e.Error())
-		}
-		s.event(str(q.user, "id"), "", "add_user", str(b, "username"))
+		a.createWorkbenchMember(q, str(b, "username"), str(b, "display"), str(b, "password"), str(b, "role"))
+		q.event("", "add_user", str(b, "username"))
 		q.json(Object{"ok": true})
 	}))
 	m.HandleFunc("POST /api/admin/users/{uid}/toggle", a.route(func(q *request) {
 		q.admin()
 		uid := q.r.PathValue("uid")
-		require(uid != str(q.user, "id"), "不可停用当前账号")
-		s.exec("UPDATE ql_users SET active=NOT active WHERE id=?", uid)
-		s.exec("DELETE FROM ql_sessions WHERE user_id=?", uid)
-		s.event(str(q.user, "id"), "", "toggle_user", uid)
+		a.toggleWorkbenchMember(q, uid)
+		q.event("", "toggle_user", uid)
+		q.json(Object{"ok": true})
+	}))
+	m.HandleFunc("POST /api/admin/users/{uid}/delete", a.route(func(q *request) {
+		q.admin()
+		uid := q.r.PathValue("uid")
+		b := q.body()
+		a.removeWorkbenchMember(q, uid, str(b, "password"))
+		q.event("", "remove_user", uid)
 		q.json(Object{"ok": true})
 	}))
 	m.HandleFunc("POST /api/clients/{cid}/grant", a.route(func(q *request) {
 		q.admin()
+		q.requireTeamSpace()
 		cid := q.access()
 		b := q.body()
-		require(s.one("SELECT id FROM ql_users WHERE id=?", b["user_id"]) != nil, "用户不存在")
+		localID, wbID := resolveGrantSubject(s, b)
 		if yes(b, "revoke") {
-			s.exec("DELETE FROM ql_grants WHERE customer_id=? AND user_id=?", cid, b["user_id"])
+			s.exec("DELETE FROM ql_grants WHERE customer_id=? AND (user_id=? OR workbench_user_id=?)", cid, localID, wbID)
 		} else {
-			s.exec("INSERT IGNORE INTO ql_grants VALUES(?,?)", cid, b["user_id"])
+			s.exec(`INSERT INTO ql_grants(customer_id,user_id,workbench_user_id) VALUES(?,?,?)
+ ON DUPLICATE KEY UPDATE workbench_user_id=VALUES(workbench_user_id)`, cid, localID, wbID)
 		}
-		s.event(str(q.user, "id"), cid, "change_grant", str(b, "user_id"))
+		q.event(cid, "change_grant", "wb:"+itoa(wbID))
 		q.json(Object{"ok": true})
 	}))
 	m.HandleFunc("/api/", a.route(func(q *request) { bad(404, "接口不存在") }))
@@ -1005,6 +1089,8 @@ func main() {
 	a := &App{s: s, secure: secure, origin: origin, static: static, slots: make(chan struct{}, 4), wb: loadWBConfig()}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	startAuditRetention(ctx, s)
+	startColdDataRetention(ctx, s)
 	workerDone := make(chan struct{})
 	go func() { defer close(workerDone); workerLoop(ctx, s, a) }()
 	addr := os.Getenv("LISTEN_ADDR")
@@ -1025,21 +1111,58 @@ func main() {
 	<-workerDone
 }
 
+// customerAccess 是客户可见性的唯一入参（空间 + 身份 + 是否管理员）。
+type customerAccess struct {
+	Space    spaceRef
+	UserID   string // 本地影子 subject（个人归属 / 未绑定时的授权兜底）
+	WBUserID int64  // 工作台 t_user.id；团队非管理员授权按此列
+	Admin    bool
+}
+
 // scopeWhere 生成「当前空间能看到哪些资料」的 SQL 条件。
 //
-// 判据是**当前空间**，不是账号：同一个人切到团队空间就能看本企业的全部资料，
-// 切回个人空间只看得见自己创建的。因此这里读空间（kind + id），而 ql_users 上
-// 没有任何空间列 —— 账号不带空间，空间属于会话。
+// 账号真相在工作台；清流只保留客户授权绑定：
+//   - 团队 + 管理员：本企业全部客户
+//   - 团队 + 非管理员：本企业且 ql_grants.workbench_user_id 命中
+//   - 个人/平台：自己创建的，或被显式授权的（复核场景）
 //
 // alias 是客户表在查询里的别名；授权判定与列表查询必须用同一口径，
 // 否则会出现「列表里看不到、直接输 ID 却能打开」的越权。
-func scopeWhere(space spaceRef, userID, alias string) (string, []any) {
-	// 平台空间刻意走下面那条「只看自己创建的」：清流没有平台视图
-	// （见 spaces.go 的文件头），平台令牌在清流里绝不放宽到某个团队的全部资料。
-	if space.Kind == spaceTeam {
-		return alias + ".workspace_tenant_id=?", []any{space.ID}
+func scopeWhere(access customerAccess, alias string) (string, []any) {
+	if access.Space.Kind == spaceTeam {
+		if access.Admin {
+			return alias + ".workspace_tenant_id=?", []any{access.Space.ID}
+		}
+		if access.WBUserID <= 0 {
+			return "1=0", nil
+		}
+		return alias + ".workspace_tenant_id=? AND EXISTS (SELECT 1 FROM ql_grants g WHERE g.customer_id=" + alias + ".id AND g.workbench_user_id=?)",
+			[]any{access.Space.ID, access.WBUserID}
 	}
-	return "(" + alias + ".workspace_tenant_id=0 AND " + alias + ".owner_user_id=?)", []any{userID}
+	own := "(" + alias + ".workspace_tenant_id=0 AND " + alias + ".owner_user_id=?)"
+	if access.WBUserID > 0 {
+		return "(" + own + " OR EXISTS (SELECT 1 FROM ql_grants g WHERE g.customer_id=" + alias + ".id AND g.workbench_user_id=?))",
+			[]any{access.UserID, access.WBUserID}
+	}
+	return "(" + own + " OR EXISTS (SELECT 1 FROM ql_grants g WHERE g.customer_id=" + alias + ".id AND g.user_id=?))",
+		[]any{access.UserID, access.UserID}
+}
+
+// resolveGrantSubject 把授权请求里的工作台 id（优先）或本地影子 id 解析成双写所需坐标。
+func resolveGrantSubject(s *Store, b Object) (localID string, wbID int64) {
+	wbID = integer(b["workbench_user_id"])
+	if wbID > 0 {
+		row := s.one("SELECT user_id FROM ql_workbench_accounts WHERE workbench_user_id=?", wbID)
+		require(row != nil, "用户不存在或未绑定工作台")
+		return str(row, "user_id"), wbID
+	}
+	localID = strings.TrimSpace(str(b, "user_id"))
+	require(localID != "" && s.one("SELECT id FROM ql_users WHERE id=?", localID) != nil, "用户不存在")
+	if account := s.one("SELECT workbench_user_id FROM ql_workbench_accounts WHERE user_id=?", localID); account != nil {
+		wbID = integer(account["workbench_user_id"])
+	}
+	require(wbID > 0, "用户未绑定工作台，无法分配客户权限")
+	return localID, wbID
 }
 
 // localLoginAllowed 决定是否允许「本地密码」这条过渡路径。

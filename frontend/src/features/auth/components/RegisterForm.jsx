@@ -128,7 +128,6 @@ export function RegisterForm({ onDone }) {
               password,
               code: String(form.get("code")).trim(),
               invite_code: String(form.get("invite_code")).trim(),
-              login_mode: 1,
             });
             navigate("/");
           }}

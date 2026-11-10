@@ -15,14 +15,14 @@ import (
 // busy() 恒真，该客户的上传、核对、报告全部被 409 挡住。启动时和之后
 // 每 5 分钟扫一次，把这些僵尸任务收掉，并留下 event 方便回溯。
 func sweepStaleJobs(s *Store) {
-	rows := s.query("SELECT id,customer_id,user_id,kind FROM ql_jobs WHERE status IN ('queued','running') AND created < DATE_SUB(NOW(6), INTERVAL ? MINUTE)", staleJobMinutes)
+	rows := s.query("SELECT id,customer_id,user_id,kind,space_kind,space_id FROM ql_jobs WHERE status IN ('queued','running') AND created < DATE_SUB(NOW(6), INTERVAL ? MINUTE)", staleJobMinutes)
 	for _, job := range rows {
 		jid := str(job, "id")
 		message := "任务超时未完成，已自动终止；可重新提交"
 		s.exec("UPDATE ql_jobs SET status='failed',message=?,stage='failed',progress=0 WHERE id=?", message, jid)
 		// AI 分析还有一张明细表，一起收掉，否则会被 startAIAnalysis 复用。
 		s.exec("UPDATE ql_ai_analyses SET status='failed',stage='failed',error=?,completed=NOW(6) WHERE customer_id=? AND status IN ('queued','running','uploading')", message, str(job, "customer_id"))
-		s.event(str(job, "user_id"), str(job, "customer_id"), "job_timeout", jid)
+		s.event(spaceOf(job), str(job, "user_id"), str(job, "customer_id"), "job_timeout", jid)
 		log.Printf("swept stale job %s (%s)", jid, str(job, "kind"))
 	}
 }
@@ -123,8 +123,10 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 	// 空间来自**任务行**，不是账号：ql_users 上已经没有空间列（见 migrations/005），
 	// 而 worker 也没有会话。任务在提交时把 space_kind/space_id 记了下来，
 	// 按它判权限才不会出现「前台能进、后台任务全失败」。
-	user := s.one("SELECT id,role,display FROM ql_users WHERE id=? AND active=1", job["user_id"])
-	if user == nil || !s.allowed(spaceOf(job), str(user, "id"), cid) {
+	user := s.one(`SELECT u.id,u.role,u.display,w.workbench_user_id,w.permissions
+ FROM ql_users u LEFT JOIN ql_workbench_accounts w ON w.user_id=u.id
+ WHERE u.id=? AND u.active=1`, job["user_id"])
+	if user == nil || !s.allowed(jobCustomerAccess(user, spaceOf(job)), cid) {
 		panic(fmt.Errorf("操作账号已失效或没有客户权限"))
 	}
 	p := obj(str(job, "payload"))
@@ -205,6 +207,22 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 	} else {
 		panic(fmt.Errorf("未知任务类型"))
 	}
-	s.event(str(user, "id"), cid, str(job, "kind")+"_finished", jid)
+	s.event(spaceOf(job), str(user, "id"), cid, str(job, "kind")+"_finished", jid)
 	return true
+}
+
+// jobCustomerAccess 把任务提交人还原成 scopeWhere 入参（worker 没有会话）。
+func jobCustomerAccess(user Object, space spaceRef) customerAccess {
+	admin := false
+	if perms := parsePermissions(str(user, "permissions")); perms != nil {
+		admin = perms[permAdmin]
+	} else {
+		admin = str(user, "role") == "admin"
+	}
+	return customerAccess{
+		Space:    space,
+		UserID:   str(user, "id"),
+		WBUserID: integer(user["workbench_user_id"]),
+		Admin:    admin,
+	}
 }

@@ -27,9 +27,9 @@ export function Form({ onSave, children, className = "", success = "已保存" }
   );
 }
 
-export function Field({ label, children }) {
+export function Field({ label, children, className = "" }) {
   return (
-    <label className="field">
+    <label className={`field${className ? ` ${className}` : ""}`}>
       <span>{label}</span>
       {children}
     </label>

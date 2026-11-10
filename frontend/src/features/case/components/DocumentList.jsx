@@ -1,6 +1,7 @@
 import React from "react";
 import { DOCUMENT_STATUS, SOURCES } from "@/shared/lib/constants.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
+import { FoldPanel } from "@/shared/ui/FoldPanel.jsx";
 
 export function DocumentList({ data }) {
   if (!data.docs.length) return null;
@@ -13,13 +14,18 @@ export function DocumentList({ data }) {
         已上传 {data.docs.length} 份{pending > 0 && `（${pending} 份待处理）`}
       </p>
       {data.docs.map((document) => (
-        <details key={document.id}>
-          <summary>
-            {document.name}{" "}
-            <StatusBadge tone={document.meta.status !== "success" ? "amber" : "default"}>
+        <FoldPanel
+          key={document.id}
+          className="doc-fold"
+          title={document.name}
+          badge={
+            <StatusBadge
+              tone={document.meta.status !== "success" ? "amber" : "default"}
+            >
               {DOCUMENT_STATUS[document.meta.status]}
             </StatusBadge>
-          </summary>
+          }
+        >
           <p>
             {SOURCES[document.meta.source]} · {document.meta.pages || 0} 页 ·{" "}
             {document.meta.rows || 0} 笔 · 原件期间：
@@ -37,7 +43,7 @@ export function DocumentList({ data }) {
               {fact.text}
             </p>
           ))}
-        </details>
+        </FoldPanel>
       ))}
     </div>
   );

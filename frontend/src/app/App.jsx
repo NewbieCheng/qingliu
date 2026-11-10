@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "@/features/auth/index.js";
+import { SpaceSwitcher } from "@/features/profile/index.js";
 import { Loading } from "@/shared/ui/Loading.jsx";
 import { ToastHost } from "@/shared/ui/toast.jsx";
 import { WorkspaceShell } from "@/shared/layout/WorkspaceShell.jsx";
@@ -9,6 +10,7 @@ import {
   useLinkInterceptor,
   useLocation,
 } from "@/shared/router/index.js";
+import { isQingliuAdmin } from "@/shared/lib/constants.js";
 import { ROUTES } from "./routes.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import { ChangePasswordDialog } from "./ChangePasswordDialog.jsx";
@@ -31,6 +33,10 @@ function Workspace() {
   const location = useLocation();
   useLinkInterceptor();
   const [passwordOpen, setPasswordOpen] = useState(false);
+  // 空间切换在 features/profile；由 app 注入 Shell，shared/layout 不反向依赖业务域。
+  const spaceSwitcher = (collapsed) => (
+    <SpaceSwitcher user={user} collapsed={collapsed} />
+  );
 
   const { route, params } = resolveRoute(location.pathname);
 
@@ -58,7 +64,11 @@ function Workspace() {
 
   if (route.public) return <route.page />;
 
-  if (route.roles && !route.roles.includes(user.role)) {
+  if (
+    route.roles?.includes("admin")
+      ? !isQingliuAdmin(user)
+      : route.roles && !route.roles.includes(user.role)
+  ) {
     return (
       <WorkspaceShell
         user={user}
@@ -70,6 +80,7 @@ function Workspace() {
           await logout();
           navigate("/login");
         }}
+        spaceSwitcher={spaceSwitcher}
       >
         <main>
           <div className="card">
@@ -95,6 +106,7 @@ function Workspace() {
           await logout();
           navigate("/login");
         }}
+        spaceSwitcher={spaceSwitcher}
       >
         <Page {...params} user={user} />
       </WorkspaceShell>

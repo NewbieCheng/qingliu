@@ -1,11 +1,31 @@
 import React from "react";
 import { Link } from "@/shared/router/index.js";
-import { ROLES } from "@/shared/lib/constants.js";
 import { NavIcon } from "@/shared/ui/icons.jsx";
+import { toast } from "@/shared/ui/toast-api.js";
+import { isQingliuAdmin } from "@/shared/lib/constants.js";
 import { NAVIGATION, isNavItemActive } from "./navigation.js";
 
-function NavItem({ item, pathname, collapsed }) {
+const TEAM_NAV_LOCKED =
+  "个人空间不支持团队与权限管理。请开通团队版，或切换到团队空间后再使用。";
+
+function NavItem({ item, pathname, collapsed, locked = false }) {
   const active = isNavItemActive(item, pathname);
+
+  if (locked) {
+    return (
+      <button
+        type="button"
+        className={`rail-link is-locked ${active ? "active" : ""}`}
+        title={collapsed ? TEAM_NAV_LOCKED : item.label}
+        aria-disabled="true"
+        onClick={() => toast(TEAM_NAV_LOCKED, "error")}
+      >
+        <NavIcon kind={item.icon} />
+        <span className="rail-link-text">{item.label}</span>
+      </button>
+    );
+  }
+
   return (
     <Link
       to={item.to}
@@ -18,8 +38,9 @@ function NavItem({ item, pathname, collapsed }) {
   );
 }
 
-export function Sidebar({ user, pathname, collapsed, onLogout, onPassword }) {
-  const initials = (user.display || "清").slice(0, 1);
+export function Sidebar({ user, pathname, collapsed, spaceSwitcher = null }) {
+  const spaceKind = user?.kind || user?.space?.kind || "personal";
+  const teamManaged = spaceKind === "team";
 
   return (
     <aside className="rail">
@@ -39,7 +60,7 @@ export function Sidebar({ user, pathname, collapsed, onLogout, onPassword }) {
       </div>
       <nav className="rail-nav" aria-label="主导航">
         {NAVIGATION.filter(
-          (group) => !group.adminOnly || user.role === "admin",
+          (group) => !group.adminOnly || isQingliuAdmin(user),
         ).map((group) => (
           <div className="rail-group" key={group.label}>
             <p className="rail-group-label">{group.label}</p>
@@ -49,38 +70,14 @@ export function Sidebar({ user, pathname, collapsed, onLogout, onPassword }) {
                 item={item}
                 pathname={pathname}
                 collapsed={collapsed}
+                locked={item.to === "/admin" && !teamManaged}
               />
             ))}
           </div>
         ))}
       </nav>
       <div className="rail-user">
-        <div className="rail-avatar" aria-hidden="true">
-          {initials}
-        </div>
-        <div className="rail-user-copy">
-          <strong>{user.display}</strong>
-          <span>{user.email || ROLES[user.role] || "工作台账号"}</span>
-        </div>
-        <div className="rail-user-actions">
-          <Link to="/recharge" className="rail-user-action">
-            账户
-          </Link>
-          <button
-            type="button"
-            className="ghost rail-user-action"
-            onClick={onLogout}
-          >
-            退出
-          </button>
-          <button
-            type="button"
-            className="ghost rail-user-action"
-            onClick={onPassword}
-          >
-            修改密码
-          </button>
-        </div>
+        {spaceSwitcher ? spaceSwitcher(collapsed) : null}
       </div>
     </aside>
   );

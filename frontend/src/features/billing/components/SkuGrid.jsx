@@ -1,20 +1,49 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { formatCurrencyFen, formatNumber } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
-import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
+import { filterSkusByAudience } from "../lib/sku.js";
 
-export function SkuGrid({ skus, busy, onChoose }) {
+const TABS = [
+  { id: "personal", label: "个人套餐" },
+  { id: "team", label: "团队套餐" },
+];
+
+export function SkuGrid({ skus, busy, onChoose, defaultTab = "personal" }) {
+  const initial = defaultTab === "team" ? "team" : "personal";
+  const [tab, setTab] = useState(initial);
+  const visible = useMemo(() => filterSkusByAudience(skus, tab), [skus, tab]);
+
   return (
-    <section className="card">
-      <SectionTitle
-        title="选择套餐"
-        description="价格与积分由工作台后台维护，支付成功后自动到账。"
-      />
-      {skus.length === 0 && (
-        <p className="muted">暂未配置可售套餐，请联系管理员。</p>
+    <section className="card sku-section">
+      <div className="sku-section-head">
+        <div className="section-title">
+          <h2>选择套餐</h2>
+          <p>价格与积分由工作台后台维护，支付成功后自动到账。</p>
+        </div>
+        <div className="sku-tabs" role="tablist" aria-label="套餐类型">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === item.id}
+              className={tab === item.id ? "is-active" : ""}
+              onClick={() => setTab(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {visible.length === 0 && (
+        <p className="muted">
+          {tab === "team"
+            ? "暂无团队套餐，请联系管理员在工作台配置。"
+            : "暂无个人套餐，请联系管理员在工作台配置。"}
+        </p>
       )}
       <div className="sku-grid">
-        {skus.map((sku) => (
+        {visible.map((sku) => (
           <article
             className={`sku-card ${sku.featured ? "featured" : ""}`}
             key={sku.code}

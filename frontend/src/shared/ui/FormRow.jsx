@@ -1,4 +1,5 @@
 import React from "react";
+export { Select } from "./Select.jsx";
 
 export function FormRow({ label, hint, children }) {
   return (
@@ -9,17 +10,5 @@ export function FormRow({ label, hint, children }) {
       </span>
       <div className="ql-row-control">{children}</div>
     </div>
-  );
-}
-
-export function Select({ label, className = "", children, ...rest }) {
-  return (
-    <select
-      className={`ql-select${className ? ` ${className}` : ""}`}
-      aria-label={rest["aria-label"] || label}
-      {...rest}
-    >
-      {children}
-    </select>
   );
 }

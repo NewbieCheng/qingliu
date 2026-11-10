@@ -1,33 +1,40 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCase, mutateCase } from "../api.js";
+import { invalidateCase, queryCase } from "@/app/queries/index.js";
+import { mutateCase } from "../api.js";
 
 export function useCaseData(cid, { range, view, query, page }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState([]);
   const requestRef = useRef(null);
+  const busyRef = useRef(false);
 
-  const load = useCallback(async () => {
-    requestRef.current?.abort();
-    const controller = new AbortController();
-    requestRef.current = controller;
-    try {
-      const value = await getCase(cid, {
-        range,
-        view,
-        query,
-        page,
-        signal: controller.signal,
-      });
-      setData(value);
-      setError("");
-      setSelected([]);
-      return value;
-    } catch (requestError) {
-      if (requestError.name !== "AbortError") setError(requestError.message);
-      return null;
-    }
-  }, [cid, range, view, query, page]);
+  const load = useCallback(
+    async ({ force = false } = {}) => {
+      requestRef.current?.abort();
+      const controller = new AbortController();
+      requestRef.current = controller;
+      try {
+        const value = await queryCase(cid, {
+          range,
+          view,
+          query,
+          page,
+          signal: controller.signal,
+          force: force || busyRef.current,
+        });
+        setData(value);
+        busyRef.current = Boolean(value?.busy);
+        setError("");
+        setSelected([]);
+        return value;
+      } catch (requestError) {
+        if (requestError.name !== "AbortError") setError(requestError.message);
+        return null;
+      }
+    },
+    [cid, range, view, query, page],
+  );
 
   useEffect(() => {
     void load();
@@ -36,14 +43,15 @@ export function useCaseData(cid, { range, view, query, page }) {
 
   useEffect(() => {
     if (!data?.busy) return undefined;
-    const timer = window.setTimeout(() => void load(), 2000);
+    const timer = window.setTimeout(() => void load({ force: true }), 2000);
     return () => window.clearTimeout(timer);
   }, [data?.busy, load]);
 
   const mutate = useCallback(
     async (action, body) => {
       await mutateCase(cid, range, action, body);
-      return load();
+      invalidateCase(cid);
+      return load({ force: true });
     },
     [cid, range, load],
   );

@@ -43,15 +43,6 @@ func TestAnalyzeStageProgressIsMonotonic(t *testing.T) {
 	}
 }
 
-func TestLoginModeName(t *testing.T) {
-	if loginModeName(2) != "enterprise" {
-		t.Fatal("team login must map to enterprise")
-	}
-	if loginModeName(1) != "personal" || loginModeName(0) != "personal" {
-		t.Fatal("default login must map to personal")
-	}
-}
-
 // 工作台余额是嵌套在 data 里的对象。用 obj(str(data,"data")) 会把对象转成
 // 字符串再解析，永远得到空 map —— 表现是「余额恒为 0，所有上传都被拦」。
 func TestNestedPayloadExtractionKeepsNumbers(t *testing.T) {

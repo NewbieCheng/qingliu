@@ -59,6 +59,12 @@ func TestBusyIgnoresStaleJobs(t *testing.T) {
 	if !strings.Contains(body, "staleJobMinutes") {
 		t.Fatal("busy() 必须排除超时卡死的任务，否则一条失败任务会锁死整个客户")
 	}
+	if !strings.Contains(body, "upload") || !strings.Contains(body, "report") {
+		t.Fatal("busy() 只能拦 upload/report，不能把 ai_analysis 算进锁客")
+	}
+	if strings.Contains(body, "ai_analysis") {
+		t.Fatal("busy() 不得把 ai_analysis 算进写锁，否则核对勾选会被旁路 AI 锁死")
+	}
 }
 
 // 阶段文案去重：message 与阶段文案相同时不应拼成「A（A）」。

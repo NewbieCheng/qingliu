@@ -1,29 +1,16 @@
 import { defineConfig } from "vite";
 import { fileURLToPath, URL } from "node:url";
 
-// 本地开发服务：前端跑在 5173，/api 与 /health 反向代理到生产后端
-// （生产后端自己连生产库，所以本地不需要数据库、也不需要 Go 二进制）。
-const target = "https://qingliu.bujiaban.top";
+// 本地开发服务：前端跑在 5173，/api 与 /health 反向代理到本机清流 Go。
+// 联调本机工作台时：清流 .env 的 WORKBENCH_BASE_URL=http://127.0.0.1:8080。
+// 若要临时连生产清流，把 target 改回 https://qingliu.bujiaban.top 并恢复 secure/Origin 改写。
+const target = "http://127.0.0.1:8787";
 
-// 生产后端对写请求校验 Origin（必须是主站 Origin），代理转发时要改写，
-// 否则本地页面调登录/保存会被 403。生产 Cookie 带 Secure，本地是 http，
-// 转发时去掉 Secure，localhost 才存得住会话。
-function prodProxy() {
+function localProxy() {
   return {
     target,
     changeOrigin: true,
-    secure: true,
-    headers: { Origin: target, Referer: `${target}/` },
-    configure(proxy) {
-      proxy.on("proxyRes", (proxyRes) => {
-        const cookies = proxyRes.headers["set-cookie"];
-        if (cookies) {
-          proxyRes.headers["set-cookie"] = cookies.map((cookie) =>
-            cookie.replace(/;\s*Secure/gi, ""),
-          );
-        }
-      });
-    },
+    secure: false,
   };
 }
 
@@ -40,8 +27,8 @@ export default defineConfig({
     // 编辑器的原子写会先在 src 下建临时目录，Windows 上被 watch 到会 EBUSY 崩掉 dev server。
     watch: { ignored: ["**/.*.tmpdir/**", "**/*.tmp"] },
     proxy: {
-      "/api": prodProxy(),
-      "/health": prodProxy(),
+      "/api": localProxy(),
+      "/health": localProxy(),
     },
   },
 });

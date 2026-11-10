@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ChevronLeftIcon, RailToggleIcon, TopbarToggleIcon } from "@/shared/ui/icons.jsx";
+import { ArrowLeftIcon, RailToggleIcon, TopbarToggleIcon } from "@/shared/ui/icons.jsx";
 import { Link } from "@/shared/router/index.js";
 import { invalidateBalance, queryBalance } from "@/app/queries/index.js";
 
@@ -7,7 +7,15 @@ import { invalidateBalance, queryBalance } from "@/app/queries/index.js";
 // 积分牌子原来散在各页页头（个人信息 / 充值各一块），现在统一收进顶栏，
 // 页面里不再重复。各页余额变化（如下单支付成功）后 dispatch
 // `ql:balance-changed` 事件，顶栏听到就重查。
-export function Topbar({ collapsed, onToggle, railCollapsed, onToggleRail, title, back }) {
+export function Topbar({
+  collapsed,
+  onToggle,
+  railCollapsed,
+  onToggleRail,
+  hideRailToggle = false,
+  title,
+  back,
+}) {
   const [points, setPoints] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -31,19 +39,21 @@ export function Topbar({ collapsed, onToggle, railCollapsed, onToggleRail, title
   return (
     <header className="topbar">
       <div className="topbar-copy">
-        <button
-          type="button"
-          className="topbar-toggle"
-          aria-label={railCollapsed ? "展开侧边栏" : "收起侧边栏"}
-          aria-expanded={!railCollapsed}
-          title={railCollapsed ? "展开侧边栏" : "收起侧边栏"}
-          onClick={onToggleRail}
-        >
-          <RailToggleIcon collapsed={railCollapsed} />
-        </button>
+        {!hideRailToggle ? (
+          <button
+            type="button"
+            className="topbar-toggle"
+            aria-label={railCollapsed ? "展开侧边栏" : "收起侧边栏"}
+            aria-expanded={!railCollapsed}
+            title={railCollapsed ? "展开侧边栏" : "收起侧边栏"}
+            onClick={onToggleRail}
+          >
+            <RailToggleIcon collapsed={railCollapsed} />
+          </button>
+        ) : null}
         {back && (
           <Link className="topbar-back" to={back.to}>
-            <ChevronLeftIcon />
+            <ArrowLeftIcon />
             {back.label}
           </Link>
         )}

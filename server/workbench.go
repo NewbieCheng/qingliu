@@ -50,16 +50,31 @@ type wbSession struct {
 	Space spaceRef
 }
 
-// login signs in through the workbench service entry. captchaID/captchaCode are
-// the human challenge solved in the qingliu login page; the workbench requires
-// it for password logins exactly like its own web login.
-func (c wbConfig) login(ctx context.Context, email, password string, mode int, captchaID, captchaCode string) (wbSession, error) {
-	body := Object{"email": email, "password": password, "service_code": "qingliu", "login_mode": loginModeName(mode)}
-	if captchaID != "" {
-		body["captcha_id"] = captchaID
-	}
-	if captchaCode != "" {
-		body["captcha_code"] = captchaCode
+// loginArgs 是工作台服务登录入参：密码登录带 captcha，邮箱验证码登录带 code。
+type loginArgs struct {
+	Email       string
+	Password    string
+	Code        string
+	CaptchaID   string
+	CaptchaCode string
+}
+
+// login signs in through the workbench service entry.
+// 密码登录：工作台要求人机验证（与网页端同一口径）。
+// 邮箱验证码登录：发码时已过闸，这里只传 email + code。
+// 空间落点由工作台按 t_space_membership 决定，不再传 login_mode。
+func (c wbConfig) login(ctx context.Context, args loginArgs) (wbSession, error) {
+	body := Object{"email": args.Email, "service_code": "qingliu"}
+	if args.Code != "" {
+		body["code"] = args.Code
+	} else {
+		body["password"] = args.Password
+		if args.CaptchaID != "" {
+			body["captcha_id"] = args.CaptchaID
+		}
+		if args.CaptchaCode != "" {
+			body["captcha_code"] = args.CaptchaCode
+		}
 	}
 	status, data, err := c.do(ctx, http.MethodPost, "/api/v1/service/auth/login", body, "")
 	if err != nil {
@@ -69,15 +84,6 @@ func (c wbConfig) login(ctx context.Context, email, password string, mode int, c
 		return wbSession{}, errors.New(wbMessage(data, "账号或密码不正确"))
 	}
 	return parseWBSession(data)
-}
-
-// loginModeName maps the qingliu login tab to the workbench login mode.
-// 1 = personal, 2 = enterprise (teams/companies provisioned in the workbench).
-func loginModeName(mode int) string {
-	if mode == 2 {
-		return "enterprise"
-	}
-	return "personal"
 }
 
 // register signs a new personal identity up on the workbench with the shared
@@ -99,6 +105,11 @@ func (c wbConfig) verifyCode(ctx context.Context, body Object) (int, Object, err
 	return c.do(ctx, http.MethodPost, "/api/v1/auth/verification-codes", body, "")
 }
 
+// resetPassword proxies public password reset (email OTP + new password).
+func (c wbConfig) resetPassword(ctx context.Context, body Object) (int, Object, error) {
+	return c.do(ctx, http.MethodPost, "/api/v1/auth/reset-password", body, "")
+}
+
 // captcha proxies the workbench captcha challenge used before issuing codes.
 func (c wbConfig) captcha(ctx context.Context, kind string) (int, Object, error) {
 	path := "/api/v1/auth/captcha"
@@ -114,7 +125,9 @@ func (c wbConfig) refresh(ctx context.Context, refreshToken string) (wbSession, 
 		return wbSession{}, err
 	}
 	if status != http.StatusOK {
-		return wbSession{}, errors.New("登录状态已过期，请重新登录")
+		// Keep the same user-facing phrase as a missing token so the recharge
+		// page / topbar do not invent a second "session died" wording.
+		return wbSession{}, errors.New("请重新登录工作台账号")
 	}
 	return parseWBSession(data)
 }
@@ -351,61 +364,69 @@ func (a *App) newSession(q *request, userID string, space spaceRef) {
 	token, csrf := id()+id(), id()+id()
 	a.s.exec("INSERT INTO ql_sessions(token,user_id,csrf,expires,space_kind,space_id) VALUES(?,?,?,?,?,?)", hash([]byte(token)), userID, csrf, time.Now().Add(8*time.Hour).Unix(), space.Kind, space.ID)
 	http.SetCookie(q.w, &http.Cookie{Name: "ql_session", Value: token, Path: "/", HttpOnly: true, Secure: a.secure, SameSite: http.SameSiteLaxMode, MaxAge: 28800})
-	a.s.event(userID, "", "login", space.Kind+":"+itoa(space.ID))
+	a.s.event(space, userID, "", "login", space.Kind+":"+itoa(space.ID))
 }
 
-func (a *App) wbAccessToken(userID string) string {
+// wbAccessToken returns a usable workbench access token for userID.
+//
+// When the stored access token is near expiry it refreshes first. Callers must
+// surface the returned error as-is: a down workbench is "工作台暂时不可用…",
+// while a dead refresh token is "请重新登录工作台账号". Collapsing every failure
+// into the re-login message is what made local outages look like auth bugs.
+func (a *App) wbAccessToken(userID string) (string, error) {
 	account := a.wbAccount(userID)
 	if account == nil {
-		return ""
+		return "", errors.New("请重新登录工作台账号")
 	}
 	expires := integer(account["token_expires"])
 	if expires > 0 && time.Now().Unix() > expires-60 {
-		if refreshed, ok := a.wbRefresh(userID); ok {
-			return refreshed
-		}
-		return ""
+		return a.wbRefresh(userID)
 	}
-	return string(a.s.unseal(bytesOf(account["access_token"])))
+	token := string(a.s.unseal(bytesOf(account["access_token"])))
+	if token == "" {
+		return "", errors.New("请重新登录工作台账号")
+	}
+	return token, nil
 }
 
-func (a *App) wbRefresh(userID string) (string, bool) {
+func (a *App) wbRefresh(userID string) (string, error) {
 	account := a.wbAccount(userID)
 	if account == nil {
-		return "", false
+		return "", errors.New("请重新登录工作台账号")
 	}
 	rawRefresh := string(a.s.unseal(bytesOf(account["refresh_token"])))
 	if rawRefresh == "" {
-		return "", false
+		return "", errors.New("请重新登录工作台账号")
 	}
 	session, err := a.wb.refresh(context.Background(), rawRefresh)
 	if err != nil {
-		return "", false
+		return "", err
 	}
 	a.wbSaveLogin(userID, session)
-	return session.AccessToken, true
+	return session.AccessToken, nil
 }
 
 // wbRequest calls the workbench on behalf of a local session. A 401 triggers
 // one refresh-and-retry so an eight-hour qingliu session does not die when the
 // short workbench access token rotates.
 func (a *App) wbUploadDocument(ctx context.Context, userID, path, name string) (int64, error) {
-	token := a.wbAccessToken(userID)
-	if token == "" {
-		return 0, errors.New("请重新登录工作台账号")
-	}
-	file, err := os.Open(path)
+	token, err := a.wbAccessToken(userID)
 	if err != nil {
 		return 0, err
 	}
-	defer file.Close()
+	// 磁盘上的 uploads 是 QLGO1 加密件；发给工作台必须先解密成真实 PDF，
+	// 否则 aidoc 会把密文当 PDF 解析并报 PDF_UNREADABLE。
+	plain, err := a.s.read(path)
+	if err != nil {
+		return 0, err
+	}
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	part, err := writer.CreateFormFile("file", name)
 	if err != nil {
 		return 0, err
 	}
-	if _, err := io.Copy(part, file); err != nil {
+	if _, err := part.Write(plain); err != nil {
 		return 0, err
 	}
 	if err := writer.Close(); err != nil {
@@ -440,18 +461,20 @@ func (a *App) wbRequest(ctx context.Context, userID, method, path string, body a
 	if !a.wb.Ready() {
 		return 0, nil, errors.New("尚未接入工作台")
 	}
-	token := a.wbAccessToken(userID)
-	if token == "" {
-		return http.StatusUnauthorized, nil, errors.New("请重新登录工作台账号")
+	token, err := a.wbAccessToken(userID)
+	if err != nil {
+		return http.StatusUnauthorized, nil, err
 	}
 	status, data, err := a.wb.do(ctx, method, path, body, token)
 	if err != nil {
 		return status, data, err
 	}
 	if status == http.StatusUnauthorized {
-		if refreshed, ok := a.wbRefresh(userID); ok {
-			return a.wb.do(ctx, method, path, body, refreshed)
+		refreshed, refreshErr := a.wbRefresh(userID)
+		if refreshErr != nil {
+			return http.StatusUnauthorized, nil, refreshErr
 		}
+		return a.wb.do(ctx, method, path, body, refreshed)
 	}
 	return status, data, nil
 }

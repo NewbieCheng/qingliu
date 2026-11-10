@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "@/shared/router/index.js";
 import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { EmptyState } from "@/shared/ui/EmptyState.jsx";
-import { ChevronLeftIcon } from "@/shared/ui/icons.jsx";
+import { ArrowLeftIcon } from "@/shared/ui/icons.jsx";
 
 export function NotFoundPage() {
   return (
@@ -12,7 +12,7 @@ export function NotFoundPage() {
         description="链接可能已失效，或当前账号没有访问权限。"
         actions={
           <Link className="back" to="/">
-            <ChevronLeftIcon />
+            <ArrowLeftIcon />
             返回客户档案
           </Link>
         }

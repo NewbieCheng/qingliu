@@ -10,6 +10,9 @@ export function ChangePasswordDialog({ onClose }) {
 
   return (
     <Modal title="修改密码" onClose={onClose}>
+      <p className="account-dialog-lead">
+        已绑定工作台时，密码修改会同步到工作台账号。新密码需 10 至 72 字节，成功后将退出并重新登录。
+      </p>
       <Form
         success="密码已更新，请重新登录"
         onSave={async (form) => {
@@ -36,7 +39,12 @@ export function ChangePasswordDialog({ onClose }) {
             required
           />
         </Field>
-        <button className="primary">保存并重新登录</button>
+        <div className="account-dialog-actions">
+          <button type="button" className="ghost" onClick={onClose}>
+            取消
+          </button>
+          <button className="primary">保存并重新登录</button>
+        </div>
       </Form>
     </Modal>
   );

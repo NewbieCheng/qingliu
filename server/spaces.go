@@ -96,7 +96,7 @@ func (a *App) spaces(q *request) Object {
 	if err != nil || status != http.StatusOK {
 		// 读不到就只回「当前空间」：界面仍然能显示自己在哪，只是不能切 ——
 		// 比整页报错好，也比假装能切好。
-		return Object{"items": []Object{currentSpaceItem(current)}, "current_space": current.Object(), "warn": "暂时读不到可用的空间列表"}
+		return Object{"items": []Object{currentSpaceItem(current)}, "current_space": current.Object(), "warn": "暂无多余空间"}
 	}
 	items := spaceItems(data)
 	out := make([]Object, 0, len(items))
@@ -238,7 +238,7 @@ func (a *App) switchSpace(q *request) Object {
 	// 而不是「永久换身份」。
 	a.s.exec("UPDATE ql_sessions SET space_kind=?, space_id=? WHERE token=?",
 		target.Kind, target.ID, str(q.session, "token"))
-	a.s.event(uid, "", "switch_space", target.Kind+":"+itoa(target.ID))
+	a.s.event(target, uid, "", "switch_space", target.Kind+":"+itoa(target.ID))
 	q.session["space_kind"], q.session["space_id"] = target.Kind, target.ID
 	return Object{"ok": true, "space": a.spaceDetail(q.r, uid, target)}
 }
@@ -259,7 +259,7 @@ func (a *App) enableSpace(q *request) Object {
 	if status < 200 || status >= 300 {
 		bad(status, wbMessage(data, "无法开启这个空间"))
 	}
-	a.s.event(str(q.user, "id"), "", "enable_space", target.Kind+":"+itoa(target.ID))
+	a.s.event(target, str(q.user, "id"), "", "enable_space", target.Kind+":"+itoa(target.ID))
 	return a.spaces(q)
 }
 

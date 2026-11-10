@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/text/unicode/norm"
 	"math/big"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 type Object = map[string]any
@@ -74,10 +76,20 @@ func integer(v any) int64 {
 		return n
 	case int:
 		return int64(n)
+	case uint64:
+		return int64(n)
 	case float64:
 		return int64(n)
 	case json.Number:
 		i, _ := n.Int64()
+		return i
+	case string:
+		// Store.query turns some numeric []byte columns into string; parse them
+		// so token_expires / ids are not silently read as 0.
+		i, _ := strconv.ParseInt(strings.TrimSpace(n), 10, 64)
+		return i
+	case []byte:
+		i, _ := strconv.ParseInt(strings.TrimSpace(string(n)), 10, 64)
 		return i
 	}
 	return 0

@@ -50,7 +50,10 @@ function transportMessage(path) {
 
 function statusMessage(status, fallback) {
   if (status === 413) return "文件过大，已超过服务器允许的上传大小";
+  // 业务侧 503 常带具体原因（如「请重新登录工作台账号」），优先展示原文。
   if (status === 502 || status === 503 || status === 504) {
+    const detail = typeof fallback === "string" ? fallback.trim() : "";
+    if (detail && detail !== "请求未完成，请稍后重试") return detail;
     return "服务器暂时不可用，请稍后重试";
   }
   if (status === 524) return "服务器处理超时，请稍后重试";

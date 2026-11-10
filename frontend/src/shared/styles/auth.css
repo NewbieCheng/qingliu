@@ -224,6 +224,34 @@
   color: #6b7a72;
 }
 
+/* —— 本地 DEV 预填账号（生产构建无此区块） —— */
+.auth-dev-presets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+
+.auth-dev-presets__hint {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #8a968c;
+  margin-right: 2px;
+}
+
+.auth-dev-presets button {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.auth-dev-presets button.is-active {
+  background: var(--ql-forest, #176b60);
+  border-color: var(--ql-forest, #176b60);
+  color: #fff;
+}
+
 /* —— 登录方式切换：一条会走动的下划线 —— */
 .auth-tabs {
   display: grid;
@@ -281,7 +309,7 @@
 }
 
 .auth-tab:focus-visible {
-  outline: 2px solid var(--ql-forest);
+  outline: none;
   outline-offset: 2px;
 }
 
@@ -383,7 +411,7 @@
 }
 
 .auth-eye:focus-visible {
-  outline: 2px solid var(--ql-forest);
+  outline: none;
   outline-offset: 1px;
 }
 
@@ -457,7 +485,7 @@
 }
 
 .auth-submit:focus-visible {
-  outline: 2px solid var(--ql-copper);
+  outline: none;
   outline-offset: 2px;
 }
 
@@ -714,6 +742,57 @@
   justify-content: center;
 }
 
+.auth-forgot-sheet {
+  width: min(440px, 100%);
+}
+
+.auth-forgot-choices {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.auth-forgot-choice {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid #d5ddd0;
+  border-radius: 2px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.auth-forgot-choice:hover {
+  border-color: var(--ql-forest);
+  background: #f7faf5;
+}
+
+.auth-forgot-choice strong {
+  color: var(--ql-ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.auth-forgot-choice span {
+  color: #667366;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.auth-forgot-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.auth-forgot-actions .auth-ghost,
+.auth-forgot-actions .auth-submit,
+.auth-forgot-actions .auth-modal-primary {
+  flex: 1;
+  justify-content: center;
+}
+
 .auth-code-row {
   display: flex;
   align-items: center;
@@ -811,7 +890,7 @@
 .auth-modal-close:focus-visible,
 .auth-ghost:focus-visible,
 .auth-modal-primary:focus-visible {
-  outline: 2px solid var(--ql-copper);
+  outline: none;
   outline-offset: 2px;
 }
 

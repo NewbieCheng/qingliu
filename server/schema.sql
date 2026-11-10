@@ -30,7 +30,9 @@ CREATE TABLE IF NOT EXISTS ql_customers (
 ) ENGINE=InnoDB;
 CREATE TABLE IF NOT EXISTS ql_grants (
  customer_id CHAR(32) NOT NULL, user_id CHAR(32) NOT NULL,
+ workbench_user_id BIGINT UNSIGNED NULL COMMENT '工作台 t_user.id；团队授权可见性按此列判',
  PRIMARY KEY(customer_id,user_id),
+ KEY idx_grants_wb (customer_id, workbench_user_id),
  FOREIGN KEY(customer_id) REFERENCES ql_customers(id) ON DELETE CASCADE,
  FOREIGN KEY(user_id) REFERENCES ql_users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
@@ -76,8 +78,11 @@ CREATE TABLE IF NOT EXISTS ql_reports (
 CREATE TABLE IF NOT EXISTS ql_events (
  seq BIGINT AUTO_INCREMENT PRIMARY KEY, user_id CHAR(32) NOT NULL, customer_id CHAR(32),
  action VARCHAR(60) NOT NULL, detail VARCHAR(500) NOT NULL,
+ space_kind VARCHAR(16) NOT NULL DEFAULT 'personal' COMMENT '事件发生时所在空间：personal|team|platform（见 migrations/006）',
+ space_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '团队/平台空间 id；个人空间为 0',
  created TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
- INDEX(user_id,seq), INDEX(action,seq), INDEX(created,seq)
+ INDEX(user_id,seq), INDEX(action,seq), INDEX(created,seq),
+ INDEX idx_events_space_seq (space_kind, space_id, seq)
 ) ENGINE=InnoDB;
 CREATE TABLE IF NOT EXISTS ql_login_failures (
  failure_key CHAR(64) NOT NULL, at BIGINT NOT NULL, INDEX(failure_key,at)

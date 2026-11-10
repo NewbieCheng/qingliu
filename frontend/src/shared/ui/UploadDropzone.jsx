@@ -1,6 +1,6 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { formatFileSize, randomId } from "@/shared/lib/format.js";
-import { CheckIcon, UploadIcon } from "./icons.jsx";
+import { UploadIcon, XIcon } from "./icons.jsx";
 
 const MAX_FILES = 10;
 const MAX_EACH = 30 * 1024 * 1024;
@@ -9,12 +9,75 @@ const MAX_EACH = 30 * 1024 * 1024;
 const MAX_TOTAL = 60 * 1024 * 1024;
 const MAX_TOTAL_LABEL = "60MB";
 
+function fileExtension(name) {
+  const index = String(name || "").lastIndexOf(".");
+  if (index < 0 || index === name.length - 1) return "FILE";
+  return name.slice(index + 1).toUpperCase();
+}
+
+function UploadFileCard({ file, previewUrl, onRemove, disabled }) {
+  const extension = fileExtension(file.name);
+  const isImage = Boolean(previewUrl);
+
+  return (
+    <div className={`upload-card${isImage ? " is-image" : ""}`}>
+      {isImage ? (
+        <img
+          className="upload-card-thumb"
+          src={previewUrl}
+          alt=""
+          draggable={false}
+        />
+      ) : (
+        <div className="upload-card-body">
+          <span className="upload-card-name" title={file.name}>
+            {file.name}
+          </span>
+          <span className="upload-card-meta">
+            <em className="upload-card-ext">{extension}</em>
+            <span>{formatFileSize(file.size)}</span>
+          </span>
+        </div>
+      )}
+      <button
+        type="button"
+        className="upload-card-remove"
+        aria-label={`移除 ${file.name}`}
+        title="移除"
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          onRemove();
+        }}
+      >
+        <XIcon size={12} />
+      </button>
+    </div>
+  );
+}
+
 export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
   const inputRef = useRef(null);
   const batchInputRef = useRef(null);
   const [files, setFiles] = useState([]);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
+
+  const previewUrls = useMemo(
+    () =>
+      files.map((file) =>
+        file.type?.startsWith("image/") ? URL.createObjectURL(file) : "",
+      ),
+    [files],
+  );
+
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach((url) => {
+        if (url) URL.revokeObjectURL(url);
+      });
+    };
+  }, [previewUrls]);
 
   function ensureBatch() {
     if (batchInputRef.current?.value) return;
@@ -56,9 +119,16 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
     commit(files.filter((_, current) => current !== index));
   }
 
+  function openPicker() {
+    if (!disabled) inputRef.current?.click();
+  }
+
+  const hasFiles = files.length > 0;
+  const canAddMore = files.length < MAX_FILES;
+
   return (
     <div
-      className={`upload-field ${dragging ? "is-dragging" : ""} ${disabled ? "is-disabled" : ""}`}
+      className={`upload-field ${dragging ? "is-dragging" : ""} ${disabled ? "is-disabled" : ""} ${hasFiles ? "has-files" : ""}`}
     >
       <input
         type="file"
@@ -76,61 +146,83 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
         onInvalid={() => setError("请选择至少一份原件")}
       />
       <input ref={batchInputRef} type="hidden" name="batch" />
-      <div
-        className="upload-zone"
-        role="button"
-        tabIndex={disabled ? -1 : 0}
-        onClick={() => !disabled && inputRef.current?.click()}
-        onKeyDown={(event) => {
-          if (!disabled && (event.key === "Enter" || event.key === " ")) {
+
+      {!hasFiles ? (
+        <div
+          className="upload-zone"
+          role="button"
+          tabIndex={disabled ? -1 : 0}
+          onClick={openPicker}
+          onKeyDown={(event) => {
+            if (!disabled && (event.key === "Enter" || event.key === " ")) {
+              event.preventDefault();
+              openPicker();
+            }
+          }}
+          onDragOver={(event) => {
             event.preventDefault();
-            inputRef.current?.click();
-          }
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          if (!disabled) setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(event) => {
-          event.preventDefault();
-          setDragging(false);
-          if (!disabled) pick(event.dataTransfer.files);
-        }}
-      >
-        <span className="upload-icon" aria-hidden="true">
-          <UploadIcon />
-        </span>
-        <strong>把原件拖到这里，或点击选择</strong>
-        <span className="upload-hint">
-          PDF / CSV / XLSX · 每批最多 10 份 · 单份 ≤30MB · 整批 ≤60MB
-        </span>
-      </div>
-      {files.length > 0 && (
-        <ul className="upload-list">
-          <li className="upload-list-head" aria-hidden="true">
-            已选 {files.length} 份待上传（均已通过大小校验）
-          </li>
+            if (!disabled) setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            if (!disabled) pick(event.dataTransfer.files);
+          }}
+        >
+          <span className="upload-icon" aria-hidden="true">
+            <UploadIcon />
+          </span>
+          <strong>把原件拖到这里，或点击选择</strong>
+          <span className="upload-hint">
+            PDF / CSV / XLSX · 每批最多 10 份 · 单份 ≤30MB · 整批 ≤60MB
+          </span>
+        </div>
+      ) : (
+        <div
+          className="upload-cards"
+          onDragOver={(event) => {
+            event.preventDefault();
+            if (!disabled && canAddMore) setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            if (!disabled && canAddMore) pick(event.dataTransfer.files);
+          }}
+        >
           {files.map((file, index) => (
-            <li key={`${file.name}-${file.lastModified}`}>
-              <span className="upload-file-ok" aria-label="大小校验通过">
-                <CheckIcon size={13} />
-              </span>
-              <span className="upload-file-name" title={file.name}>
-                {file.name}
-              </span>
-              <span className="upload-file-size">{formatFileSize(file.size)}</span>
-              <button
-                type="button"
-                className="ghost upload-remove"
-                onClick={() => remove(index)}
-              >
-                移除
-              </button>
-            </li>
+            <UploadFileCard
+              key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+              file={file}
+              previewUrl={previewUrls[index]}
+              disabled={disabled}
+              onRemove={() => remove(index)}
+            />
           ))}
-        </ul>
+          {canAddMore ? (
+            <button
+              type="button"
+              className="upload-card upload-card--add"
+              disabled={disabled}
+              onClick={openPicker}
+            >
+              <span className="upload-card-add-mark" aria-hidden="true">
+                ＋
+              </span>
+              <span>继续添加</span>
+            </button>
+          ) : null}
+        </div>
       )}
+
+      {hasFiles ? (
+        <p className="upload-cards-count">
+          已选 {files.length} 份 · 可继续拖入或点「继续添加」
+        </p>
+      ) : null}
+
       {error && (
         <p className="upload-error" role="alert">
           {error}
