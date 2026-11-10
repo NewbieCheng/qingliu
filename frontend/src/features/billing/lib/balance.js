@@ -1,26 +1,8 @@
-/** 工作台余额：永久桶 + 本期桶。优先读服务端 available_points。 */
-
-export function availablePoints(balance) {
-  if (balance == null) return null;
-  if (balance.available_points != null && balance.available_points !== "") {
-    return Number(balance.available_points) || 0;
-  }
-  const permanent = Number(balance.points_balance || 0);
-  const period = Number(balance.period_points_balance || 0);
-  return permanent + period;
-}
-
-export function permanentPoints(balance) {
-  return Number(balance?.points_balance || 0);
-}
-
-export function periodPoints(balance) {
-  return Number(balance?.period_points_balance || 0);
-}
-
-export function periodExpiresAt(balance) {
-  const raw = balance?.period_expires_at;
-  if (!raw) return null;
-  const date = new Date(raw);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
+// 余额展示口径的实现放在 shared/lib/billing.js：顶栏（shared）也要用同一套读法，
+// 而 shared 不允许依赖 features。这里保留同名导出，features 内部按原路径取用。
+export {
+  availablePoints,
+  permanentPoints,
+  periodExpiresAt,
+  periodPoints,
+} from "@/shared/lib/billing.js";

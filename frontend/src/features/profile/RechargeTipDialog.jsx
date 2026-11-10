@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { navigate } from "@/shared/router/index.js";
 import { queryBalance } from "@/app/queries/index.js";
-import { availablePoints } from "@/features/billing/lib/balance.js";
+import { availablePoints } from "@/features/billing/index.js";
 
 export function RechargeTipDialog({ onClose }) {
   const [points, setPoints] = useState(null);

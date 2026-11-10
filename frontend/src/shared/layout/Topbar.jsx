@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ArrowLeftIcon, RailToggleIcon, TopbarToggleIcon } from "@/shared/ui/icons.jsx";
 import { Link } from "@/shared/router/index.js";
 import { invalidateBalance, queryBalance } from "@/app/queries/index.js";
-import { availablePoints } from "@/features/billing/lib/balance.js";
+import { availablePoints } from "@/shared/lib/billing.js";
 
 // 顶栏：左侧收起侧边栏，右侧全局积分 + 刷新 + 收起顶栏。
 // 积分牌子原来散在各页页头（个人信息 / 充值各一块），现在统一收进顶栏，

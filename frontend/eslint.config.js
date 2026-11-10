@@ -21,6 +21,7 @@ export default [
         fetch: "readonly",
         FormData: "readonly",
         DataTransfer: "readonly",
+        Blob: "readonly",
         URLSearchParams: "readonly",
         AbortController: "readonly",
         CustomEvent: "readonly",

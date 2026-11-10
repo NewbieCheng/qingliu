@@ -152,11 +152,18 @@ func (a *App) pointBalance(ctx context.Context, userID string) (int64, bool) {
 	if err != nil || status != http.StatusOK {
 		return 0, false
 	}
-	// 工作台返回 {data:{points_balance:...}}；sub() 直接取嵌套对象，
-	// 用 obj(str(...)) 会把对象转成字符串再解析，永远得到空 map。
+	// 工作台返回 {data:{points_balance, period_points_balance, available_points}}；
+	// sub() 直接取嵌套对象，用 obj(str(...)) 会把对象转成字符串再解析，永远得到空 map。
 	payload := sub(data, "data")
 	if payload == nil {
 		payload = data
 	}
-	return integer(payload["points_balance"]), true
+	// 可用额度 = 永久桶 + 本期桶（订阅发放的积分全在本期桶，到期作废）。
+	// 只读 points_balance 会把「充了月度套餐」的账号判成 0 分：2026-11-10 线上
+	// 用户付款成功后仍被 402 挡住，就是这个口径差。available_points 由工作台
+	// 统一汇总，有就优先用，避免两边各算一遍。
+	if available := integer(payload["available_points"]); available > 0 {
+		return available, true
+	}
+	return integer(payload["points_balance"]) + integer(payload["period_points_balance"]), true
 }
