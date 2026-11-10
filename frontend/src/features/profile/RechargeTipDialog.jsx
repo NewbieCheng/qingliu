@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { navigate } from "@/shared/router/index.js";
 import { queryBalance } from "@/app/queries/index.js";
+import { availablePoints } from "@/features/billing/lib/balance.js";
 
 export function RechargeTipDialog({ onClose }) {
   const [points, setPoints] = useState(null);
@@ -14,7 +15,7 @@ export function RechargeTipDialog({ onClose }) {
       try {
         const data = await queryBalance();
         if (!alive) return;
-        setPoints(data?.points_balance ?? 0);
+        setPoints(availablePoints(data) ?? 0);
       } catch (requestError) {
         if (!alive) return;
         setError(requestError.message || "余额读取失败");

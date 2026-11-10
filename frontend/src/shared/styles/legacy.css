@@ -37,6 +37,16 @@
 .sku-points{margin:0;font-weight:600;color:var(--ql-forest)}
 .sku-card ul{margin:4px 0 12px;padding-left:18px;color:#46534d;font-size:13px;line-height:1.65}
 .sku-card button{margin-top:auto}
+.balance-strip{display:grid;gap:10px}
+.balance-strip-main{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.balance-strip-label{font-size:12px;letter-spacing:.08em;color:var(--ql-muted)}
+.balance-strip-total{font-family:"Noto Serif SC",serif;font-size:28px;line-height:1;color:var(--ql-forest);font-variant-numeric:tabular-nums}
+.balance-strip-total small{margin-left:6px;font-size:13px;font-weight:500;color:var(--ql-muted)}
+.balance-strip-split{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:#46534d}
+.balance-strip-split strong{font-variant-numeric:tabular-nums}
+.balance-strip-hint{margin:0;font-size:12px;line-height:1.6}
+.ledger-expire td{color:#8a5a3a}
+.ledger-expire-delta{color:#a33b31!important}
 .checkout{display:flex;gap:24px;align-items:center;justify-content:space-between}
 .checkout-main{flex:1;min-width:0}
 .checkout-qr{width:190px;height:190px;border:1px solid var(--ql-line);padding:8px;background:#fff}

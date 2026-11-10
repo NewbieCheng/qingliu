@@ -5,11 +5,13 @@ import { Loading } from "@/shared/ui/Loading.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { useAuth } from "@/features/auth/index.js";
 import {
+  BalanceStrip,
   CheckoutPanel,
   LedgerTable,
   OrdersTable,
   SkuGrid,
   createOrder,
+  getBalance,
   getLedgers,
   getOrder,
   getOrders,
@@ -24,6 +26,7 @@ export function RechargePage() {
   const { user } = useAuth();
   const space = user?.space || { kind: user?.kind || "personal", id: 0 };
   const [skus, setSkus] = useState([]);
+  const [balance, setBalance] = useState(null);
   const [orders, setOrders] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [ledgerPage, setLedgerPage] = useState(1);
@@ -84,6 +87,11 @@ export function RechargePage() {
     try {
       const skuData = await getSkus();
       setSkus(skuData.items || []);
+    } catch (requestError) {
+      failures.push(requestError.message);
+    }
+    try {
+      setBalance(await getBalance());
     } catch (requestError) {
       failures.push(requestError.message);
     }
@@ -195,6 +203,7 @@ export function RechargePage() {
           {error}
         </p>
       )}
+      <BalanceStrip balance={balance} />
       <SkuGrid
         skus={skus}
         busy={busy}

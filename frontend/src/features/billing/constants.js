@@ -12,4 +12,19 @@ export const LEDGER_CHANGE = {
   4: "人工调整",
   5: "预授权退回",
   6: "充值到账",
+  7: "本期额度到期作废",
 };
+
+/** 按 change_type + period_points_delta 给业务员看清「本期 / 永久」。 */
+export function ledgerChangeLabel(ledger) {
+  const type = Number(ledger?.change_type);
+  if (type === 7) return LEDGER_CHANGE[7];
+  const periodDelta = Number(ledger?.period_points_delta || 0);
+  if (type === 6) {
+    if (periodDelta > 0) return "订阅到账（本期）";
+    if (periodDelta < 0) return "本期额度变动";
+    return "充值到账（永久）";
+  }
+  if (type === 3 && periodDelta < 0) return "AI 消耗（含本期）";
+  return LEDGER_CHANGE[type] || ledger?.change_type || "—";
+}

@@ -2,7 +2,7 @@ import React from "react";
 import { formatDateTime } from "@/shared/lib/format.js";
 import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
 import { Pagination } from "@/shared/ui/Pagination.jsx";
-import { LEDGER_CHANGE } from "../constants.js";
+import { ledgerChangeLabel } from "../constants.js";
 
 export function LedgerTable({ ledgers, page = 1, pageSize = 10, total = 0, onPageChange }) {
   return (
@@ -22,23 +22,36 @@ export function LedgerTable({ ledgers, page = 1, pageSize = 10, total = 0, onPag
             </tr>
           </thead>
           <tbody>
-            {ledgers.map((ledger) => (
-              <tr key={ledger.ledger_id}>
-                <td className="muted">
-                  {formatDateTime(ledger.occurred_at || ledger.created_at)}
-                </td>
-                <td>{LEDGER_CHANGE[ledger.change_type] || ledger.change_type}</td>
-                <td
-                  className={
-                    ledger.points_delta >= 0 ? "number positive" : "number"
-                  }
+            {ledgers.map((ledger) => {
+              const isExpire = Number(ledger.change_type) === 7;
+              const reason =
+                ledger.reason ||
+                (isExpire ? "本期额度到期未用完，已作废" : "—");
+              return (
+                <tr
+                  key={ledger.ledger_id}
+                  className={isExpire ? "ledger-expire" : undefined}
                 >
-                  {ledger.points_delta >= 0 ? "+" : ""}
-                  {ledger.points_delta}
-                </td>
-                <td>{ledger.reason || "—"}</td>
-              </tr>
-            ))}
+                  <td className="muted">
+                    {formatDateTime(ledger.occurred_at || ledger.created_at)}
+                  </td>
+                  <td>{ledgerChangeLabel(ledger)}</td>
+                  <td
+                    className={
+                      ledger.points_delta >= 0
+                        ? "number positive"
+                        : isExpire
+                          ? "number ledger-expire-delta"
+                          : "number"
+                    }
+                  >
+                    {ledger.points_delta >= 0 ? "+" : ""}
+                    {ledger.points_delta}
+                  </td>
+                  <td>{reason}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

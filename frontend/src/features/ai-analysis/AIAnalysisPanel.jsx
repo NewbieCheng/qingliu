@@ -9,6 +9,7 @@ import { FoldPanel } from "@/shared/ui/FoldPanel.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { navigate } from "@/shared/router/index.js";
 import { queryBalance } from "@/app/queries/index.js";
+import { availablePoints } from "@/features/billing/lib/balance.js";
 import { isInsufficientPointsError } from "@/shared/lib/billing.js";
 import { getAnalyses, startAnalysis } from "./api.js";
 import { enrichAIResult, formatAISummary } from "./format-result.js";
@@ -117,7 +118,7 @@ function AIAnalysisDialog({ cid, onClose }) {
     let alive = true;
     queryBalance()
       .then((data) => {
-        if (alive) setPoints(data?.points_balance ?? 0);
+        if (alive) setPoints(availablePoints(data) ?? 0);
       })
       .catch(() => {
         if (alive) setPoints(null);
