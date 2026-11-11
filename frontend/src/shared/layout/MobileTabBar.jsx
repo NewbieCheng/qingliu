@@ -4,20 +4,15 @@ import { LockIcon, NavIcon } from "@/shared/ui/icons.jsx";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { isQingliuAdmin } from "@/shared/lib/constants.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import {
   MOBILE_PRIMARY_TABS,
   isMobileMeActive,
   isNavItemActive,
 } from "./navigation.js";
 
-const TEAM_NAV_LOCKED =
-  "个人空间不支持团队与权限管理。请开通团队版，或切换到团队空间后再使用。";
-
-/**
- * 手机端底部导航：客户 / 充值 / 我的。
- * 「我的」展开底部面板，收纳个人信息、空间切换、团队入口与退出。
- */
 export function MobileTabBar({ user, pathname, onPassword, onLogout, spaceSwitcher = null }) {
+  const { t } = useI18n();
   const sheetId = useId();
   const [meOpen, setMeOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -51,7 +46,7 @@ export function MobileTabBar({ user, pathname, onPassword, onLogout, spaceSwitch
         <button
           type="button"
           className="mobile-sheet-backdrop"
-          aria-label="关闭我的面板"
+          aria-label={t("mobile.close_me")}
           onClick={() => setMeOpen(false)}
         />
       ) : null}
@@ -62,20 +57,20 @@ export function MobileTabBar({ user, pathname, onPassword, onLogout, spaceSwitch
           className="mobile-me-sheet"
           role="dialog"
           aria-modal="true"
-          aria-label="我的"
+          aria-label={t("mobile.me_menu")}
         >
           <div className="mobile-me-handle" aria-hidden="true" />
           <header className="mobile-me-head">
             <div>
-              <strong>{user?.display || "用户"}</strong>
-              <p className="muted">{user?.email || "工作台账号"}</p>
+              <strong>{user?.display || t("space.user")}</strong>
+              <p className="muted">{user?.email || t("space.account")}</p>
             </div>
             <button
               type="button"
               className="ghost"
               onClick={() => setMeOpen(false)}
             >
-              关闭
+              {t("common.close")}
             </button>
           </header>
 
@@ -83,14 +78,14 @@ export function MobileTabBar({ user, pathname, onPassword, onLogout, spaceSwitch
             {spaceSwitcher ? spaceSwitcher(false) : null}
           </div>
 
-          <nav className="mobile-me-nav" aria-label="我的菜单">
+          <nav className="mobile-me-nav" aria-label={t("mobile.me_menu")}>
             <Link
               to="/profile"
               className={`mobile-me-link${pathname === "/profile" ? " active" : ""}`}
               onClick={() => setMeOpen(false)}
             >
               <NavIcon kind="user" size={18} />
-              <span>个人信息</span>
+              <span>{t("nav.profile")}</span>
             </Link>
             {isAdmin ? (
               teamManaged ? (
@@ -104,16 +99,16 @@ export function MobileTabBar({ user, pathname, onPassword, onLogout, spaceSwitch
                   onClick={() => setMeOpen(false)}
                 >
                   <NavIcon kind="admin" size={18} />
-                  <span>团队与权限</span>
+                  <span>{t("nav.admin")}</span>
                 </Link>
               ) : (
                 <button
                   type="button"
                   className="mobile-me-link is-locked"
-                  onClick={() => toast(TEAM_NAV_LOCKED, "error")}
+                  onClick={() => toast(t("nav.team_locked"), "error")}
                 >
                   <NavIcon kind="admin" size={18} />
-                  <span>团队与权限</span>
+                  <span>{t("nav.admin")}</span>
                 </button>
               )
             ) : null}
@@ -126,7 +121,7 @@ export function MobileTabBar({ user, pathname, onPassword, onLogout, spaceSwitch
               }}
             >
               <LockIcon size={18} />
-              <span>修改密码</span>
+              <span>{t("profile.change_password")}</span>
             </button>
             <button
               type="button"
@@ -136,17 +131,15 @@ export function MobileTabBar({ user, pathname, onPassword, onLogout, spaceSwitch
                 setLogoutOpen(true);
               }}
             >
-              <span>退出登录</span>
+              <span>{t("auth.sign_out")}</span>
             </button>
           </nav>
         </section>
       ) : null}
 
       {logoutOpen ? (
-        <Modal title="退出登录" className="modal--sm" onClose={() => setLogoutOpen(false)}>
-          <p className="account-dialog-lead">
-            退出后需要重新登录才能继续使用青流。当前设备上的会话会被结束，不影响其他设备。
-          </p>
+        <Modal title={t("auth.sign_out_title")} className="modal--sm" onClose={() => setLogoutOpen(false)}>
+          <p className="account-dialog-lead">{t("auth.sign_out_description")}</p>
           <div className="account-dialog-actions">
             <button
               type="button"
@@ -154,7 +147,7 @@ export function MobileTabBar({ user, pathname, onPassword, onLogout, spaceSwitch
               onClick={() => setLogoutOpen(false)}
               disabled={logoutBusy}
             >
-              取消
+              {t("common.cancel")}
             </button>
             <button
               type="button"
@@ -171,13 +164,13 @@ export function MobileTabBar({ user, pathname, onPassword, onLogout, spaceSwitch
                 }
               }}
             >
-              {logoutBusy ? "正在退出…" : "确认退出"}
+              {logoutBusy ? t("auth.signing_out") : t("auth.confirm_sign_out")}
             </button>
           </div>
         </Modal>
       ) : null}
 
-      <nav className="mobile-tabbar" aria-label="手机主导航">
+      <nav className="mobile-tabbar" aria-label={t("mobile.primary_navigation")}>
         {MOBILE_PRIMARY_TABS.map((item) => {
           const active = isNavItemActive(item, pathname);
           return (
@@ -188,7 +181,7 @@ export function MobileTabBar({ user, pathname, onPassword, onLogout, spaceSwitch
               aria-current={active ? "page" : undefined}
             >
               <NavIcon kind={item.icon} size={20} />
-              <span>{item.label}</span>
+              <span>{t(item.to === "/recharge" ? "nav.recharge" : "nav.clients")}</span>
             </Link>
           );
         })}
@@ -200,7 +193,7 @@ export function MobileTabBar({ user, pathname, onPassword, onLogout, spaceSwitch
           onClick={() => setMeOpen((value) => !value)}
         >
           <NavIcon kind="user" size={20} />
-          <span>我的</span>
+          <span>{t("nav.mobile.me")}</span>
         </button>
       </nav>
     </>

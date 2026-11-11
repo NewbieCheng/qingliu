@@ -1,8 +1,10 @@
 import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { XIcon } from "@/shared/ui/icons.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 export function Modal({ title, onClose, children, className = "" }) {
+  const { t } = useI18n();
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key === "Escape") onClose();
@@ -35,7 +37,7 @@ export function Modal({ title, onClose, children, className = "" }) {
             type="button"
             className="modal-close"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("common.close")}
             autoFocus
           >
             <XIcon size={16} />

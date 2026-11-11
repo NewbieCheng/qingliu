@@ -17,7 +17,7 @@ export function CreateMemberSuccessDialog({ member, onClose }) {
 
   return (
     <Modal
-      title="成员已开通"
+      title="Member created"
       className="modal--sm create-member-success"
       onClose={onClose}
     >
@@ -29,15 +29,15 @@ export function CreateMemberSuccessDialog({ member, onClose }) {
       </p>
       <dl className="create-member-success-meta">
         <div>
-          <dt>账号</dt>
+          <dt>Account</dt>
           <dd>{member.username}</dd>
         </div>
         <div>
-          <dt>姓名</dt>
+          <dt>Name</dt>
           <dd>{member.display}</dd>
         </div>
         <div>
-          <dt>角色</dt>
+          <dt>Role</dt>
           <dd>{roleLabel}</dd>
         </div>
       </dl>

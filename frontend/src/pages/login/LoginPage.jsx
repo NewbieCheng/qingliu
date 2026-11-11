@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { LoginForm, RegisterForm } from "@/features/auth/index.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
+import { LanguageSwitch } from "@/shared/ui/LanguageSwitch.jsx";
 
 /**
  * 登录页：一张可复核的工作底稿。
@@ -11,6 +13,7 @@ import { LoginForm, RegisterForm } from "@/features/auth/index.js";
  * 人机验证不常驻在表单里：用户点「登录」才出题，验证通过后再提交登录。
  */
 export function LoginPage() {
+  const { t } = useI18n();
   const [tab, setTab] = useState("login");
   const registering = tab === "register";
 
@@ -29,25 +32,18 @@ export function LoginPage() {
                 aria-hidden="true"
                 className="auth-brand-mark"
               />
-              <span className="auth-brand-name">青流</span>
-              <span className="auth-brand-tag">流水初筛底稿</span>
+              <span className="auth-brand-name">{t("app.name")}</span>
+              <span className="auth-brand-tag">{t("auth.cover_tag")}</span>
             </header>
 
             <div className="auth-cover-copy">
-              <h1 className="auth-cover-headline">
-                把每一笔流水，
-                <br />
-                落成可复核的底稿。
-              </h1>
-              <p className="auth-cover-sub">
-                银行流水自动解析、疑点逐笔标注、报告一键生成。
-                账号与「今天不加班」统一管理。
-              </p>
+              <h1 className="auth-cover-headline">{t("auth.cover_headline")}</h1>
+              <p className="auth-cover-sub">{t("auth.cover_desc")}</p>
             </div>
 
             <footer className="auth-cover-foot">
-              <span className="auth-cover-badge">今天不加班 · 旗下产品</span>
-              <span className="auth-cover-note">内部系统 · 请勿外传</span>
+              <span className="auth-cover-badge">{t("auth.cover_badge")}</span>
+              <span className="auth-cover-note">{t("auth.cover_internal")}</span>
             </footer>
           </div>
         </div>
@@ -55,13 +51,16 @@ export function LoginPage() {
         <section className="auth-panel">
           <div className="auth-panel-inner">
             <header className="auth-panel-head">
-              <h2 className="auth-panel-title">
-                {registering ? "创建账号" : "登录青流"}
-              </h2>
+              <div className="auth-panel-head-row">
+                <h2 className="auth-panel-title">
+                  {registering ? t("auth.register_title") : t("auth.login_title")}
+                </h2>
+                <LanguageSwitch className="language-switch--login" />
+              </div>
               <p className="auth-panel-sub">
                 {registering
-                  ? "使用工作邮箱注册，账号同样适用于今天不加班工作台"
-                  : "使用今天不加班工作台账号直接登录"}
+                  ? t("auth.register_subtitle")
+                  : t("auth.login_subtitle")}
               </p>
             </header>
 
@@ -72,7 +71,7 @@ export function LoginPage() {
             )}
 
             <p className="auth-panel-foot">
-              青流工作台 · 账号由「今天不加班」统一管理
+              {t("auth.footer")}
             </p>
           </div>
         </section>

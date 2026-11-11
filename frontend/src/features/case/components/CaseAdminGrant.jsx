@@ -45,8 +45,8 @@ export function CaseAdminGrant({ onGrant, onError }) {
               setOpen(false);
             }}
           >
-            <FormRow label="选择成员">
-              <Select label="选择成员" name="workbench_user_id" required>
+            <FormRow label="Select member">
+              <Select label="Select member" name="workbench_user_id" required>
                 <option value="">请选择工作台成员</option>
                 {(admin?.users || []).map((member) => (
                   <option
@@ -58,8 +58,8 @@ export function CaseAdminGrant({ onGrant, onError }) {
                 ))}
               </Select>
             </FormRow>
-            <FormRow label="权限操作">
-              <Select label="权限操作" name="action" defaultValue="grant">
+            <FormRow label="Access actions">
+              <Select label="Access actions" name="action" defaultValue="grant">
                 <option value="grant">授予访问</option>
                 <option value="revoke">撤销访问</option>
               </Select>
@@ -70,7 +70,7 @@ export function CaseAdminGrant({ onGrant, onError }) {
                 className="ghost"
                 onClick={() => setOpen(false)}
               >
-                取消
+                Cancel
               </button>
               <button className="primary">保存权限</button>
             </ModalActions>

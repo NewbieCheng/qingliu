@@ -8,7 +8,7 @@ export function DeleteMemberDialog({ member, onClose, onConfirm }) {
 
   return (
     <Modal
-      title="删除成员"
+      title="Remove member"
       onClose={onClose}
       className="modal--sm delete-member-dialog"
     >
@@ -23,7 +23,7 @@ export function DeleteMemberDialog({ member, onClose, onConfirm }) {
           onClose();
         }}
       >
-        <Field label="输入你的登录密码以确认">
+        <Field label="Enter your password to confirm">
           <input
             name="password"
             type="password"
@@ -31,13 +31,13 @@ export function DeleteMemberDialog({ member, onClose, onConfirm }) {
             required
             minLength="1"
             maxLength="72"
-            placeholder="当前管理员密码"
+            placeholder="Current admin password"
             autoFocus
           />
         </Field>
         <ModalActions>
           <button type="button" className="ghost" onClick={onClose}>
-            取消
+            Cancel
           </button>
           <button type="submit" className="primary is-danger-action">
             确认删除

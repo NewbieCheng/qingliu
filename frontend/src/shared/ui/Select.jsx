@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 function optionLabel(node) {
   if (node == null || node === false) return "";
@@ -74,6 +75,7 @@ export function Select({
   "aria-label": ariaLabel,
   ...rest
 }) {
+  const { t } = useI18n();
   const options = useMemo(() => parseOptions(children), [children]);
   const isControlled = value !== undefined;
   const firstValue = options[0]?.value ?? "";
@@ -237,7 +239,7 @@ export function Select({
     }
   }
 
-  const display = selected?.label || "请选择";
+  const display = selected?.label || t("common.select_placeholder");
 
   return (
     <div

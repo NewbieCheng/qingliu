@@ -24,7 +24,7 @@ import {
 } from "@/app/queries/index.js";
 
 const TEAM_LOCKED_HINT =
-  "个人空间不支持团队成员管理。请开通团队版，或切换到团队空间后再开通/启停工作台成员。";
+  "Personal space does not support team members. Open Team plan or switch to a team space before managing members.";
 
 export function AdminPage() {
   const { user } = useAuth();
@@ -108,8 +108,8 @@ export function AdminPage() {
         title="明确分工，保留每次核对。"
         description={
           teamManaged
-            ? "成员账号以工作台为准。业务员与复核员只可访问获授权的客户；管理员可管理全部客户。"
-            : "当前是个人空间：可查看自己的操作记录；团队成员管理需开通或切换到团队空间。"
+            ? "Member accounts follow the workbench. Sales/reviewers only see granted customers; admins manage all."
+            : "Personal space: view your own activity. Team member management needs a team space."
         }
       />
       {error && <p className="error">{error}</p>}
@@ -128,25 +128,25 @@ export function AdminPage() {
                 <button
                   type="button"
                   className="btn-chip"
-                  title="刷新成员列表"
-                  aria-label="刷新成员列表"
+                  title="Refresh members"
+                  aria-label="Refresh members"
                   onClick={() => {
                     invalidateAdmin();
                     void loadUsers(true);
                   }}
                 >
                   <RefreshIcon size={14} />
-                  <span>刷新</span>
+                  <span>Refresh</span>
                 </button>
                 <button
                   type="button"
                   className="btn-chip is-primary-action"
                   title="开通工作台成员"
-                  aria-label="新增账号"
+                  aria-label="Add account"
                   onClick={() => setCreateOpen(true)}
                 >
                   <UserPlusIcon size={14} />
-                  <span>新增账号</span>
+                  <span>Add account</span>
                 </button>
               </div>
             </div>
@@ -160,7 +160,7 @@ export function AdminPage() {
                 onLockedAction={refuseTeamAction}
                 onToggle={async (userId) => {
                   if (userId === user?.id) {
-                    toast("不可停用当前账号", "error");
+                    toast("Cannot disable the current account", "error");
                     return;
                   }
                   await toggleMember(userId);
@@ -169,7 +169,7 @@ export function AdminPage() {
                 }}
                 onDelete={(member) => {
                   if (member.id === user?.id) {
-                    toast("不可删除当前账号", "error");
+                    toast("Cannot delete the current account", "error");
                     return;
                   }
                   setDeletingMember(member);

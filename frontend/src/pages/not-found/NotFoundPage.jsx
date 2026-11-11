@@ -9,11 +9,11 @@ export function NotFoundPage() {
     <main>
       <PageHeader
         title="这里没有可打开的工作底稿。"
-        description="链接可能已失效，或当前账号没有访问权限。"
+        description="Link may have expired, or this account has no access."
         actions={
           <Link className="back" to="/">
             <ArrowLeftIcon />
-            返回客户档案
+            Back to customers
           </Link>
         }
       />

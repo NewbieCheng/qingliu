@@ -11,6 +11,10 @@ import {
   reviewCanNext,
   reviewPagerLabel,
 } from "../../lib/review-paging.js";
+import {
+  adoptedAIRows,
+  highConfidenceSuggested,
+} from "../../lib/ai-adopt.js";
 
 export function ReviewStep({
   data,
@@ -25,11 +29,15 @@ export function ReviewStep({
   onPageChange,
   onRangeChange,
   onReview,
+  onAIAdopt,
+  onAIRevoke,
   onRulesSave,
   onCoverage,
   onOpenOriginal,
   onStepChange,
 }) {
+  const highAI = highConfidenceSuggested(data.rows);
+  const adoptedAI = adoptedAIRows(data.rows);
   function changeView(value) {
     onViewChange(value);
     onPageChange(1);
@@ -91,6 +99,37 @@ export function ReviewStep({
             onNext={() => onPageChange(page + 1)}
             label={reviewPagerLabel(page, data.row_count)}
           />
+          {(highAI.length > 0 || adoptedAI.length > 0) && (
+            <div className="review-action review-action--ai" role="group" aria-label="AI 预勾">
+              {highAI.length > 0 ? (
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={data.busy || !onAIAdopt}
+                  onClick={() => onAIAdopt?.()}
+                >
+                  采纳高置信 AI 建议（{highAI.length}）
+                </button>
+              ) : null}
+              {adoptedAI.length > 0 ? (
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={data.busy || !onAIRevoke}
+                  onClick={() =>
+                    onAIRevoke?.(
+                      (selected.length
+                        ? adoptedAI.filter((row) => selected.includes(row.id))
+                        : adoptedAI
+                      ).map((row) => row.id),
+                    )
+                  }
+                >
+                  撤销 AI 采纳
+                </button>
+              ) : null}
+            </div>
+          )}
           <BulkReviewForm
             selectedCount={selected.length}
             busy={data.busy}

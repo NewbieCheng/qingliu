@@ -1,0 +1,46 @@
+{
+  "_comment": "仅用于前端 enrich/导出形状单测。AI 验收必须 POST /ai-analysis 调真实模型，勿把本文件当分析结果。",
+  "summary": "合成客户近两月流水以货款与项目尾款为主，夹杂结息、提现与一笔借款，建议人工确认经营口径。",
+  "disclaimer": "本结果仅供内部初筛参考，不构成授信或贷款结论。",
+  "process": [
+    "已读取合成银行流水样本",
+    "按备注归类收入结构",
+    "标记结息、提现、借款为待核实"
+  ],
+  "income_structure": [
+    {
+      "item": "货款/项目回款",
+      "amount": "4480.50",
+      "evidence": "BK-20260105-001 / BK-20260122-005"
+    },
+    {
+      "item": "钱包相关转入",
+      "amount": "500.00",
+      "evidence": "BK-20260118-004 提现"
+    }
+  ],
+  "anomalies": [
+    {
+      "item": "存款结息",
+      "amount": "0.36",
+      "evidence": "摘要含结息，通常不计入经营",
+      "transaction_id": "REPLACE_WITH_REAL_TX_ID"
+    },
+    {
+      "item": "平台提现",
+      "amount": "500.00",
+      "evidence": "摘要含提现，避免与钱包重复计入"
+    }
+  ],
+  "questions": [
+    {
+      "item": "借款 200 元是否经营往来？",
+      "evidence": "BK-20260201-006",
+      "transaction_id": "REPLACE_WITH_REAL_TX_ID"
+    },
+    {
+      "item": "提现是否已在微信侧统计？",
+      "evidence": "BK-20260118-004"
+    }
+  ]
+}

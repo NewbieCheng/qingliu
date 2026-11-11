@@ -5,6 +5,7 @@ import { Modal } from "@/shared/ui/Modal.jsx";
 import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { originalPageURL } from "../../api.js";
 import { loadPagePreview } from "../../lib/page-preview-cache.js";
+import { prefetchNeighborPages } from "../../lib/prefetch-pages.js";
 
 export function OriginalEvidenceDialog({ cid, original, onClose }) {
   const row = original.row;
@@ -34,15 +35,22 @@ export function OriginalEvidenceDialog({ cid, original, onClose }) {
         }
         objectUrl = url;
         setPreviewUrl(url);
+        void prefetchNeighborPages({
+          cid,
+          documentId: row.document_id,
+          sha: original.sha || "",
+          page,
+          total,
+        });
       })
       .catch((error) => {
-        if (!cancelled) setPreviewError(error.message || "原件页加载失败");
+        if (!cancelled) setPreviewError(error.message || "Failed to load original page");
       });
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [cid, isPdf, original.sha, page, row.document_id]);
+  }, [cid, isPdf, original.sha, page, row.document_id, total]);
 
   return (
     <Modal
@@ -76,14 +84,14 @@ export function OriginalEvidenceDialog({ cid, original, onClose }) {
         <div>
           <dl>
             {[
-              ["日期", row.date],
-              ["对手方", row.counterparty],
+              ["Date", row.date],
+              ["Counterparty", row.counterparty],
               ["收入（元）", formatCents(row.income)],
               ["支出（元）", formatCents(row.expense)],
               ["余额（元）", formatCents(row.balance)],
               ["本方账户", row.account],
               ["对方账户", row.counter_account],
-              ["摘要", row.memo],
+              ["Memo", row.memo],
               [
                 "定位",
                 `${row.filename} · 第${row.page}页 · ${row.locator}`,
@@ -91,7 +99,7 @@ export function OriginalEvidenceDialog({ cid, original, onClose }) {
             ].map(([label, value]) => (
               <React.Fragment key={label}>
                 <dt>{label}</dt>
-                <dd>{value || "原件未提供"}</dd>
+                <dd>{value || "Original not provided"}</dd>
               </React.Fragment>
             ))}
           </dl>

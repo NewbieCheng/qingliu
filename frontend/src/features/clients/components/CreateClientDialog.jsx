@@ -28,7 +28,7 @@ export function CreateClientDialog({ onClose }) {
           />
         </Field>
         <Field label="企业名称（选填）">
-          <input name="company" placeholder="可选" />
+          <input name="company" placeholder="Optional" />
         </Field>
         <div className="form-footer">
           <label className="check">
@@ -37,7 +37,7 @@ export function CreateClientDialog({ onClose }) {
           </label>
           <ModalActions className="actions-end">
             <button type="button" className="ghost" onClick={onClose}>
-              取消
+              Cancel
             </button>
             <button className="primary">创建档案</button>
           </ModalActions>

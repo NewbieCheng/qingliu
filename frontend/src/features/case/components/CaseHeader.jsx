@@ -17,7 +17,7 @@ export function CaseHeader({ data, adminAction = null }) {
                 ? "后台处理中"
                 : data.submitted_current
                   ? "已提交复核"
-                  : "待核对"}
+                  : "Needs check"}
             </StatusBadge>
             <span>
               <strong>{data.docs.length}</strong> 份资料

@@ -9,7 +9,7 @@ const TABS = [
 ];
 
 const KIND_SECTIONS = [
-  { id: "plan", title: "周期套餐", hint: "按月额度；本月买过会暂时不可再买。" },
+  { id: "plan", title: "周期套餐", hint: "This period’s quota has an expiry; purchase limits follow package rules." },
   { id: "topup", title: "额度充值包", hint: "永久积分，不够用时可反复购买。" },
 ];
 
@@ -17,6 +17,24 @@ function periodLabel(sku) {
   const days = Number(sku.period_days || 0);
   if (days > 0) return `/ ${days} 天`;
   return "/ 月";
+}
+
+function purchaseLimitFallback(sku) {
+  const window = String(sku?.purchase_window || "")
+    .trim()
+    .toLowerCase();
+  const limit = Number(sku?.purchase_limit || 0);
+  if (!(limit > 0)) return "额度不够请买充值包；可按规则再次购买";
+  if (window === "calendar_year") return `本自然年限购 ${limit} 次；额度不够请买充值包`;
+  if (window === "calendar_quarter") return `本自然季限购 ${limit} 次；额度不够请买充值包`;
+  if (window === "rolling_days") {
+    const days = Number(sku?.purchase_window_days || 0);
+    return days > 0
+      ? `近 ${days} 天限购 ${limit} 次；额度不够请买充值包`
+      : `已配置滚动限购 ${limit} 次；额度不够请买充值包`;
+  }
+  if (window === "none") return `终身限购 ${limit} 次`;
+  return `本自然月限购 ${limit} 次；额度不够请买充值包`;
 }
 
 function skuHints(sku) {
@@ -30,7 +48,7 @@ function skuHints(sku) {
     const days = Number(sku.period_days || 30);
     return [
       `付款后 ${days} 天内有效，到期未用完作废`,
-      "本自然月限购；额度不够请买充值包",
+      purchaseLimitFallback(sku),
     ];
   }
   return ["永久积分，不过期", "可反复购买"];
@@ -43,7 +61,7 @@ function SkuCard({ sku, busy, onChoose }) {
     sku.points_kind === "period";
   const purchasable = isSkuPurchasable(sku);
   const disabled = !purchasable || busy === sku.code;
-  let buttonLabel = isPeriod ? "开通本月额度" : "立即充值";
+  let buttonLabel = isPeriod ? "开通本期额度" : "立即充值";
   if (busy === sku.code) buttonLabel = "正在下单…";
   else if (!purchasable) buttonLabel = ineligibleLabel(sku) || "暂不可买";
 
@@ -108,7 +126,7 @@ export function SkuGrid({ skus, busy, onChoose, defaultTab = "personal" }) {
       <div className="sku-section-head">
         <div className="section-title">
           <h2>选择套餐</h2>
-          <p>周期套餐按月限购；额度不够请买充值包。支付成功后自动到账。</p>
+          <p>周期套餐按套餐规则限购；额度不够请买充值包。支付成功后自动到账。</p>
         </div>
         <div className="sku-tabs" role="tablist" aria-label="套餐类型">
           {TABS.map((item) => (
@@ -128,8 +146,8 @@ export function SkuGrid({ skus, busy, onChoose, defaultTab = "personal" }) {
       {visible.length === 0 && (
         <p className="muted">
           {tab === "team"
-            ? "暂无团队套餐，请联系管理员在工作台配置。"
-            : "暂无个人套餐，请联系管理员在工作台配置。"}
+            ? "No team packages. Ask an admin to configure them on the workbench."
+            : "No personal packages. Ask an admin to configure them on the workbench."}
         </p>
       )}
       {KIND_SECTIONS.map((section) => {

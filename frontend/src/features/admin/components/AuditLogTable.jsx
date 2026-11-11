@@ -16,7 +16,7 @@ function AuditDetailCell({ event }) {
     <span className="audit-detail-cell">
       {hasCustomer ? (
         <Link to={`/clients/${event.customer_id}`}>
-          {customerName || "客户档案"}
+          {customerName || "Customers"}
         </Link>
       ) : null}
       {detailLabel ? (
@@ -35,9 +35,9 @@ export function AuditLogTable({ events }) {
       <table>
         <thead>
           <tr>
-            <th>时间</th>
+            <th>Time</th>
             <th>成员</th>
-            <th>操作</th>
+            <th>Actions</th>
             <th>客户 / 详情</th>
           </tr>
         </thead>

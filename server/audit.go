@@ -27,32 +27,38 @@ type auditActionMeta struct {
 //   - 管理台筛选下拉与 action_label 也只来自这里。
 // 噪音动作（切空间、翻原件、任务 *_finished / AI 进度）不进目录，也就不会落库。
 var auditActionCatalog = map[string]auditActionMeta{
-	"login":               {Label: "登录", Category: "account"},
-	"change_password":     {Label: "修改密码", Category: "account"},
+	"login":               {Label: "Sign in", Category: "account"},
+	"change_password":     {Label: "Change password", Category: "account"},
 	"enable_space":        {Label: "开启空间", Category: "account"},
 	"create_customer":     {Label: "新建客户", Category: "customer"},
-	"upload_queued":       {Label: "上传资料", Category: "customer"},
-	"confirm_ownership":   {Label: "确认归属", Category: "customer"},
+	"upload_queued":       {Label: "Upload files", Category: "customer"},
+	"upload_parsed":       {Label: "本机解析入库", Category: "customer"},
+	"confirm_ownership":   {Label: "Confirm ownership", Category: "customer"},
 	"confirm_period":      {Label: "确认期间", Category: "customer"},
 	"update_rules":        {Label: "更新规则", Category: "customer"},
 	"review_transactions": {Label: "核对交易", Category: "customer"},
-	"submit_review":       {Label: "提交复核", Category: "customer"},
-	"report_queued":       {Label: "生成报告", Category: "customer"},
-	"download_report":     {Label: "下载报告", Category: "customer"},
+	"submit_review":       {Label: "Submit for review", Category: "customer"},
+	"report_queued":       {Label: "Generate report", Category: "customer"},
+	"download_report":     {Label: "Download report", Category: "customer"},
 	"job_cancelled":       {Label: "取消任务", Category: "customer"},
+	"ai_suggest":          {Label: "写入 AI 预勾", Category: "customer"},
+	"ai_adopt":            {Label: "采纳 AI 建议", Category: "customer"},
+	"ai_revoke":           {Label: "撤销 AI 建议", Category: "customer"},
+	"ai_writeback":        {Label: "视觉写回核对", Category: "customer"},
 	"add_user":            {Label: "新增成员", Category: "admin"},
 	"toggle_user":         {Label: "启停成员", Category: "admin"},
-	"remove_user":         {Label: "删除成员", Category: "admin"},
+	"remove_user":         {Label: "Remove member", Category: "admin"},
 	"change_grant":        {Label: "调整客户权限", Category: "admin"},
 }
 
 // auditActionOrder 控制筛选下拉里的展示顺序。
 var auditActionOrder = []string{
 	"login", "change_password", "enable_space",
-	"create_customer", "upload_queued",
+	"create_customer", "upload_queued", "upload_parsed",
 	"confirm_ownership", "confirm_period", "update_rules",
 	"review_transactions", "submit_review",
 	"report_queued", "download_report", "job_cancelled",
+	"ai_suggest", "ai_adopt", "ai_revoke", "ai_writeback",
 	"add_user", "toggle_user", "remove_user", "change_grant",
 }
 
@@ -87,11 +93,11 @@ func auditSpaceDetailLabel(detail string) string {
 	kind, _, _ := strings.Cut(strings.TrimSpace(detail), ":")
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case spaceTeam, "enterprise":
-		return "团队空间"
+		return "Team space"
 	case spacePlatform:
-		return "平台空间"
+		return "Platform space"
 	case spacePersonal:
-		return "个人空间"
+		return "Personal space"
 	case "":
 		return ""
 	default:
@@ -106,15 +112,15 @@ func auditReportFileLabel(detail string) string {
 	}
 	switch name {
 	case "report.pdf":
-		return "PDF 报告"
+		return "PDF report"
 	case "report.html":
-		return "网页报告"
+		return "Web report"
 	case "summary.xlsx":
 		return "汇总表"
 	case "detail.xlsx":
 		return "明细表"
 	case "":
-		return "下载报告"
+		return "Download report"
 	default:
 		return "报告文件"
 	}
@@ -134,6 +140,11 @@ func auditDetailLabel(action, detail string) string {
 			return "已上传资料"
 		}
 		return "上传 " + detail + " 份资料"
+	case "upload_parsed":
+		if detail == "" {
+			return "本机解析已入库"
+		}
+		return "本机解析入库 " + detail + " 份"
 	case "review_transactions":
 		if detail == "" {
 			return "已核对交易"
@@ -143,14 +154,14 @@ func auditDetailLabel(action, detail string) string {
 		return "已确认统计期间"
 	case "change_password":
 		if detail == "workbench" {
-			return "工作台账号"
+			return "Workbench account"
 		}
 		if detail == "" {
 			return "本系统账号"
 		}
 		return detail
 	case "change_grant":
-		return "已调整授权"
+		return "Access updated"
 	case "report_queued":
 		return "报告已排队"
 	case "job_cancelled":

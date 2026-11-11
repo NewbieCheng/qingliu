@@ -33,13 +33,13 @@ export function RangeForm({
           key={`${data.start}-${data.end}-${data.source}-${choiceCount}`}
         >
           <label className="review-filter-field is-source">
-            <span>资料来源</span>
+            <span>Source</span>
             <Select
               name="source"
-              label="资料来源"
+              label="Source"
               className="review-filter-select"
               defaultValue={data.source}
-              title="改来源或日期后需点「应用范围」才会重算"
+              title="After changing source or dates, click Apply range to recalculate"
             >
               {choiceCount === 0 ? (
                 <option value={data.source || "other"}>
@@ -61,7 +61,7 @@ export function RangeForm({
               type="date"
               defaultValue={data.start}
               required
-              title="改日期后需点「应用范围」才会重算"
+              title="After changing dates, click Apply range to recalculate"
             />
           </label>
           <label className="review-filter-field">
@@ -71,7 +71,7 @@ export function RangeForm({
               type="date"
               defaultValue={data.end}
               required
-              title="改日期后需点「应用范围」才会重算"
+              title="After changing dates, click Apply range to recalculate"
             />
           </label>
           <button
@@ -79,7 +79,7 @@ export function RangeForm({
             className="primary review-filter-apply"
             title="应用后才会按新来源与日期重算"
           >
-            应用范围
+            Apply range
           </button>
         </Form>
 
@@ -91,10 +91,10 @@ export function RangeForm({
           aria-label="交易列表筛选"
         >
           <label className="review-filter-field">
-            <span>状态</span>
+            <span>Status</span>
             <Select
-              aria-label="交易状态"
-              label="交易状态"
+              aria-label="Transaction status"
+              label="Transaction status"
               className="review-filter-select"
               value={view}
               onChange={(event) => onViewChange(event.target.value)}
@@ -107,14 +107,14 @@ export function RangeForm({
             </Select>
           </label>
           <label className="review-filter-field is-search">
-            <span>搜索</span>
+            <span>Search</span>
             <SearchInput
               aria-label="搜索交易"
               placeholder="对手方、摘要或日期"
               value={draft}
               onChange={setDraft}
               onSearch={onQueryChange}
-              title="点右侧放大镜或回车后才查询，不改测算范围"
+              title="Search only after clicking the magnifier or pressing Enter; does not change the calculation range"
             />
           </label>
         </div>

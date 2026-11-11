@@ -9,19 +9,19 @@ export function ChangePasswordDialog({ onClose }) {
   const { logout } = useAuth();
 
   return (
-    <Modal title="修改密码" onClose={onClose}>
+    <Modal title="Change password" onClose={onClose}>
       <p className="account-dialog-lead">
-        已绑定工作台时，密码修改会同步到工作台账号。新密码需 10 至 72 字节，成功后将退出并重新登录。
+        When linked to the workbench, password changes sync there. New password must be 10–72 bytes; you will be signed out after success.
       </p>
       <Form
-        success="密码已更新，请重新登录"
+        success="Password updated. Please sign in again."
         onSave={async (form) => {
           await changePassword(Object.fromEntries(form));
           await logout();
           navigate("/login");
         }}
       >
-        <Field label="当前密码">
+        <Field label="Current password">
           <input
             name="current_password"
             type="password"
@@ -29,7 +29,7 @@ export function ChangePasswordDialog({ onClose }) {
             required
           />
         </Field>
-        <Field label="新密码（10至72字节）">
+        <Field label="New password (10–72 bytes)">
           <input
             name="new_password"
             type="password"
@@ -41,9 +41,9 @@ export function ChangePasswordDialog({ onClose }) {
         </Field>
         <div className="account-dialog-actions">
           <button type="button" className="ghost" onClick={onClose}>
-            取消
+            Cancel
           </button>
-          <button className="primary">保存并重新登录</button>
+          <button className="primary">Save and sign in again</button>
         </div>
       </Form>
     </Modal>

@@ -56,8 +56,8 @@ func TestBusyIgnoresStaleJobs(t *testing.T) {
 		t.Fatal("busy() 结构异常")
 	}
 	body := text[start : start+end]
-	if !strings.Contains(body, "staleJobMinutes") {
-		t.Fatal("busy() 必须排除超时卡死的任务，否则一条失败任务会锁死整个客户")
+	if !strings.Contains(body, "jobStaleSQLInterval") && !strings.Contains(body, "staleJobMinutes") {
+		t.Fatal("busy() 必须按 kind 排除超时卡死的任务，否则一条失败任务会锁死整个客户")
 	}
 	if !strings.Contains(body, "upload") || !strings.Contains(body, "report") {
 		t.Fatal("busy() 只能拦 upload/report，不能把 ai_analysis 算进锁客")

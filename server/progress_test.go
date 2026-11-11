@@ -85,3 +85,19 @@ func TestParseCostFollowsConfiguredPricing(t *testing.T) {
 		t.Fatalf("zero pricing charged %d", got)
 	}
 }
+
+func TestParseBillingTierNeedsVisionDoesNotBillVision(t *testing.T) {
+	// needs-vision 未跑模型，不能按视觉档扣；有本机 OCR 页则走 ocr。
+	got := parseBillingTier(ParseResult{Meta: Object{
+		"method": "needs-vision", "ocr_pages": 3, "pages": 10,
+	}})
+	if got != "ocr" {
+		t.Fatalf("needs-vision with ocr_pages = %q, want ocr", got)
+	}
+	got = parseBillingTier(ParseResult{Meta: Object{
+		"method": "needs-vision", "ocr_pages": 0, "pages": 10,
+	}})
+	if got != "text" {
+		t.Fatalf("needs-vision without ocr = %q, want text", got)
+	}
+}

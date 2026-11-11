@@ -4,11 +4,11 @@ import { NavIcon } from "@/shared/ui/icons.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { isQingliuAdmin } from "@/shared/lib/constants.js";
 import { NAVIGATION, isNavItemActive } from "./navigation.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
-const TEAM_NAV_LOCKED =
-  "个人空间不支持团队与权限管理。请开通团队版，或切换到团队空间后再使用。";
+const TEAM_NAV_LOCKED = "nav.team_locked";
 
-function NavItem({ item, pathname, collapsed, locked = false }) {
+function NavItem({ item, pathname, collapsed, locked = false, label, t }) {
   const active = isNavItemActive(item, pathname);
 
   if (locked) {
@@ -16,12 +16,12 @@ function NavItem({ item, pathname, collapsed, locked = false }) {
       <button
         type="button"
         className={`rail-link is-locked ${active ? "active" : ""}`}
-        title={collapsed ? TEAM_NAV_LOCKED : item.label}
+        title={collapsed ? t(TEAM_NAV_LOCKED) : label}
         aria-disabled="true"
-        onClick={() => toast(TEAM_NAV_LOCKED, "error")}
+        onClick={() => toast(t(TEAM_NAV_LOCKED), "error")}
       >
         <NavIcon kind={item.icon} />
-        <span className="rail-link-text">{item.label}</span>
+        <span className="rail-link-text">{label}</span>
       </button>
     );
   }
@@ -30,40 +30,49 @@ function NavItem({ item, pathname, collapsed, locked = false }) {
     <Link
       to={item.to}
       className={`rail-link ${active ? "active" : ""}`}
-      title={collapsed ? item.label : undefined}
+      title={collapsed ? label : undefined}
     >
       <NavIcon kind={item.icon} />
-      <span className="rail-link-text">{item.label}</span>
+      <span className="rail-link-text">{label}</span>
     </Link>
   );
 }
 
 export function Sidebar({ user, pathname, collapsed, spaceSwitcher = null }) {
+  const { t } = useI18n();
   const spaceKind = user?.kind || user?.space?.kind || "personal";
   const teamManaged = spaceKind === "team";
+  const navLabel = (item) => {
+    const key = { "/": "nav.clients", "/recharge": "nav.recharge", "/profile": "nav.profile", "/admin": "nav.admin" }[item.to];
+    return key ? t(key) : item.label;
+  };
+  const groupLabel = (label) => {
+    const key = { Workspace: "nav.group.workspace", Account: "nav.group.account", Admin: "nav.group.admin" }[label];
+    return key ? t(key) : label;
+  };
 
   return (
     <aside className="rail">
       <div className="rail-head">
-        <Link to="/" className="brand" aria-label="青流工作台">
+        <Link to="/" className="brand" aria-label={t("app.title_suffix")}>
           <img
             className="brand-logo"
             src="/qingliu-logo-dark.svg"
-            alt="青流"
+            alt="Qingliu"
           />
           <img
             className="brand-mark"
             src="/qingliu-icon-light.svg"
-            alt="青流"
+            alt="Qingliu"
           />
         </Link>
       </div>
-      <nav className="rail-nav" aria-label="主导航">
+      <nav className="rail-nav" aria-label={t("nav.main")}>
         {NAVIGATION.filter(
           (group) => !group.adminOnly || isQingliuAdmin(user),
         ).map((group) => (
           <div className="rail-group" key={group.label}>
-            <p className="rail-group-label">{group.label}</p>
+            <p className="rail-group-label">{groupLabel(group.label)}</p>
             {group.items.map((item) => (
               <NavItem
                 key={item.to}
@@ -71,6 +80,8 @@ export function Sidebar({ user, pathname, collapsed, spaceSwitcher = null }) {
                 pathname={pathname}
                 collapsed={collapsed}
                 locked={item.to === "/admin" && !teamManaged}
+                label={navLabel(item)}
+                t={t}
               />
             ))}
           </div>

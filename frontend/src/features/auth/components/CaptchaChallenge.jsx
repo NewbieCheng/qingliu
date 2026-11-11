@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/shared/api/client.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 // 人机验证挑战：与「今天不加班」工作台同一套点击式验证码，行为完全对齐
 // 工作台 `CaptchaVerifyDialog`（出题规则、提交时机、容错次数都以它为准）。
@@ -24,19 +25,19 @@ const MAX_SEQUENCE_WRONG_ATTEMPTS = 2;
 // 图标中文名与工作台 login.json captchaIcon 保持一致，题目里出现新种类时
 // 回退显示原始 kind不至于展示空白。
 const ICON_NAME = {
-  fish: "清蒸鱼",
-  cake: "蛋糕",
-  egg: "荷包蛋",
-  milk: "牛奶",
-  chili: "小米辣",
-  potato: "土豆",
-  chocolate: "巧克力",
-  garlic: "蒜",
-  scallion: "蒜苗",
-  mint: "薄荷",
-  snow_lotus: "雪莲",
-  sweet_potato: "土豆",
-  bean: "雪莲",
+  fish: "captcha.item.fish",
+  cake: "captcha.item.cake",
+  egg: "captcha.item.egg",
+  milk: "captcha.item.milk",
+  chili: "captcha.item.chili",
+  potato: "captcha.item.potato",
+  chocolate: "captcha.item.chocolate",
+  garlic: "captcha.item.garlic",
+  scallion: "captcha.item.scallion",
+  mint: "captcha.item.mint",
+  snow_lotus: "captcha.item.snow_lotus",
+  sweet_potato: "captcha.item.sweet_potato",
+  bean: "captcha.item.bean",
 };
 
 function isSequencePrompt(prompt) {
@@ -55,6 +56,7 @@ function fillCaptchaViewport(svg) {
 }
 
 export function CaptchaChallenge({ open, title, reason, onCancel, onSolved }) {
+  const { t } = useI18n();
   const [captchaId, setCaptchaId] = useState("");
   const [captchaSvg, setCaptchaSvg] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -77,26 +79,26 @@ export function CaptchaChallenge({ open, title, reason, onCancel, onSolved }) {
   }, [prompt, sequence.length]);
 
   const promptHint = useMemo(() => {
-    const iconLabel = ICON_NAME[iconTarget] || iconTarget || "图标";
+    const iconLabel = t(ICON_NAME[iconTarget] || "captcha.icon_default");
     switch (prompt) {
       case "click_largest":
-        return `请点击最大的${iconLabel}图标`;
+        return t("captcha.click_largest", { icon: iconLabel });
       case "click_smallest":
-        return `请点击最小的${iconLabel}图标`;
+        return t("captcha.click_smallest", { icon: iconLabel });
       case "click_second_smallest":
-        return `请点击第二小的${iconLabel}图标`;
+        return t("captcha.click_second_smallest", { icon: iconLabel });
       case "click_icon":
-        return `请点击${iconLabel}图标`;
+        return t("captcha.click_icon", { icon: iconLabel });
       case "click_sequence":
-        return "请按下方顺序依次点击对应图标";
+        return t("captcha.click_sequence");
       case "click_size_asc":
-        return `请按从小到大的顺序依次点击全部${iconLabel}`;
+        return t("captcha.click_size_asc", { icon: iconLabel });
       case "click_size_desc":
-        return `请按从大到小的顺序依次点击全部${iconLabel}`;
+        return t("captcha.click_size_desc", { icon: iconLabel });
       default:
-        return "请点击图片中对应的图标完成验证";
+        return t("captcha.click_default");
     }
-  }, [iconTarget, prompt]);
+  }, [iconTarget, prompt, t]);
 
   const resetPickState = useCallback(() => {
     setClicks([]);
@@ -112,7 +114,7 @@ export function CaptchaChallenge({ open, title, reason, onCancel, onSolved }) {
     try {
       const data = await api("/api/auth/captcha?type=click");
       if (!data?.captcha_id || !data?.svg) {
-        setError("验证码加载失败，请刷新重试");
+        setError(t("captcha.load_failed"));
         return;
       }
       setCaptchaId(data.captcha_id);
@@ -121,11 +123,11 @@ export function CaptchaChallenge({ open, title, reason, onCancel, onSolved }) {
       setIconTarget(data.icon_target ?? "");
       setSequence(data.sequence ?? []);
     } catch (requestError) {
-      setError(requestError.message || "验证码加载失败请刷新重试");
+      setError(requestError.message || t("captcha.load_failed"));
     } finally {
       setLoading(false);
     }
-  }, [resetPickState]);
+  }, [resetPickState, t]);
 
   // 每次打开都换一张新题：验证码一次性有效，不能拿上一次的图重试。
   useEffect(() => {
@@ -187,11 +189,11 @@ export function CaptchaChallenge({ open, title, reason, onCancel, onSolved }) {
       node.classList.remove("is-picked");
     });
     if (nextWrong >= MAX_SEQUENCE_WRONG_ATTEMPTS) {
-      setError("连续点错 2 次已刷新验证码");
+      setError(t("captcha.sequence_refreshed"));
       void load();
       return;
     }
-    setError("顺序不正确请按提示重新点击");
+    setError(t("captcha.sequence_wrong"));
   }
 
   function handleSvgClick(event) {
@@ -246,11 +248,11 @@ export function CaptchaChallenge({ open, title, reason, onCancel, onSolved }) {
         aria-labelledby="auth-challenge-title"
       >
         <header className="auth-modal-head">
-          <h2 id="auth-challenge-title">{title || "真人验证"}</h2>
+          <h2 id="auth-challenge-title">{title || t("captcha.title")}</h2>
           <button
             type="button"
             className="auth-modal-close"
-            aria-label="关闭验证"
+            aria-label={t("captcha.close")}
             onClick={onCancel}
           >
             <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
@@ -260,7 +262,7 @@ export function CaptchaChallenge({ open, title, reason, onCancel, onSolved }) {
         </header>
 
         <p className="auth-modal-reason">
-          {reason || "请完成人机验证，防止恶意注册。"}
+          {reason || t("captcha.reason")}
         </p>
 
         <div className="auth-modal-prompt">
@@ -271,22 +273,22 @@ export function CaptchaChallenge({ open, title, reason, onCancel, onSolved }) {
                 className={`auth-step ${index < clicks.length ? "is-done" : index === clicks.length ? "is-next" : ""}`}
               >
                 <span className="auth-step-no">{index + 1}</span>
-                {ICON_NAME[name] || name}
+                {t(ICON_NAME[name] || name)}
               </span>
             ))
           ) : (
-            <span className="auth-step auth-step--single">{loading ? "题目加载中…" : promptHint}</span>
+            <span className="auth-step auth-step--single">{loading ? t("captcha.loading") : promptHint}</span>
           )}
         </div>
 
         {(prompt === "click_size_asc" || prompt === "click_size_desc") && (
           <p className="auth-modal-progress">
-            已点击 {clicks.length} / {expectedSteps}
+            {t("captcha.clicked", { clicked: clicks.length, total: expectedSteps })}
           </p>
         )}
         {wrongAttempts > 0 && wrongAttempts < MAX_SEQUENCE_WRONG_ATTEMPTS && (
           <p className="auth-modal-progress">
-            还可试错 {MAX_SEQUENCE_WRONG_ATTEMPTS - wrongAttempts} 次再错将刷新验证码
+            {t("captcha.remaining", { count: MAX_SEQUENCE_WRONG_ATTEMPTS - wrongAttempts })}
           </p>
         )}
 
@@ -297,7 +299,7 @@ export function CaptchaChallenge({ open, title, reason, onCancel, onSolved }) {
             onClick={handleSvgClick}
             role="presentation"
           >
-            {loading && <span className="auth-challenge-loading">正在出题…</span>}
+            {loading && <span className="auth-challenge-loading">{t("captcha.preparing")}</span>}
             {!loading && captchaSvg && (
               <span
                 className="auth-challenge-svg"
@@ -305,7 +307,7 @@ export function CaptchaChallenge({ open, title, reason, onCancel, onSolved }) {
               />
             )}
             {!loading && !captchaSvg && !error && (
-              <span className="auth-challenge-loading">题目为空，请换一张</span>
+              <span className="auth-challenge-loading">{t("captcha.empty")}</span>
             )}
             {pickMarkers.map((marker) => (
               <span
@@ -321,7 +323,7 @@ export function CaptchaChallenge({ open, title, reason, onCancel, onSolved }) {
           <button
             type="button"
             className="auth-ghost auth-challenge-refresh"
-            aria-label="换一张"
+            aria-label={t("captcha.refresh")}
             onClick={() => void load()}
             disabled={loading}
           >

@@ -12,5 +12,5 @@ export { ReviewStep } from "./components/review/ReviewStep.jsx";
 export { ReportStep } from "./components/report/ReportStep.jsx";
 export { OriginalEvidenceDialog } from "./components/evidence/OriginalEvidenceDialog.jsx";
 export { useCaseData } from "./hooks/useCaseData.js";
-export { getTransaction } from "./api.js";
+export { getTransaction, uploadParsed } from "./api.js";
 export { CASE_STEPS } from "./constants.js";

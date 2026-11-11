@@ -7,6 +7,7 @@ import { useAuth } from "../context.js";
 import { CaptchaChallenge } from "./CaptchaChallenge.jsx";
 import { EnterpriseApplyPanel } from "./EnterpriseApplyPanel.jsx";
 import { BuildingIcon, UserIcon } from "@/shared/ui/icons.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 // 注册与工作台完全同源：同一张邀请码表、同一套邮箱验证码与人机验证。
 // 版式对齐工作台 LoginPage：个人 / 企业双意图；个人走邮箱验证码注册，
@@ -17,6 +18,7 @@ import { BuildingIcon, UserIcon } from "@/shared/ui/icons.jsx";
 const CODE_COOLDOWN_SECONDS = 60;
 
 export function RegisterForm({ onDone }) {
+  const { t } = useI18n();
   const { register } = useAuth();
   const [intent, setIntent] = useState("personal");
   const [email, setEmail] = useState("");
@@ -54,11 +56,11 @@ export function RegisterForm({ onDone }) {
 
   function requestCode() {
     if (!email.trim()) {
-      toast("请先填写邮箱", "error");
+      toast(t("auth.enter_email_first"), "error");
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      toast("邮箱格式不正确", "error");
+      toast(t("auth.invalid_email"), "error");
       return;
     }
     if (cooldown > 0 || sending) return;
@@ -76,9 +78,9 @@ export function RegisterForm({ onDone }) {
       });
       setCodeSent(true);
       startCooldown();
-      toast("验证码已发送请查收邮箱");
+      toast(t("auth.code_sent"));
     } catch (error) {
-      toast(error.message || "验证码发送失败", "error");
+      toast(error.message || t("auth.send_code_failed"), "error");
     } finally {
       setSending(false);
     }
@@ -86,7 +88,7 @@ export function RegisterForm({ onDone }) {
 
   return (
     <>
-      <div className="auth-tabs" role="tablist" aria-label="注册身份">
+      <div className="auth-tabs" role="tablist" aria-label={t("auth.register_identity")}>
         <button
           type="button"
           role="tab"
@@ -95,7 +97,7 @@ export function RegisterForm({ onDone }) {
           onClick={() => setIntent("personal")}
         >
           <UserIcon size={14} />
-          个人注册
+          {t("auth.register_personal")}
         </button>
         <button
           type="button"
@@ -105,7 +107,7 @@ export function RegisterForm({ onDone }) {
           onClick={() => setIntent("enterprise")}
         >
           <BuildingIcon size={14} />
-          企业注册
+          {t("auth.register_enterprise")}
         </button>
       </div>
 
@@ -114,13 +116,13 @@ export function RegisterForm({ onDone }) {
       ) : (
         <Form
           className="auth-form"
-          success="注册成功"
+          success={t("auth.register_success")}
           onSave={async (form) => {
             const password = String(form.get("password"));
             if (password !== String(form.get("confirm_password"))) {
-              throw new Error("两次输入的密码不一致");
+              throw new Error(t("auth.password_mismatch"));
             }
-            if (!codeSent) throw new Error("请先获取邮箱验证码");
+            if (!codeSent) throw new Error(t("auth.request_code_first"));
             await register({
               email: String(form.get("email")).trim(),
               phone: String(form.get("phone")).trim(),
@@ -133,7 +135,7 @@ export function RegisterForm({ onDone }) {
           }}
         >
           <label className="auth-field">
-            <span className="auth-label">邮箱 *</span>
+            <span className="auth-label">{t("auth.email")}</span>
             <input
               name="email"
               type="email"
@@ -147,7 +149,7 @@ export function RegisterForm({ onDone }) {
           </label>
 
           <label className="auth-field">
-            <span className="auth-label">手机号 *</span>
+            <span className="auth-label">{t("auth.phone")} *</span>
             <span className="auth-phone-row">
               <span className="auth-phone-prefix" aria-hidden="true">+86</span>
               <input
@@ -157,7 +159,7 @@ export function RegisterForm({ onDone }) {
                 required
                 pattern="1[3-9][0-9]{9}"
                 maxLength="11"
-                placeholder="请输入 11 位手机号"
+                placeholder={t("auth.phone_placeholder")}
                 value={phone}
                 onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 11))}
               />
@@ -165,7 +167,7 @@ export function RegisterForm({ onDone }) {
           </label>
 
           <label className="auth-field">
-            <span className="auth-label">邮箱验证码 *</span>
+            <span className="auth-label">{t("auth.email_code")} *</span>
             <div className="auth-code-row">
               <input
                 name="code"
@@ -173,16 +175,16 @@ export function RegisterForm({ onDone }) {
                 maxLength="8"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                placeholder="6 位验证码"
+                placeholder={t("auth.code_placeholder")}
               />
               <button type="button" onClick={requestCode} disabled={sending || cooldown > 0}>
-                {sending ? "发送中…" : cooldown > 0 ? `${cooldown}s 后重发` : codeSent ? "重新发送" : "发送验证码"}
+                {sending ? t("auth.sending") : cooldown > 0 ? t("auth.resend_in", { seconds: cooldown }) : codeSent ? t("auth.resend") : t("auth.send_code")}
               </button>
             </div>
           </label>
 
           <label className="auth-field">
-            <span className="auth-label">密码 *</span>
+            <span className="auth-label">{t("auth.password")} *</span>
             <input
               name="password"
               type="password"
@@ -190,12 +192,12 @@ export function RegisterForm({ onDone }) {
               required
               minLength="8"
               maxLength="72"
-              placeholder="至少 8 位，含字母与数字"
+              placeholder={t("auth.password_new_placeholder")}
             />
           </label>
 
           <label className="auth-field">
-            <span className="auth-label">确认密码 *</span>
+            <span className="auth-label">{t("auth.confirm_password")} *</span>
             <input
               name="confirm_password"
               type="password"
@@ -203,18 +205,18 @@ export function RegisterForm({ onDone }) {
               required
               minLength="8"
               maxLength="72"
-              placeholder="请再输入一次密码"
+              placeholder={t("auth.confirm_password_placeholder")}
             />
           </label>
 
           <label className="auth-field">
-            <span className="auth-label">邀请码 *</span>
+            <span className="auth-label">{t("auth.invite_code")} *</span>
             <input
               name="invite_code"
               required
               maxLength="32"
               autoCapitalize="characters"
-              placeholder="请输入注册邀请码"
+              placeholder={t("auth.invite_code_placeholder")}
             />
           </label>
 
@@ -225,28 +227,28 @@ export function RegisterForm({ onDone }) {
               aria-expanded={extrasOpen}
               onClick={() => setExtrasOpen((open) => !open)}
             >
-              {extrasOpen ? "收起可选信息" : "更多选项（可选）"}
+              {extrasOpen ? t("auth.hide_options") : t("auth.more_options")}
             </button>
             {extrasOpen && (
               <label className="auth-field">
-                <span className="auth-label">姓名 / 显示名</span>
-                <input name="display_name" maxLength="60" placeholder="选填" />
+                <span className="auth-label">{t("auth.display_name")}</span>
+                <input name="display_name" maxLength="60" placeholder={t("auth.optional")} />
               </label>
             )}
           </div>
 
           <p className="auth-help">
-            注册时邮箱与手机号均为必填；需先完成邮箱验证码验证。企业/团队账号由公司管理员在工作台后台创建，此处仅开放个人注册。
+            {t("auth.register_note")}
           </p>
 
-          <button className="auth-submit">注册并进入</button>
+          <button className="auth-submit">{t("auth.register_button")}</button>
         </Form>
       )}
 
       <CaptchaChallenge
         open={challengeOpen}
-        title="真人验证"
-        reason="发送邮箱验证码前需要确认这一步由真人完成，防止恶意注册。"
+        title={t("auth.captcha_title")}
+        reason={t("auth.human_check_send")}
         onCancel={() => setChallengeOpen(false)}
         onSolved={(code, id) => {
           setChallengeOpen(false);
@@ -256,9 +258,9 @@ export function RegisterForm({ onDone }) {
 
       <div className="auth-links">
         <span>
-          已有账号？
+          {t("auth.have_account")}
           <button type="button" className="auth-link" onClick={onDone}>
-            登录
+            {t("auth.sign_in_link")}
           </button>
         </span>
       </div>

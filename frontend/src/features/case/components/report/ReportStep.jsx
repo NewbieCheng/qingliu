@@ -12,8 +12,8 @@ import { downloadReport, previewReport } from "../../api.js";
 const DOWNLOADS = [
   ["report.pdf", "PDF"],
   ["summary.xlsx", "汇总Excel"],
-  ["detail.xlsx", "逐笔底稿"],
-  ["report.html", "网页快照"],
+  ["detail.xlsx", "Line-by-line draft"],
+  ["report.html", "Web snapshot"],
 ];
 
 const VISIBLE_QUARTERS = 4;
@@ -40,7 +40,7 @@ function ReportNumbers({ summary }) {
           <strong>
             {formatCents(summary.complete_month_average)}{" "}
             <small>
-              {summary.complete_month_average == null ? "无完整自然月" : "元"}
+              {summary.complete_month_average == null ? "No full calendar month" : "元"}
             </small>
           </strong>
           <p>只统计范围内 {summary.complete_month_count} 个完整自然月。</p>
@@ -81,7 +81,7 @@ function ReportNumbers({ summary }) {
             className="ghost task-toggle"
             onClick={() => setShowAllQuarters((value) => !value)}
           >
-            {showAllQuarters ? "收起" : `展开全部 ${quarterEntries.length} 条`}
+            {showAllQuarters ? "Collapse" : `展开全部 ${quarterEntries.length} 条`}
           </button>
         )}
       </FoldPanel>
@@ -116,7 +116,7 @@ function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal }) {
             className="primary"
             disabled={data.busy || data.problems.length > 0}
           >
-            提交复核
+            Submit for review
           </button>
         </Form>
       </div>
@@ -130,7 +130,7 @@ function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal }) {
             })
           }
         >
-          <Field label="复核声明">
+          <Field label="Review statement">
             <textarea
               name="statement"
               required
@@ -175,7 +175,7 @@ function ReportVersions({ cid, data }) {
     try {
       await downloadReport(cid, report.id, file);
     } catch (error) {
-      toast(error.message || "下载失败请稍后重试", "error");
+      toast(error.message || "Download failed. Please retry later.", "error");
     } finally {
       setDownloading("");
     }
@@ -210,7 +210,7 @@ function ReportVersions({ cid, data }) {
             <strong>
               {report.info.stage === "formal"
                 ? "正式内部初筛版本"
-                : "草稿 · 未完成复核"}
+                : "Draft · review incomplete"}
             </strong>
             <small className="block">
               {formatDateTime(report.created)} · {SOURCES[report.info.source]} ·{" "}
@@ -254,12 +254,12 @@ function ReportVersions({ cid, data }) {
           className="ghost task-toggle"
           onClick={() => setShowAll((value) => !value)}
         >
-          {showAll ? "收起" : `展开全部 ${data.reports.length} 个版本`}
+          {showAll ? "Collapse" : `展开全部 ${data.reports.length} 个版本`}
         </button>
       )}
       {preview.open && (
         <Modal
-          title={preview.title || "网页快照"}
+          title={preview.title || "Web snapshot"}
           onClose={() => setPreview({ open: false, title: "", html: "" })}
         >
           {preview.html ? (
@@ -281,8 +281,8 @@ function ReportVersions({ cid, data }) {
 export function ReportStep({ cid, data, user, summary, onGenerate, onSubmit, onFormal }) {
   return (
     <div className="report-layout">
-      <section className="card ai-entry-card" aria-label="AI 辅助分析">
-        <AIAnalysisPanel cid={cid} />
+      <section className="card ai-entry-card" aria-label="AI analysis">
+        <AIAnalysisPanel cid={cid} docs={data.docs || []} />
       </section>
       <ReportNumbers summary={summary} />
       <SubmitPanel

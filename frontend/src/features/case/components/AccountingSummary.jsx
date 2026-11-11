@@ -8,11 +8,11 @@ export function AccountingSummary({ summary }) {
     `无效行可识别流入：${formatCents(summary.invalid_income)} 元。不同来源分别统计。`;
 
   const stats = [
-    ["原始总流入", summary.original_income, true],
-    ["范围外", summary.scope_excluded_income, false],
+    ["Raw total inflow", summary.original_income, true],
+    ["Out of range", summary.scope_excluded_income, false],
     ["重复隔离", summary.quarantined_income, false],
-    ["当前测算流入", summary.income, false],
-    ["暂计经营（未核实）", summary.included, false],
+    ["Current measured inflow", summary.income, false],
+    ["Tentative business (unverified)", summary.included, false],
   ];
 
   return (

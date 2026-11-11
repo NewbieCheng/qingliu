@@ -15,15 +15,24 @@ import (
 // busy() 恒真，该客户的上传、核对、报告全部被 409 挡住。启动时和之后
 // 每 5 分钟扫一次，把这些僵尸任务收掉，并留下 event 方便回溯。
 func sweepStaleJobs(s *Store) {
-	rows := s.query("SELECT id,customer_id,user_id,kind,space_kind,space_id FROM ql_jobs WHERE status IN ('queued','running') AND created < DATE_SUB(NOW(6), INTERVAL ? MINUTE)", staleJobMinutes)
+	// 按 kind 各自 stale，禁止单常量误杀长视觉 / 放过卡死的短任务。
+	rows := s.query(
+		"SELECT id,customer_id,user_id,kind,payload,space_kind,space_id FROM ql_jobs WHERE status IN ('queued','running') AND created < DATE_SUB(NOW(6), INTERVAL ("+jobStaleSQLInterval()+") MINUTE)",
+	)
 	for _, job := range rows {
 		jid := str(job, "id")
-		message := "任务超时未完成，已自动终止；可重新提交"
+		kind := str(job, "kind")
+		policy := jobPolicy(kind)
+		message := fmt.Sprintf("任务超时未完成（%s，超过约 %d 分钟无进展），已自动终止；可重新提交", kind, policy.StaleMinutes)
 		s.exec("UPDATE ql_jobs SET status='failed',message=?,stage='failed',progress=0 WHERE id=?", message, jid)
-		// AI 分析还有一张明细表，一起收掉，否则会被 startAIAnalysis 复用。
-		s.exec("UPDATE ql_ai_analyses SET status='failed',stage='failed',error=?,completed=NOW(6) WHERE customer_id=? AND status IN ('queued','running','uploading')", message, str(job, "customer_id"))
+		if kind == "ai_analysis" {
+			analysisID := str(obj(str(job, "payload")), "analysis_id")
+			if analysisID != "" {
+				s.exec("UPDATE ql_ai_analyses SET status='failed',stage='failed',error=?,completed=NOW(6) WHERE id=? AND status IN ('queued','running','uploading')", message, analysisID)
+			}
+		}
 		s.event(spaceOf(job), str(job, "user_id"), str(job, "customer_id"), "job_timeout", jid)
-		log.Printf("swept stale job %s (%s)", jid, str(job, "kind"))
+		log.Printf("swept stale job %s (%s stale=%dm)", jid, kind, policy.StaleMinutes)
 	}
 }
 
@@ -138,7 +147,7 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 		panic(fmt.Errorf("操作账号已失效或没有客户权限"))
 	}
 	p := obj(str(job, "payload"))
-	jobctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	jobctx, cancel := context.WithTimeout(ctx, jobPolicy(str(job, "kind")).RunTimeout)
 	defer cancel()
 	if str(job, "kind") == "upload" {
 		path := filepath.Join(s.root, "pending", jid)
@@ -168,10 +177,10 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 		d := s.one("SELECT payload FROM ql_documents WHERE customer_id=? AND sha=?", cid, p["sha"])
 		meta := obj(str(d, "payload"))
 		state := "done"
-		message := "识别完成，请确认资料归属"
+		message := "Recognition complete. Confirm document ownership."
 		if str(meta, "status") != "success" {
 			state = "partial"
-			message = "资料已保存，识别未完整通过，请核对提示；未通过的资料不能直接签发正式版本"
+			message = "Saved with incomplete recognition; review warnings before issuing a formal report"
 		}
 		s.jobFinish(jid, state, message)
 		must(os.Remove(path))
@@ -203,13 +212,13 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 		}
 		if str(p, "stage") == "formal" {
 			if str(user, "role") != "admin" && str(user, "role") != "reviewer" {
-				panic(fmt.Errorf("仅复核员或管理员可签发"))
+				panic(fmt.Errorf("Only reviewers or admins can issue"))
 			}
 			if !yes(d, "submitted_current") || len(d["problems"].([]string)) > 0 {
 				panic(fmt.Errorf("复核条件已变化，请重新提交"))
 			}
 		}
-		s.jobProgress(jid, "rendering", "正在生成PDF、Excel与报告快照", 60)
+		s.jobProgress(jid, "rendering", "Generating PDF, Excel, and report snapshot", 60)
 		must(generateReport(s, cid, jid, d, p))
 		s.jobFinish(jid, "done", "报告已保存，可下载")
 	} else {

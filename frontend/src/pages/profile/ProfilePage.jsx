@@ -45,14 +45,14 @@ export function ProfilePage() {
     kind === "team"
       ? me.space_name || "团队"
       : kind === "platform"
-        ? "平台空间（青流未接入，只显示自己创建的）"
+        ? "Platform space (not wired in Qingliu; only shows what you created)"
         : "个人空间（仅自己可见）";
 
   return (
     <main className="account-page">
       <PageHeader
         title={me.display}
-        description="账号由工作台统一管理；青流只保留业务角色与本地工作记录。"
+        description="Accounts are managed by the workbench; Qingliu keeps business roles and local work records."
       />
       {error && (
         <p className="error" role="alert">
@@ -90,7 +90,7 @@ export function ProfilePage() {
       <section className="card">
         <SectionTitle
           title="账号操作"
-          description="改密、充值与退出都通过弹窗确认，避免误触。"
+          description="Password change, top-up, and sign-out use confirm dialogs to avoid mistakes."
         />
         <div className="account-action-grid">
           <button
@@ -98,7 +98,7 @@ export function ProfilePage() {
             className="account-action"
             onClick={() => setDialog("password")}
           >
-            <strong>修改密码</strong>
+            <strong>Change password</strong>
             <span>验证当前密码后设置新密码，成功后需重新登录</span>
           </button>
           <button
@@ -114,7 +114,7 @@ export function ProfilePage() {
             className="account-action is-danger"
             onClick={() => setDialog("logout")}
           >
-            <strong>退出登录</strong>
+            <strong>Sign out</strong>
             <span>结束当前设备会话，不影响其他已登录设备</span>
           </button>
         </div>

@@ -1,5 +1,6 @@
 import React from "react";
 import { SearchIcon, XIcon } from "./icons.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 /**
  * 搜索框。
@@ -10,10 +11,13 @@ export function SearchInput({
   value,
   onChange,
   onSearch,
-  clearLabel = "清除搜索",
-  searchLabel = "搜索",
+  clearLabel,
+  searchLabel,
   ...rest
 }) {
+  const { t } = useI18n();
+  const resolvedClearLabel = clearLabel || t("common.clear_search");
+  const resolvedSearchLabel = searchLabel || t("common.search");
   const submitMode = typeof onSearch === "function";
 
   function submit() {
@@ -50,8 +54,8 @@ export function SearchInput({
         <button
           type="button"
           className="ql-search-clear"
-          aria-label={clearLabel}
-          title={clearLabel}
+          aria-label={resolvedClearLabel}
+          title={resolvedClearLabel}
           onClick={clear}
         >
           <XIcon size={13} />
@@ -61,8 +65,8 @@ export function SearchInput({
         <button
           type="button"
           className="ql-search-submit"
-          aria-label={searchLabel}
-          title={searchLabel}
+          aria-label={resolvedSearchLabel}
+          title={resolvedSearchLabel}
           onClick={submit}
         >
           <SearchIcon size={15} />

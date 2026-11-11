@@ -1,4 +1,5 @@
 import { randomId } from "@/shared/lib/format.js";
+import { readStoredLocale } from "@/shared/i18n/core.js";
 
 let csrfToken = "";
 let unauthorizedHandler = null;
@@ -39,8 +40,8 @@ function newRequestId() {
 // 浏览器与后端之间断开时 fetch 只抛 TypeError("Failed to fetch")；对用户来说
 // 这句话没有意义，而且掩盖了“可能已经提交成功”的事实，因此统一翻译成可操作提示。
 const NETWORK_MESSAGES = {
-  upload: "网络连接中断，文件可能尚未提交完整，请重试",
-  default: "网络连接中断，请检查网络后重试",
+  upload: "Network interrupted; the file may not have uploaded fully. Please retry.",
+  default: "Network interrupted. Check your connection and retry.",
 };
 
 function transportMessage(path) {
@@ -49,14 +50,14 @@ function transportMessage(path) {
 }
 
 function statusMessage(status, fallback) {
-  if (status === 413) return "文件过大，已超过服务器允许的上传大小";
+  if (status === 413) return "File is too large for the server upload limit.";
   // 业务侧 503 常带具体原因（如「请重新登录工作台账号」），优先展示原文。
   if (status === 502 || status === 503 || status === 504) {
     const detail = typeof fallback === "string" ? fallback.trim() : "";
-    if (detail && detail !== "请求未完成，请稍后重试") return detail;
-    return "服务器暂时不可用，请稍后重试";
+    if (detail && detail !== "Request incomplete. Please retry later.") return detail;
+    return "Server temporarily unavailable. Please try again later.";
   }
-  if (status === 524) return "服务器处理超时，请稍后重试";
+  if (status === 524) return "Server timed out. Please try again later.";
   return fallback;
 }
 
@@ -92,10 +93,10 @@ export async function api(path, body, options = {}) {
       credentials: "same-origin",
       signal: controller.signal,
       headers: isFormData(body)
-        ? { "X-CSRF-Token": csrfToken, "X-Request-ID": requestId }
+        ? { "X-CSRF-Token": csrfToken, "X-Request-ID": requestId, "X-Locale": readStoredLocale() }
         : hasBody
           ? { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, "X-Request-ID": requestId }
-          : { "X-CSRF-Token": csrfToken, "X-Request-ID": requestId },
+          : { "X-CSRF-Token": csrfToken, "X-Request-ID": requestId, "X-Locale": readStoredLocale() },
       body: hasBody ? (isFormData(body) ? body : JSON.stringify(body)) : undefined,
     });
   } catch (error) {
@@ -120,7 +121,7 @@ export async function api(path, body, options = {}) {
     }
     const message = statusMessage(
       response.status,
-      data.error || "请求未完成，请稍后重试",
+      data.error || "Request incomplete. Please retry later.",
     );
     const suffix = responseRequestId && response.status >= 500 ? `（请求 ${responseRequestId.slice(0, 8)}）` : "";
     throw new ApiError(`${message}${suffix}`, response.status, data, responseRequestId);

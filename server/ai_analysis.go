@@ -20,21 +20,21 @@ const aiAnalysisTimeout = 10 * time.Minute
 func analyzeStageProgress(stage string) (int, string) {
 	switch stage {
 	case "uploading":
-		return 10, "正在上传原件到分析服务"
+		return 10, "Uploading original to analysis service"
 	case "creating":
-		return 25, "正在创建分析任务"
+		return 25, "Creating analysis task"
 	case "queued":
-		return 35, "分析任务排队中"
+		return 35, "Analysis task queued"
 	case "running":
-		return 55, "AI 正在阅读并整理流水"
+		return 55, "AI is reading and organizing transactions"
 	case "summarizing":
-		return 90, "正在汇总分析结果"
+		return 90, "Summarizing analysis results"
 	case "done":
-		return 100, "分析完成"
+		return 100, "Analysis complete"
 	case "failed":
-		return 0, "分析失败"
+		return 0, "Analysis failed"
 	default:
-		return 5, "准备分析"
+		return 5, "Preparing analysis"
 	}
 }
 
@@ -45,7 +45,7 @@ func (a *App) startAIAnalysis(userID, cid, docID, task string, space spaceRef) O
 	}
 	// 同一资料已有排队/运行中的分析时复用，避免重复点击产生并行任务。
 	// 但超过 staleJobMinutes 的记录视为卡死，不复用，直接开新的一条。
-	if existing := a.s.one("SELECT * FROM ql_ai_analyses WHERE customer_id=? AND document_id=? AND status IN ('queued','running','uploading') AND created > DATE_SUB(NOW(6), INTERVAL ? MINUTE) ORDER BY created DESC LIMIT 1", cid, docID, staleJobMinutes); existing != nil {
+	if existing := a.s.one("SELECT * FROM ql_ai_analyses WHERE customer_id=? AND document_id=? AND status IN ('queued','running','uploading') AND created > DATE_SUB(NOW(6), INTERVAL ? MINUTE) ORDER BY created DESC LIMIT 1", cid, docID, jobPolicy("ai_analysis").StaleMinutes); existing != nil {
 		return existing
 	}
 	analysisID := id()
@@ -96,10 +96,10 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, pay
 		a.s.jobFinish(jid, "failed", message)
 	}
 	if !a.wb.Ready() {
-		fail("尚未接入工作台")
+		fail("Workbench is not connected")
 		return
 	}
-	step("uploading", "正在上传原件到分析服务")
+	step("uploading", "Uploading original to analysis service")
 	path := filepath.Join(a.s.root, "uploads", cid, docID)
 	wbDocID, err := a.wbUploadDocument(ctx, userID, path, name)
 	if err != nil {
@@ -107,7 +107,7 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, pay
 		return
 	}
 	a.s.exec("UPDATE ql_ai_analyses SET workbench_document_id=? WHERE id=?", wbDocID, analysisID)
-	step("creating", "正在创建分析任务")
+	step("creating", "Creating analysis task")
 	task := str(payload, "task")
 	if task == "" {
 		task = "statement_review"
@@ -121,23 +121,31 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, pay
 	}
 	payloadData := sub(data, "data")
 	if payloadData == nil {
-		fail("AI 分析任务返回不完整")
+		fail("AI analysis response incomplete")
 		return
 	}
 	wbAnalysisID := integer(payloadData["analysis_id"])
 	if wbAnalysisID == 0 {
-		fail("AI 分析任务返回不完整")
+		fail("AI analysis response incomplete")
 		return
 	}
 	a.s.exec("UPDATE ql_ai_analyses SET workbench_analysis_id=? WHERE id=?", wbAnalysisID, analysisID)
-	step("queued", "分析任务排队中")
+	step("queued", "Analysis task queued")
 
-	ticker := time.NewTicker(2 * time.Second)
+	poll := time.Duration(jobPolicy("ai_analysis").PollMS) * time.Millisecond
+	if poll < time.Second {
+		poll = 4 * time.Second
+	}
+	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			fail("AI 分析超时，请稍后重试")
+			// 超时也尽量通知工作台停跑，避免清流先杀、后台仍占槽扣费。
+			if wbAnalysisID > 0 {
+				_, _, _ = a.wbRequest(context.Background(), userID, http.MethodPost, "/api/v1/ai/analyses/"+itoa(wbAnalysisID)+"/cancel", Object{})
+			}
+			fail("AI analysis timed out. Please try again later.")
 			return
 		case <-ticker.C:
 		}
@@ -156,7 +164,7 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, pay
 		remote := str(payloadData, "status")
 		if remote == "running" {
 			progress := 55
-			message := "AI 正在阅读并整理流水"
+			message := "AI is reading and organizing transactions"
 			if workbenchProgress := integer(payloadData["progress"]); workbenchProgress > 0 {
 				// 工作台进度是展示用百分比；映射到清流 running 段，避免一开始就顶到 100。
 				progress = int(40 + workbenchProgress*55/100)
@@ -177,15 +185,45 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, pay
 		}
 		switch remote {
 		case "done":
-			step("summarizing", "正在汇总分析结果")
-			raw, _ := json.Marshal(payloadData["result"])
+			step("summarizing", "Summarizing analysis results")
+			resultObj := asObject(payloadData["result"])
+			raw, _ := json.Marshal(resultObj)
 			a.s.exec("UPDATE ql_ai_analyses SET status='done',stage='done',progress=100,result=?,completed=NOW(6) WHERE id=?", string(raw), analysisID)
+			// S6：page_ocr 成功后把转写正文解析成交易行写回核对。
+			if str(payload, "task") == "page_ocr" {
+				if n, wbErr := a.writebackPageOCR(cid, docID, name, resultObj); wbErr != nil {
+					report("running", "视觉识别已完成，但写回核对失败："+wbErr.Error(), 95)
+				} else if n > 0 {
+					report("summarizing", fmt.Sprintf("已写回 %d 笔交易到核对", n), 98)
+				}
+			}
 			return
 		case "failed":
 			fail(str(payloadData, "error"))
 			return
+		case "cancelled":
+			fail("Analysis cancelled")
+			return
 		}
 	}
+}
+
+// writebackPageOCR 消费 page_ocr 结果里的 text，解析后写入该资料的交易行。
+func (a *App) writebackPageOCR(cid, docID, name string, result Object) (int, error) {
+	ocrText := str(result, "text")
+	if strings.TrimSpace(ocrText) == "" {
+		return 0, fmt.Errorf("Analysis result has no transcribed text")
+	}
+	doc := a.s.one("SELECT payload FROM ql_documents WHERE id=? AND customer_id=?", docID, cid)
+	preferred := ""
+	if doc != nil {
+		preferred = str(obj(str(doc, "payload")), "source")
+	}
+	source, rows, err := parseOCRTranscript(ocrText, preferred)
+	if err != nil {
+		return 0, err
+	}
+	return a.s.applyOCRWriteback(cid, docID, name, source, rows)
 }
 
 func (a *App) latestAIAnalyses(cid string, limit int) []Object {

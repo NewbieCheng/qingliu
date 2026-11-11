@@ -14,6 +14,7 @@ import { isQingliuAdmin } from "@/shared/lib/constants.js";
 import { ROUTES } from "./routes.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import { ChangePasswordDialog } from "./ChangePasswordDialog.jsx";
+import { LocaleProvider } from "@/shared/i18n/index.jsx";
 
 function resolveRoute(pathname) {
   let fallback = null;
@@ -43,7 +44,7 @@ function Workspace() {
   useEffect(() => {
     document.title = route.title
       ? `${route.title} · 青流`
-      : "青流 · 客户资料与流水初筛";
+      : "Qingliu · Customer files & statement screening";
   }, [route.title]);
 
   const mustGoHome = ready && route.public && Boolean(user);
@@ -57,7 +58,7 @@ function Workspace() {
   if (!ready || mustGoHome || mustLogin) {
     return (
       <main>
-        <Loading text="正在打开工作台…" />
+        <Loading text="Opening workspace…" />
       </main>
     );
   }
@@ -84,8 +85,8 @@ function Workspace() {
       >
         <main>
           <div className="card">
-            <h1>当前账号没有访问此页面的权限。</h1>
-            <p className="muted">请联系管理员分配对应角色或客户访问权限。</p>
+            <h1>You do not have access to this page.</h1>
+            <p className="muted">Ask an admin to grant the required role or customer access.</p>
           </div>
         </main>
       </WorkspaceShell>
@@ -119,11 +120,13 @@ function Workspace() {
 
 export function App() {
   return (
-    <ErrorBoundary>
-      <AuthProvider>
-        <Workspace />
-        <ToastHost />
-      </AuthProvider>
-    </ErrorBoundary>
+    <LocaleProvider>
+      <ErrorBoundary>
+        <AuthProvider>
+          <Workspace />
+          <ToastHost />
+        </AuthProvider>
+      </ErrorBoundary>
+    </LocaleProvider>
   );
 }

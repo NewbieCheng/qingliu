@@ -1,6 +1,6 @@
 export const CASE_STEPS = [
-  ["upload", "上传资料"],
-  ["ownership", "确认归属"],
+  ["upload", "Upload files"],
+  ["ownership", "Confirm ownership"],
   ["review", "核对疑点"],
   ["report", "查看报告"],
 ];

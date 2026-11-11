@@ -2,7 +2,7 @@ export const ORDER_STATUS = {
   pending: "待支付",
   paid: "已支付",
   closed: "已关闭",
-  failed: "失败",
+  failed: "Failed",
 };
 
 export const LEDGER_CHANGE = {

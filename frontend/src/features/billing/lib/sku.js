@@ -1,3 +1,5 @@
+import { tStandalone } from "@/shared/i18n/core.js";
+
 /** SKU audience helpers — workbench metadata.audience is personal | team | (empty=any). */
 
 export function skuAudience(sku) {
@@ -27,16 +29,31 @@ export function isSkuPurchasable(sku) {
 
 export function ineligibleLabel(sku) {
   switch (String(sku?.ineligible_reason || "")) {
-    case "purchase_window_limit":
-      return "本月已购买，下月可再买";
+    case "purchase_window_limit": {
+      const window = String(sku?.purchase_window || "")
+        .trim()
+        .toLowerCase();
+      if (window === "calendar_year") return tStandalone("billing.sku_limit_year");
+      if (window === "calendar_quarter") return tStandalone("billing.sku_limit_quarter");
+      if (window === "rolling_days") {
+        const days = Number(sku?.purchase_window_days || 0);
+        return days > 0
+          ? tStandalone("billing.sku_limit_rolling_days", { days })
+          : tStandalone("billing.sku_limit_retry");
+      }
+      if (window === "none") return tStandalone("billing.sku_limit_lifetime");
+      return tStandalone("billing.sku_limit_month");
+    }
     case "not_new_user":
-      return "仅新用户可购";
+      return tStandalone("billing.sku_new_user_only");
+    case "not_within_registration_window":
+      return tStandalone("billing.sku_registration_window_only");
     case "audience_mismatch":
-      return "与当前账户类型不匹配";
+      return tStandalone("billing.sku_audience_mismatch");
     case "inactive":
-      return "已下架";
+      return tStandalone("billing.sku_inactive");
     case "owner_not_authorized":
-      return "当前账号无权为企业购买，请联系管理员";
+      return tStandalone("billing.owner_not_authorized");
     default:
       return "";
   }
@@ -61,7 +78,7 @@ export function orderOwnerForSku(sku, space) {
     if (kind !== "team" || spaceId <= 0) {
       return {
         ok: false,
-        message: "团队套餐需先切换到团队空间再下单",
+        message: tStandalone("billing.team_space_required"),
       };
     }
     return { ok: true, owner_type: 2, owner_id: spaceId };

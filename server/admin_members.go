@@ -14,7 +14,7 @@ import (
 func (a *App) listWorkbenchMembers(q *request) []Object {
 	q.requireTeamSpace()
 	if !a.wb.Ready() {
-		bad(503, "尚未接入工作台")
+		bad(503, "Workbench is not connected")
 	}
 	status, data, err := a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodGet, "/api/v1/tenant/members?page=1&page_size=100", nil)
 	if err != nil {
@@ -45,16 +45,16 @@ func (a *App) listWorkbenchMembers(q *request) []Object {
 func (a *App) createWorkbenchMember(q *request, username, display, password, role string) {
 	q.requireTeamSpace()
 	if !a.wb.Ready() {
-		bad(503, "尚未接入工作台")
+		bad(503, "Workbench is not connected")
 	}
 	username = strings.TrimSpace(username)
 	display = strings.TrimSpace(display)
 	role = strings.TrimSpace(role)
 	if username == "" || len(username) > 60 || len(display) > 120 || len(password) < 10 || len(password) > 72 {
-		bad(400, "账号必填、密码10至72字节，角色须有效")
+		bad(400, "Account required; password 10–72 bytes; role must be valid")
 	}
 	if role != "sales" && role != "reviewer" && role != "admin" {
-		bad(400, "账号必填、密码10至72字节，角色须有效")
+		bad(400, "Account required; password 10–72 bytes; role must be valid")
 	}
 	if display == "" {
 		display = username
@@ -95,13 +95,13 @@ func (a *App) createWorkbenchMember(q *request, username, display, password, rol
 func (a *App) removeWorkbenchMember(q *request, localUserID, password string) {
 	q.requireTeamSpace()
 	if !a.wb.Ready() {
-		bad(503, "尚未接入工作台")
+		bad(503, "Workbench is not connected")
 	}
 	password = strings.TrimSpace(password)
 	require(password != "", "请输入当前登录密码以确认删除")
-	require(localUserID != str(q.user, "id"), "不可删除当前账号")
+	require(localUserID != str(q.user, "id"), "Cannot delete the current account")
 	account := a.wbAccount(localUserID)
-	require(account != nil && integer(account["workbench_user_id"]) > 0, "用户不存在或未绑定工作台")
+	require(account != nil && integer(account["workbench_user_id"]) > 0, "User not found or not linked to workbench")
 	wbID := integer(account["workbench_user_id"])
 
 	status, data, err := a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodPost,
@@ -134,13 +134,13 @@ func (a *App) removeWorkbenchMember(q *request, localUserID, password string) {
 func (a *App) toggleWorkbenchMember(q *request, localUserID string) {
 	q.requireTeamSpace()
 	if !a.wb.Ready() {
-		bad(503, "尚未接入工作台")
+		bad(503, "Workbench is not connected")
 	}
-	require(localUserID != str(q.user, "id"), "不可停用当前账号")
+	require(localUserID != str(q.user, "id"), "Cannot disable the current account")
 	account := a.wbAccount(localUserID)
-	require(account != nil && integer(account["workbench_user_id"]) > 0, "用户不存在或未绑定工作台")
+	require(account != nil && integer(account["workbench_user_id"]) > 0, "User not found or not linked to workbench")
 	local := a.s.one("SELECT id,active FROM ql_users WHERE id=?", localUserID)
-	require(local != nil, "用户不存在")
+	require(local != nil, "User not found")
 	nextStatus := int64(1) // UserStatusActive
 	if yesActive(local["active"]) {
 		nextStatus = 2 // UserStatusFrozen

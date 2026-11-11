@@ -1,14 +1,16 @@
 import React from "react";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 export function Pagination({ page, onPrevious, onNext, canPrevious, canNext, label }) {
+  const { t } = useI18n();
   return (
     <div className="pager">
       <button disabled={!canPrevious} onClick={onPrevious}>
-        上一页
+        {t("common.previous")}
       </button>
-      <span>{label ?? `第 ${page} 页`}</span>
+      <span>{label ?? t("common.page", { page })}</span>
       <button disabled={!canNext} onClick={onNext}>
-        下一页
+        {t("common.next")}
       </button>
     </div>
   );

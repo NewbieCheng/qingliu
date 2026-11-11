@@ -9,7 +9,7 @@ export function CreateMemberDialog({ open, onClose, onCreate }) {
   if (!open) return null;
 
   return (
-    <Modal title="新增账号" onClose={onClose} className="modal--sm create-member-dialog">
+    <Modal title="Add account" onClose={onClose} className="modal--sm create-member-dialog">
       <p className="muted create-member-dialog-lead">
         在工作台开通企业成员；个人账号与企业关联同一邮箱，清流角色写在产品权限里。
       </p>
@@ -23,20 +23,20 @@ export function CreateMemberDialog({ open, onClose, onCreate }) {
         }}
       >
         <div className="grid2">
-          <Field label="账号（邮箱）">
+          <Field label="Account (email)">
             <input
               name="username"
               type="email"
               maxLength="60"
               required
-              placeholder="与工作台管理后台同一套账号"
+              placeholder="Same accounts as the workbench admin console"
               autoFocus
             />
           </Field>
-          <Field label="姓名">
+          <Field label="Name">
             <input name="display" maxLength="120" required />
           </Field>
-          <Field label="初始密码（10至72字节）">
+          <Field label="Initial password (10–72 bytes)">
             <input
               name="password"
               type="password"
@@ -46,17 +46,17 @@ export function CreateMemberDialog({ open, onClose, onCreate }) {
               required
             />
           </Field>
-          <Field label="角色">
-            <Select name="role" label="角色" defaultValue="sales">
-              <option value="sales">业务员</option>
-              <option value="reviewer">复核员</option>
-              <option value="admin">管理员</option>
+          <Field label="Role">
+            <Select name="role" label="Role" defaultValue="sales">
+              <option value="sales">Sales</option>
+              <option value="reviewer">Reviewer</option>
+              <option value="admin">Admin</option>
             </Select>
           </Field>
         </div>
         <ModalActions>
           <button type="button" className="ghost" onClick={onClose}>
-            取消
+            Cancel
           </button>
           <button type="submit" className="primary btn-with-icon">
             <UserPlusIcon size={15} />

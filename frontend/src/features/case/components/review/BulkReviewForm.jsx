@@ -8,7 +8,7 @@ export function BulkReviewForm({ selectedCount, busy, onSave }) {
     <Form onSave={onSave}>
       <div className="review-action">
         <strong>已选 {selectedCount} 笔</strong>
-        <Select name="label" label="处理方式" aria-label="处理方式">
+        <Select name="label" label="Handling" aria-label="Handling">
           {REVIEW_OPTIONS.map(([value, label]) => (
             <option key={value} value={value}>
               {label}

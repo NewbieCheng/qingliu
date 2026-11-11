@@ -17,8 +17,10 @@ import {
   TaskList,
   UploadStep,
   getTransaction,
+  uploadParsed,
   useCaseData,
 } from "@/features/case/index.js";
+import { invalidateCase } from "@/app/queries/index.js";
 
 const VALID_STEPS = new Set(CASE_STEPS.map(([key]) => key));
 
@@ -40,6 +42,17 @@ export function CasePage({ cid, user }) {
       if (isInsufficientPointsError(requestError)) setRechargeOpen(true);
       throw requestError;
     });
+  }
+
+  async function commitParsed(payload) {
+    try {
+      await uploadParsed(cid, payload);
+      invalidateCase(cid);
+      return load({ force: true });
+    } catch (requestError) {
+      if (isInsufficientPointsError(requestError)) setRechargeOpen(true);
+      throw requestError;
+    }
   }
 
   const range = useMemo(
@@ -116,6 +129,7 @@ export function CasePage({ cid, user }) {
         <UploadStep
           data={data}
           onUpload={upload}
+          onCommitParsed={commitParsed}
           onNext={() => changeStep("ownership")}
         />
       )}
@@ -143,6 +157,8 @@ export function CasePage({ cid, user }) {
             setPeriod(next);
           }}
           onReview={(payload) => mutate("review", payload)}
+          onAIAdopt={() => mutate("ai-adopt", {})}
+          onAIRevoke={(ids) => mutate("ai-revoke", { ids })}
           onRulesSave={(rules) => mutate("rules", rules)}
           onCoverage={(payload) => mutate("coverage", payload)}
           onOpenOriginal={openOriginal}

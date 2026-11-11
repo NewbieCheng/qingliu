@@ -1,0 +1,20 @@
+{
+  "http_status": 202,
+  "body": {
+    "data": {
+      "analysis_id": 4,
+      "completed_at": null,
+      "completion_tokens": 0,
+      "created_at": "2026-11-11T09:07:00.8183915Z",
+      "document_id": 8,
+      "error": "",
+      "model": "",
+      "points": 0,
+      "progress": 0,
+      "prompt_tokens": 0,
+      "status": "queued",
+      "task": "page_ocr"
+    },
+    "trace_id": "01a1c9dc-4e4d-7aba-9afa-3e15f8e3aeb5"
+  }
+}

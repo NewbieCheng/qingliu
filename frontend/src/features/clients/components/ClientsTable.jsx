@@ -1,4 +1,5 @@
 import React from "react";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import { navigate } from "@/shared/router/index.js";
 import { formatRelativeTime } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
@@ -9,14 +10,15 @@ function openClient(clientId) {
 }
 
 export function ClientsTable({ clients }) {
+  const { t } = useI18n();
   return (
     <div className="table-wrap table-compact">
       <table className="clients-table">
         <thead>
           <tr>
-            <th>客户</th>
-            <th>进度</th>
-            <th>更新时间</th>
+            <th>{t("clients.col_customer")}</th>
+            <th>{t("clients.col_progress")}</th>
+            <th>{t("clients.col_updated")}</th>
           </tr>
         </thead>
         <tbody>
@@ -28,7 +30,7 @@ export function ClientsTable({ clients }) {
                 className="clients-row is-clickable"
                 tabIndex={0}
                 role="link"
-                aria-label={`打开 ${client.name}`}
+                aria-label={t("clients.open_aria_label", { name: client.name })}
                 onClick={() => openClient(client.id)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
@@ -45,7 +47,7 @@ export function ClientsTable({ clients }) {
                     <StatusBadge tone={step.tone}>{step.label}</StatusBadge>
                     {step.docs > 0 && (
                       <span className="clients-progress-meta">
-                        {step.docs} 份
+                      {t("clients.docs_count", { n: step.docs })}
                       </span>
                     )}
                     {step.action ? (

@@ -19,7 +19,7 @@ export function BalanceStrip({ balance }) {
     <section className="card balance-strip" aria-label="当前积分">
       <div className="balance-strip-body">
         <div className="balance-strip-main">
-          <span className="balance-strip-label">可用积分</span>
+          <span className="balance-strip-label">Available points</span>
           <strong className="balance-strip-total">
             {formatNumber(total)}
             <small>积分</small>
@@ -55,8 +55,8 @@ export function BalanceStrip({ balance }) {
 
       <p className="balance-strip-hint muted">
         {hasPeriod
-          ? "临时到期未用完将作废。扣费先扣临时，再扣永久。"
-          : "永久积分不过期。订阅到账后会出现临时额度与到期时间。"}
+          ? "Unused temporary points expire. Charges use temporary first, then permanent."
+          : "Permanent points do not expire. After a subscription, temporary quota and expiry appear."}
       </p>
     </section>
   );

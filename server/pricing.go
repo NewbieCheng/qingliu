@@ -39,7 +39,7 @@ var errPricingChargeFailed = errors.New("积分扣费失败，请联系管理员
 // insufficientPointsMessage 是所有「计费解析入口」对余额不足的统一文案。
 // 三种状态（上传解析、AI 解析、文档 OCR）共用一句话，前端按 402 拉起
 // 「前往充值」对话框，用户不需要在不同页面读不同的说法。
-const insufficientPointsMessage = "积分不足：AI 解析与文档解析按积分计费，请先充值再试"
+const insufficientPointsMessage = "Not enough points: AI and document parsing are billed by points. Top up and retry."
 
 // loadPricing 拉取当前解析计价。读不到时返回 0（不扣费）而不是报错：
 // 计费配置故障不该让用户无法解析，运营可从账单侧对账。
@@ -129,9 +129,19 @@ func (a *App) chargeParse(ctx context.Context, userID, jobID, method string, pag
 //
 // 只认三条路：纯文本提取 / 本机 OCR / 视觉模型。表格导入（CSV/XLSX）没有
 // 模型成本，按最低档处理，运营若想免费可把该档调成 0。
+//
+// needs-vision 只是「还没跑模型」的标记，不能按视觉档扣费——真正的视觉识别
+// 走工作台 page-ocr，由网关按 page-ocr.unit_points 结算。
 func parseBillingTier(result ParseResult) string {
 	method := strings.ToLower(str(result.Meta, "method"))
 	switch {
+	case method == "needs-vision":
+		// 上传阶段只标了需要视觉，本机没跑模型；按本机已完成的最高档计，
+		// 有 OCR 页走 ocr，否则只收文字层（通常 0 或低价）。
+		if integer(result.Meta["ocr_pages"]) > 0 {
+			return "ocr"
+		}
+		return "text"
 	case strings.Contains(method, "vision"), strings.Contains(method, "model"):
 		return "vision"
 	case strings.Contains(method, "ocr"), strings.Contains(method, "tesseract"):

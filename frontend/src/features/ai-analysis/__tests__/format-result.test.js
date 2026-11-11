@@ -3,6 +3,8 @@ import {
   enrichAIResult,
   formatAIExportText,
   formatAISummary,
+  formatDetailLine,
+  formatLocator,
   normalizeProcess,
 } from "../format-result.js";
 
@@ -44,5 +46,25 @@ describe("process and export", () => {
     expect(text).toContain("第 1 段思考：收入稳定");
     expect(text).toContain("大额提现");
     expect(text).toContain("AI 辅助，需人工复核");
+  });
+
+  it("exports locator / page for anomalies", () => {
+    expect(
+      formatLocator({ page: 3, evidence: "右上角印章", locator: "row:12" }),
+    ).toBe("第3页 · row:12 · 右上角印章");
+    expect(
+      formatDetailLine({
+        item: "大额提现",
+        amount: "20000",
+        page: 3,
+        evidence: "第 3 页",
+      }),
+    ).toContain("第3页");
+    const text = formatAIExportText({
+      summary: "摘要",
+      anomalies: [{ item: "异常转入", page: 2, locator: "bbox:1" }],
+    });
+    expect(text).toContain("第2页");
+    expect(text).toContain("bbox:1");
   });
 });

@@ -1,28 +1,28 @@
 export const NAVIGATION = [
   {
-    label: "工作区",
+    label: "Workspace",
     items: [
-      { to: "/", icon: "clients", label: "客户档案", end: true },
+      { to: "/", icon: "clients", label: "Customers", end: true },
     ],
   },
   {
-    label: "账户",
+    label: "Account",
     items: [
-      { to: "/recharge", icon: "wallet", label: "充值" },
-      { to: "/profile", icon: "user", label: "个人信息" },
+      { to: "/recharge", icon: "wallet", label: "Top up" },
+      { to: "/profile", icon: "user", label: "Profile" },
     ],
   },
   {
-    label: "管理",
+    label: "Admin",
     adminOnly: true,
-    items: [{ to: "/admin", icon: "admin", label: "团队与权限" }],
+    items: [{ to: "/admin", icon: "admin", label: "Team & access" }],
   },
 ];
 
 /** 手机底部主 Tab（「我的」由 MobileTabBar 单独处理） */
 export const MOBILE_PRIMARY_TABS = [
-  { to: "/", icon: "clients", label: "客户", end: true },
-  { to: "/recharge", icon: "wallet", label: "充值" },
+  { to: "/", icon: "clients", label: "Customers", end: true },
+  { to: "/recharge", icon: "wallet", label: "Top up" },
 ];
 
 export const MOBILE_ME_PATHS = ["/profile", "/admin"];

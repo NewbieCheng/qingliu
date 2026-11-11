@@ -28,9 +28,23 @@ bin/
 # local-only fixtures (real customer PDFs — never commit)
 .local/
 
+# OCR/AI probe runtime (tokens / ephemeral responses)
+samples/ocr-probe/login*.json
+samples/ocr-probe/*-resp.json
+samples/ocr-probe/hash.txt
+samples/ocr-probe/reset.sql
+samples/ocr-probe/otp-req.json
+samples/ocr-probe/svc-login.json
+samples/ocr-probe/unlock.sql
+samples/ocr-probe/bcheck/
+
 # local Go toolchain caches (workspace builds)
 .gocache/
 .gotmp/
 .gopath/
 *.exe
 .pkg/
+
+# local hand-edit backups (never commit)
+*.bak
+*.bak-*

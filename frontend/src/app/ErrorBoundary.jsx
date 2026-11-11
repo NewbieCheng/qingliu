@@ -19,14 +19,14 @@ export class ErrorBoundary extends React.Component {
     return (
       <main>
         <div className="card">
-          <h1>当前页面没有正常加载。</h1>
+          <h1>This page did not load correctly.</h1>
           <p className="muted">{this.state.error.message}</p>
           <button
             type="button"
             className="primary"
             onClick={() => window.location.reload()}
           >
-            重新加载页面
+            Reload page
           </button>
         </div>
       </main>

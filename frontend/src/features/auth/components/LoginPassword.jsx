@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { EyeIcon } from "@/shared/ui/icons.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 export function LoginPassword({ value, onChange, defaultValue = "" }) {
+  const { t } = useI18n();
   const [show, setShow] = useState(false);
   const controlled = value !== undefined;
   return (
@@ -15,12 +17,12 @@ export function LoginPassword({ value, onChange, defaultValue = "" }) {
           : { defaultValue })}
         required
         maxLength="72"
-        placeholder="请输入密码"
+        placeholder={t("auth.password_placeholder")}
       />
       <button
         type="button"
         className="auth-eye"
-        aria-label={show ? "隐藏密码" : "显示密码"}
+        aria-label={show ? t("captcha.password_hide") : t("captcha.password_show")}
         onClick={() => setShow((current) => !current)}
       >
         <EyeIcon off={show} />

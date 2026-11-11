@@ -80,19 +80,13 @@ export function formatAIExportText(result) {
     blocks.push("【思考过程】\n" + enriched.process.map((line) => `· ${line}`).join("\n"));
   }
   const sections = [
-    ["收入结构", enriched.income_structure],
+    ["Income mix", enriched.income_structure],
     ["异常点", enriched.anomalies],
-    ["建议核实", enriched.questions],
+    ["Suggested review", enriched.questions],
   ];
   for (const [label, rows] of sections) {
     if (!rows?.length) continue;
-    const lines = rows.map((row) => {
-      if (typeof row === "string") return `· ${row}`;
-      const head = row.item || row.source || "";
-      const amount = row.amount ? ` · ${row.amount}` : "";
-      const evidence = row.evidence ? `（${row.evidence}）` : "";
-      return `· ${head}${amount}${evidence}`.trim();
-    });
+    const lines = rows.map((row) => formatDetailLine(row));
     blocks.push(`【${label}】\n` + lines.join("\n"));
   }
   if (enriched.disclaimer) blocks.push(String(enriched.disclaimer));
@@ -129,6 +123,29 @@ export function downloadText(filename, text) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+/** 明细行展示/导出：优先带定位（页码 / locator / evidence）。 */
+export function formatDetailLine(row) {
+  if (typeof row === "string") return `· ${row}`;
+  if (!row || typeof row !== "object") return "·";
+  const head = row.item || row.source || row.label || "";
+  const amount = row.amount ? ` · ${row.amount}` : "";
+  const locator = formatLocator(row);
+  return `· ${head}${amount}${locator ? `（${locator}）` : ""}`.trim();
+}
+
+export function formatLocator(row) {
+  if (!row || typeof row !== "object") return "";
+  const parts = [];
+  if (row.page != null && String(row.page).trim() !== "") {
+    parts.push(`第${row.page}页`);
+  }
+  if (row.locator) parts.push(String(row.locator));
+  if (row.evidence) parts.push(String(row.evidence));
+  if (row.ai_locator) parts.push(String(row.ai_locator));
+  // 去重保序
+  return [...new Set(parts.map((part) => part.trim()).filter(Boolean))].join(" · ");
 }
 
 function appendScoped(target, value, scope) {

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { formatFileSize, randomId } from "@/shared/lib/format.js";
 import { UploadIcon, XIcon } from "./icons.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 const MAX_FILES = 10;
 const MAX_EACH = 30 * 1024 * 1024;
@@ -16,6 +17,7 @@ function fileExtension(name) {
 }
 
 function UploadFileCard({ file, previewUrl, onRemove, disabled }) {
+  const { t } = useI18n();
   const extension = fileExtension(file.name);
   const isImage = Boolean(previewUrl);
 
@@ -42,8 +44,8 @@ function UploadFileCard({ file, previewUrl, onRemove, disabled }) {
       <button
         type="button"
         className="upload-card-remove"
-        aria-label={`移除 ${file.name}`}
-        title="移除"
+        aria-label={t("upload.remove_file", { name: file.name })}
+        title={t("common.remove")}
         disabled={disabled}
         onClick={(event) => {
           event.stopPropagation();
@@ -57,6 +59,7 @@ function UploadFileCard({ file, previewUrl, onRemove, disabled }) {
 }
 
 export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
+  const { t } = useI18n();
   const inputRef = useRef(null);
   const batchInputRef = useRef(null);
   const [files, setFiles] = useState([]);
@@ -88,15 +91,15 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
   function commit(next) {
     const total = next.reduce((sum, file) => sum + file.size, 0);
     if (next.length > MAX_FILES) {
-      setError(`每批最多 ${MAX_FILES} 份`);
+      setError(t("upload.max_files", { max: MAX_FILES }));
       return;
     }
     if (next.some((file) => file.size > MAX_EACH)) {
-      setError("单份文件不能超过 30MB");
+      setError(t("upload.max_each_size", { size: 30 }));
       return;
     }
     if (total > MAX_TOTAL) {
-      setError(`整批文件不能超过 ${MAX_TOTAL_LABEL}`);
+      setError(t("upload.max_batch_size", { size: MAX_TOTAL_LABEL }));
       return;
     }
     setError("");
@@ -143,7 +146,7 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
         required
         disabled={disabled}
         onChange={(event) => pick(event.target.files)}
-        onInvalid={() => setError("请选择至少一份原件")}
+        onInvalid={() => setError(t("upload.select_one_file"))}
       />
       <input ref={batchInputRef} type="hidden" name="batch" />
 
@@ -173,9 +176,9 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
           <span className="upload-icon" aria-hidden="true">
             <UploadIcon />
           </span>
-          <strong>把原件拖到这里，或点击选择</strong>
+          <strong>{t("upload.drop_here")}</strong>
           <span className="upload-hint">
-            PDF / CSV / XLSX · 每批最多 10 份 · 单份 ≤30MB · 整批 ≤60MB
+            {t("upload.drop_limits")}
           </span>
         </div>
       ) : (
@@ -211,7 +214,7 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
               <span className="upload-card-add-mark" aria-hidden="true">
                 ＋
               </span>
-              <span>继续添加</span>
+              <span>{t("upload.add_more")}</span>
             </button>
           ) : null}
         </div>
@@ -219,7 +222,7 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
 
       {hasFiles ? (
         <p className="upload-cards-count">
-          已选 {files.length} 份 · 可继续拖入或点「继续添加」
+          {t("upload.selected_count", { count: files.length })}
         </p>
       ) : null}
 

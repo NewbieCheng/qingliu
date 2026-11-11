@@ -22,6 +22,21 @@ export function mutateCase(cid, range, action, body) {
   );
 }
 
+/** 本机拆行入库：原件落 Vault + 服务端权威校验 rows + 扣解析分，不进 upload worker。 */
+export function uploadParsed(cid, { file, rows, source, batch }) {
+  const form = new FormData();
+  form.set("client_parsed", "1");
+  form.set("source", source);
+  if (batch) form.set("batch", batch);
+  form.set("rows_json", JSON.stringify(rows));
+  form.append("file", file);
+  return api(`/api/clients/${cid}/upload-parsed`, form);
+}
+
+export function listCaseJobs(cid, { signal } = {}) {
+  return api(`/api/clients/${cid}/jobs`, undefined, { signal });
+}
+
 export function getTransaction(cid, transactionId) {
   return api(`/api/clients/${cid}/transaction/${transactionId}`);
 }
@@ -42,10 +57,10 @@ async function fetchReportFile(cid, reportId, file) {
   });
   if (response.status === 401) {
     navigate("/login");
-    throw new Error("登录已过期请重新登录");
+    throw new Error("Session expired. Please sign in again.");
   }
   if (!response.ok) {
-    let message = "下载失败请稍后重试";
+    let message = "Download failed. Please retry later.";
     try {
       const data = await response.json();
       if (data?.error) message = data.error;

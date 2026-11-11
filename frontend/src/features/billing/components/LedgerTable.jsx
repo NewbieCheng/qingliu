@@ -15,10 +15,10 @@ export function LedgerTable({ ledgers, page = 1, pageSize = 10, total = 0, onPag
         <table>
           <thead>
             <tr>
-              <th>时间</th>
-              <th>类型</th>
+              <th>Time</th>
+              <th>Type</th>
               <th>变动</th>
-              <th>说明</th>
+              <th>Notes</th>
             </tr>
           </thead>
           <tbody>

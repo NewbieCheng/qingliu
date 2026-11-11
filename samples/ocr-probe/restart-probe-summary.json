@@ -1,0 +1,50 @@
+[
+  {
+    "model": "page-ocr",
+    "http": 200,
+    "ms": 4632,
+    "response_model": "page-ocr",
+    "has_content": true,
+    "marker": true,
+    "error_code": null,
+    "error_type": null,
+    "error_message": null,
+    "preview": "微信支付交易明细证明（合成探测页）\n兹证明：合成持有人\n账号：6222000011112222\n期间：2026-01-01 至 2026-01-31\n\n交易时间 收/支 金额(元) 交易对方 交易类型\n2026-01-05 10:11 收入 1280.50 华丰商贸 转账\n2026-01-08 09:00 收入 0.3"
+  },
+  {
+    "model": "mimo-v2.6-pro",
+    "http": 200,
+    "ms": 52834,
+    "response_model": "mimo-v2.6-pro",
+    "has_content": true,
+    "marker": true,
+    "error_code": null,
+    "error_type": null,
+    "error_message": null,
+    "preview": "微信支付交易明细证明（合成探测页）\n兹证明：合成持有人\n账号：6222000011112222\n期间：2026-01-01 至 2026-01-31\n\n交易时间 收/支 金额(元) 交易对方 交易类型\n2026-01-05 10:11 收入 1280.50 华丰商贸 转账\n2026-01-08 09:00 收入 0.3"
+  },
+  {
+    "model": "deepseek-flash",
+    "http": 200,
+    "ms": 3991,
+    "response_model": "deepseek-flash",
+    "has_content": true,
+    "marker": true,
+    "error_code": null,
+    "error_type": null,
+    "error_message": null,
+    "preview": "微信支付交易明细证明（合成探测页）\n兹证明：合成持有人\n账号：6222000011112222\n期间：2026-01-01 至 2026-01-31\n\n交易时间 收/支 金额(元) 交易对方 交易类型\n2026-01-05 10:11 收入 1280.50 华丰商贸 转账\n2026-01-08 09:00 收入 0.3"
+  },
+  {
+    "model": "__no_such_model__",
+    "http": 404,
+    "ms": 5,
+    "response_model": null,
+    "has_content": false,
+    "marker": false,
+    "error_code": "model_not_found",
+    "error_type": "not_found_error",
+    "error_message": "model \"__no_such_model__\" does not exist or is not available",
+    "preview": null
+  }
+]

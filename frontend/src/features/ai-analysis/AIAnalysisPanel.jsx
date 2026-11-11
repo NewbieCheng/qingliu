@@ -11,25 +11,31 @@ import { navigate } from "@/shared/router/index.js";
 import { queryBalance } from "@/app/queries/index.js";
 import { availablePoints } from "@/features/billing/index.js";
 import { isInsufficientPointsError } from "@/shared/lib/billing.js";
-import { getAnalyses, startAnalysis } from "./api.js";
+import {
+  applyAISuggest,
+  applyAIWriteback,
+  getAnalyses,
+  startAnalysis,
+} from "./api.js";
 import {
   copyText,
   downloadText,
   enrichAIResult,
   formatAIExportText,
   formatAISummary,
+  formatLocator,
 } from "./format-result.js";
 
 const STATUS = {
   uploading: "正在上传",
-  queued: "排队中",
-  running: "分析中",
-  done: "已完成",
-  failed: "失败",
+  queued: "Queued",
+  running: "Analyzing",
+  done: "Done",
+  failed: "Failed",
 };
 
 const ETA_HINT = {
-  analysis: "预计约 1–3 分钟",
+  analysis: "Usually 1–3 minutes",
   page_ocr: "预计约 3–8 分钟",
 };
 
@@ -38,13 +44,13 @@ const RESULT_PAGE_SIZE = 10;
 const AI_MODES = [
   {
     value: "analysis",
-    label: "智能解析",
-    hint: "直接读版式，快，适合原生 PDF / 表格清晰的流水",
+    label: "Smart analysis",
+    hint: "Reads layout directly; fast for native PDF / clear table statements",
   },
   {
     value: "page_ocr",
     label: "文档 OCR 转写",
-    hint: "逐页渲染后视觉转写，适合扫描件或图片型流水；页多时较慢",
+    hint: "Page render + vision OCR; good for scans/images; slower with many pages",
   },
 ];
 
@@ -67,7 +73,7 @@ async function handleCopyExport(result, action) {
     downloadText(`ai-analysis-${Date.now()}.txt`, text);
     toast("已导出分析结果", "success");
   } catch (requestError) {
-    toast(requestError.message || "操作失败", "error");
+    toast(requestError.message || "Failed", "error");
   }
 }
 
@@ -100,14 +106,14 @@ function AIResultActions({ result, disabled }) {
         className="ghost"
         onClick={() => void handleCopyExport(result, "copy")}
       >
-        复制
+        Copy
       </button>
       <button
         type="button"
         className="ghost"
         onClick={() => void handleCopyExport(result, "export")}
       >
-        导出
+        Export
       </button>
     </div>
   );
@@ -115,9 +121,9 @@ function AIResultActions({ result, disabled }) {
 
 function AIResultDialog({ open, onClose, result }) {
   const tabs = [
-    { key: "income_structure", label: "收入结构" },
+    { key: "income_structure", label: "Income mix" },
     { key: "anomalies", label: "异常点" },
-    { key: "questions", label: "建议核实" },
+    { key: "questions", label: "Suggested review" },
   ].filter((tab) => (result?.[tab.key] || []).length > 0);
   const [tab, setTab] = useState(tabs[0]?.key || "");
   const [page, setPage] = useState(1);
@@ -174,9 +180,11 @@ function AIResultDialog({ open, onClose, result }) {
               row
             ) : (
               <>
-                {row.item || row.source || ""}
+                {row.item || row.source || row.label || ""}
                 {row.amount ? ` · ${row.amount}` : ""}
-                {row.evidence && <small> {row.evidence}</small>}
+                {formatLocator(row) ? (
+                  <small> 定位：{formatLocator(row)}</small>
+                ) : null}
               </>
             )}
           </li>
@@ -196,15 +204,26 @@ function AIResultDialog({ open, onClose, result }) {
   );
 }
 
-function AIAnalysisDialog({ cid, onClose }) {
+function AIAnalysisDialog({ cid, docs = [], onClose }) {
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resultOpen, setResultOpen] = useState(false);
   const [mode, setMode] = useState("analysis");
+  const [documentId, setDocumentId] = useState(docs[0]?.id || "");
   // 积分余额：AI 解析按用量扣积分，余额为 0 时先说清楚要充值，别让用户
   // 点了「开始分析」才吃一个 402。null = 还没读到（不阻塞按钮）。
   const [points, setPoints] = useState(null);
+
+  useEffect(() => {
+    if (!docs.length) {
+      setDocumentId("");
+      return;
+    }
+    if (!docs.some((doc) => String(doc.id) === String(documentId))) {
+      setDocumentId(docs[0].id);
+    }
+  }, [docs, documentId]);
 
   useEffect(() => {
     let alive = true;
@@ -246,10 +265,21 @@ function AIAnalysisDialog({ cid, onClose }) {
   }, [items[0]?.id, items[0]?.status, cid]);
 
   async function start() {
+    if (!documentId) {
+      const message = docs.length
+        ? "Select a document to analyze"
+        : "Upload documents before starting analysis";
+      setError(message);
+      toast(message, "error");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      await startAnalysis(cid, mode === "page_ocr" ? mode : undefined);
+      await startAnalysis(cid, {
+        documentId,
+        task: mode === "page_ocr" ? mode : undefined,
+      });
       toast(
         mode === "page_ocr"
           ? `已提交文档视觉识别；${ETA_HINT.page_ocr}，进度与思考过程会在下方陆续出现。`
@@ -266,6 +296,47 @@ function AIAnalysisDialog({ cid, onClose }) {
       setBusy(false);
     }
   }
+
+  async function writeSuggest() {
+    if (!latest?.id || latest.status !== "done") return;
+    setBusy(true);
+    try {
+      const data = await applyAISuggest(cid, latest.id);
+      const n = Number(data?.applied) || 0;
+      toast(
+        n > 0
+          ? `已写入 ${n} 笔核对预勾；请到「逐笔核对」查看并采纳`
+          : "No entries with transaction anchors; could not write pre-checks",
+        n > 0 ? "success" : "info",
+      );
+    } catch (requestError) {
+      toast(requestError.message || "写入预勾失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function writeOCRRows() {
+    if (!latest?.id || latest.status !== "done") return;
+    setBusy(true);
+    try {
+      const data = await applyAIWriteback(cid, latest.id);
+      const n = Number(data?.rows) || 0;
+      toast(
+        n > 0
+          ? `已写回 ${n} 笔交易，请到「逐笔核对」查看`
+          : "没有可写回的交易行",
+        n > 0 ? "success" : "info",
+      );
+    } catch (requestError) {
+      toast(requestError.message || "写回核对失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const selectedDoc = docs.find((doc) => String(doc.id) === String(documentId));
+  const canStart = Boolean(documentId) && !busy && !needRecharge;
 
   const latest = items[0];
   const running = latest && isActiveStatus(latest.status);
@@ -284,7 +355,7 @@ function AIAnalysisDialog({ cid, onClose }) {
 
   return (
     <>
-      <Modal title="AI 辅助分析" onClose={onClose} className="modal--sm">
+      <Modal title="AI analysis" onClose={onClose} className="modal--sm">
         <div className="ai-dialog-body">
           <p className="muted" style={{ margin: 0 }}>
             基于原件文字与页面视觉生成摘要、异常点和需核实问题；不替代规则结论，不自动签发报告。
@@ -312,6 +383,34 @@ function AIAnalysisDialog({ cid, onClose }) {
               </button>
             </div>
           ) : null}
+          <label className="field">
+            <span>分析文档（必选）</span>
+            {docs.length ? (
+              <select
+                value={documentId}
+                onChange={(event) => setDocumentId(event.target.value)}
+                disabled={busy || running}
+                aria-label="选择要分析的文档"
+              >
+                {docs.map((doc) => (
+                  <option key={doc.id} value={doc.id}>
+                    {doc.name}
+                    {doc.meta?.pages ? ` · ${doc.meta.pages} 页` : ""}
+                    {doc.meta?.rows ? ` · ${doc.meta.rows} 笔` : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="muted" style={{ margin: 0 }}>
+                还没有可分析的资料，请先在上传步骤提交原件。
+              </p>
+            )}
+            {selectedDoc ? (
+              <p className="ai-mode-hint">
+                将阅读「{selectedDoc.name}」；定位说明会出现在异常点与建议核实条目中。
+              </p>
+            ) : null}
+          </label>
           <div>
             <SegmentedControl
               aria-label="AI 分析方式"
@@ -325,15 +424,15 @@ function AIAnalysisDialog({ cid, onClose }) {
           </div>
           <ModalActions>
             <button type="button" className="ghost" onClick={() => void load()}>
-              刷新
+              Refresh
             </button>
             <button
               type="button"
               className="primary"
-              disabled={busy}
+              disabled={!canStart || running}
               onClick={() => void start()}
             >
-              {busy ? "提交中…" : "开始分析"}
+              {busy ? "提交中…" : "Start analysis"}
             </button>
           </ModalActions>
           {latest ? (
@@ -370,7 +469,7 @@ function AIAnalysisDialog({ cid, onClose }) {
                   </div>
                   <p className="task-meta">
                     <span>
-                      {latest.stage === "running" ? "分析中" : STATUS[latest.status] || "分析中"}
+                      {latest.stage === "running" ? "Analyzing" : STATUS[latest.status] || "Analyzing"}
                       {" · "}
                       {eta}
                     </span>
@@ -390,6 +489,26 @@ function AIAnalysisDialog({ cid, onClose }) {
                 <p className="muted">正在整理片段，稍后会陆续出现摘要与思考过程。</p>
               ) : null}
               <AIResultActions result={displayResult} />
+              {latest.status === "done" ? (
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={busy}
+                  onClick={() => void writeSuggest()}
+                >
+                  Write suggestions to review
+                </button>
+              ) : null}
+              {latest.status === "done" && displayResult?.text ? (
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={busy}
+                  onClick={() => void writeOCRRows()}
+                >
+                  写回核对交易
+                </button>
+              ) : null}
               {detailCount > 0 ? (
                 <button
                   type="button"
@@ -428,7 +547,7 @@ function AIAnalysisDialog({ cid, onClose }) {
 }
 
 /** 报告页入口：右侧入口按钮 + 弹窗，不再常驻侧栏。 */
-export function AIAnalysisPanel({ cid }) {
+export function AIAnalysisPanel({ cid, docs = [] }) {
   const [open, setOpen] = useState(false);
   const [latest, setLatest] = useState(null);
 
@@ -471,7 +590,7 @@ export function AIAnalysisPanel({ cid }) {
   const eta = ETA_HINT.analysis;
 
   let statusLine =
-    "基于原件生成摘要与异常点，不替代规则结论、不自动签发。";
+    "Summaries and anomalies from originals; does not replace rule conclusions or auto-issue.";
   if (running) {
     statusLine = `分析进行中（${STATUS[latest.status] || latest.status} ${percent}% · ${eta}）`;
   } else if (failed) {
@@ -482,15 +601,19 @@ export function AIAnalysisPanel({ cid }) {
     <>
       <div className="ai-entry-bar">
         <div>
-          <strong className="ai-entry-title">AI 辅助分析</strong>
+          <strong className="ai-entry-title">AI analysis</strong>
           <p>{statusLine}</p>
         </div>
         <button type="button" className="primary" onClick={() => setOpen(true)}>
-          {running ? "查看进度" : failed ? "查看并重试" : "开始分析"}
+          {running ? "查看进度" : failed ? "查看并重试" : "Start analysis"}
         </button>
       </div>
       {open ? (
-        <AIAnalysisDialog cid={cid} onClose={() => setOpen(false)} />
+        <AIAnalysisDialog
+          cid={cid}
+          docs={docs}
+          onClose={() => setOpen(false)}
+        />
       ) : null}
     </>
   );

@@ -51,6 +51,34 @@ describe("skuKind / purchasable", () => {
     expect(ineligibleLabel({ ineligible_reason: "purchase_window_limit" })).toMatch(
       /本月/,
     );
+    expect(
+      ineligibleLabel({
+        ineligible_reason: "purchase_window_limit",
+        purchase_window: "calendar_year",
+      }),
+    ).toMatch(/本年/);
+    expect(
+      ineligibleLabel({
+        ineligible_reason: "purchase_window_limit",
+        purchase_window: "calendar_quarter",
+      }),
+    ).toMatch(/本季/);
+    expect(
+      ineligibleLabel({
+        ineligible_reason: "purchase_window_limit",
+        purchase_window: "rolling_days",
+        purchase_window_days: 90,
+      }),
+    ).toMatch(/90/);
+    expect(
+      ineligibleLabel({
+        ineligible_reason: "purchase_window_limit",
+        purchase_window: "none",
+      }),
+    ).toMatch(/上限/);
+    expect(
+      ineligibleLabel({ ineligible_reason: "not_within_registration_window" }),
+    ).toMatch(/注册期/);
     expect(ineligibleLabel({ ineligible_reason: "owner_not_authorized" })).toMatch(
       /无权为企业购买/,
     );

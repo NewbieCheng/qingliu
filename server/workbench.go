@@ -81,7 +81,7 @@ func (c wbConfig) login(ctx context.Context, args loginArgs) (wbSession, error) 
 		return wbSession{}, err
 	}
 	if status != http.StatusOK {
-		return wbSession{}, errors.New(wbMessage(data, "账号或密码不正确"))
+		return wbSession{}, errors.New(wbMessage(data, "Incorrect account or password"))
 	}
 	return parseWBSession(data)
 }
@@ -127,7 +127,7 @@ func (c wbConfig) refresh(ctx context.Context, refreshToken string) (wbSession, 
 	if status != http.StatusOK {
 		// Keep the same user-facing phrase as a missing token so the recharge
 		// page / topbar do not invent a second "session died" wording.
-		return wbSession{}, errors.New("请重新登录工作台账号")
+		return wbSession{}, errors.New("Please sign in to the workbench again")
 	}
 	return parseWBSession(data)
 }
@@ -166,7 +166,7 @@ func (c wbConfig) do(ctx context.Context, method, path string, body any, token s
 	}
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		return 0, nil, errors.New("工作台暂时不可用，请稍后重试")
+		return 0, nil, errors.New("Workbench temporarily unavailable. Please retry later.")
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
@@ -376,7 +376,7 @@ func (a *App) newSession(q *request, userID string, space spaceRef) {
 func (a *App) wbAccessToken(userID string) (string, error) {
 	account := a.wbAccount(userID)
 	if account == nil {
-		return "", errors.New("请重新登录工作台账号")
+		return "", errors.New("Please sign in to the workbench again")
 	}
 	expires := integer(account["token_expires"])
 	if expires > 0 && time.Now().Unix() > expires-60 {
@@ -384,17 +384,22 @@ func (a *App) wbAccessToken(userID string) (string, error) {
 	}
 	token := string(a.s.unseal(bytesOf(account["access_token"])))
 	if token == "" {
-		return "", errors.New("请重新登录工作台账号")
+		return "", errors.New("Please sign in to the workbench again")
 	}
 	return token, nil
 }
+
+// wbRefreshWaitTimeout 是「同 user 等同伴刷新结果」的上限。领飞者的上游
+// 调用本身有 15s 客户端超时，这里再留一倍余量；超时就直接失败退出，
+// 绝不把一个准入槽（见 pool.go 的 proxy 池）无限期挂在 gate 上。
+const wbRefreshWaitTimeout = 30 * time.Second
 
 // wbRefresh 刷新工作台 access token，并按 userID 做单飞：同一时刻只允许
 // 一次上游 /auth/refresh。工作台 refresh token 轮换后复用会吊销整个
 // family（见后端 auth.Refresh → ErrRefreshTokenReused），并发刷新等于自踢。
 func (a *App) wbRefresh(userID string) (string, error) {
 	if a == nil {
-		return "", errors.New("请重新登录工作台账号")
+		return "", errors.New("Please sign in to the workbench again")
 	}
 	a.refreshMu.Lock()
 	if a.refreshGates == nil {
@@ -402,32 +407,53 @@ func (a *App) wbRefresh(userID string) (string, error) {
 	}
 	if gate, ok := a.refreshGates[userID]; ok {
 		a.refreshMu.Unlock()
-		<-gate.done
-		return gate.token, gate.err
+		// 等同伴必须有兜底：领飞者一旦 panic 或上游卡住，等待方不能永久
+		// 占着准入槽 —— proxy 池被长期占用同样会拖慢全站（见 2026-11-12 生产故障）。
+		select {
+		case <-gate.done:
+			return gate.token, gate.err
+		case <-time.After(wbRefreshWaitTimeout):
+			return "", errors.New("Workbench is temporarily unavailable. Try again later.")
+		}
 	}
 	gate := &wbRefreshGate{done: make(chan struct{})}
 	a.refreshGates[userID] = gate
 	a.refreshMu.Unlock()
 
-	token, err := a.wbRefreshOnce(userID)
+	// 收尾无条件执行：成功、失败、panic 都必须销号并 close(gate.done)。
+	// 少关一次，该用户后续每个请求都会卡在 <-gate.done，4 个并发槽被这样
+	// 占满后所有接口（含 /health）全部 503，只能重启进程恢复。
+	var token string
+	var err error
+	defer func() {
+		p := recover()
+		if p != nil {
+			token, err = "", errors.New("Workbench is temporarily unavailable. Try again later.")
+		}
+		a.refreshMu.Lock()
+		gate.token, gate.err = token, err
+		delete(a.refreshGates, userID)
+		a.refreshMu.Unlock()
+		close(gate.done)
+		if p != nil {
+			panic(p)
+		}
+	}()
+
+	token, err = a.wbRefreshOnce(userID)
 	if err != nil {
 		// 瞬时失败时：可能同伴已刷成功并写库，优先复用仍有效的 access。
 		if fresh, ok := a.wbFreshAccess(userID); ok {
 			token, err = fresh, nil
 		}
 	}
-	gate.token, gate.err = token, err
-	a.refreshMu.Lock()
-	delete(a.refreshGates, userID)
-	a.refreshMu.Unlock()
-	close(gate.done)
 	return token, err
 }
 
 func (a *App) wbRefreshOnce(userID string) (string, error) {
 	account := a.wbAccount(userID)
 	if account == nil {
-		return "", errors.New("请重新登录工作台账号")
+		return "", errors.New("Please sign in to the workbench again")
 	}
 	// 进闸后再次检查：同伴可能刚刷完，不必再拿旧 refresh 去撞轮换。
 	expires := integer(account["token_expires"])
@@ -439,7 +465,7 @@ func (a *App) wbRefreshOnce(userID string) (string, error) {
 	}
 	rawRefresh := string(a.s.unseal(bytesOf(account["refresh_token"])))
 	if rawRefresh == "" {
-		return "", errors.New("请重新登录工作台账号")
+		return "", errors.New("Please sign in to the workbench again")
 	}
 	session, err := a.wb.refresh(context.Background(), rawRefresh)
 	if err != nil {
@@ -500,7 +526,7 @@ func (a *App) wbUploadDocument(ctx context.Context, userID, path, name string) (
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := a.wb.Client.Do(req)
 	if err != nil {
-		return 0, errors.New("工作台暂时不可用，请稍后重试")
+		return 0, errors.New("Workbench temporarily unavailable. Please retry later.")
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -519,7 +545,7 @@ func (a *App) wbUploadDocument(ctx context.Context, userID, path, name string) (
 
 func (a *App) wbRequest(ctx context.Context, userID, method, path string, body any) (int, Object, error) {
 	if !a.wb.Ready() {
-		return 0, nil, errors.New("尚未接入工作台")
+		return 0, nil, errors.New("Workbench is not connected")
 	}
 	token, err := a.wbAccessToken(userID)
 	if err != nil {

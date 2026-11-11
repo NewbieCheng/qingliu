@@ -261,9 +261,8 @@ func (s *Store) jobFinish(jid, status, message string) {
 	s.exec("UPDATE ql_jobs SET status=?,message=?,stage=?,progress=? WHERE id=?", status, message, status, progress, jid)
 }
 
-// staleJobMinutes 是判定任务卡死的时限。AI 分析本身有 10 分钟超时，
-// 这里留出余量；超过这个时间仍在 queued/running 的任务一律视为失效，
-// 不再阻断该客户的写操作，并会被 sweepStaleJobs 标成失败。
+// staleJobMinutes 保留给「复用进行中 AI」等粗粒度查询的默认上界。
+// 真正的超时/清扫以 jobPolicy(kind).StaleMinutes 为准（见 job_policy.go）。
 const staleJobMinutes = 30
 
 // queuePosition 返回该任务前面还有几个待处理任务（0 表示下一个就是它）。
@@ -302,13 +301,19 @@ func parsePercent(page, total int) int {
 // AI 辅助分析是旁路意见，跑着时仍应允许核对勾选与归属确认；
 // 否则「开始分析」会把整页复选框和保存处理一起锁死，看起来像勾选坏了。
 func (s *Store) busy(cid string) bool {
-	return s.one("SELECT id FROM ql_jobs WHERE customer_id=? AND kind IN ('upload','report') AND status IN ('queued','running') AND created > DATE_SUB(NOW(6), INTERVAL ? MINUTE) LIMIT 1", cid, staleJobMinutes) != nil
+	return s.one(
+		"SELECT id FROM ql_jobs WHERE customer_id=? AND kind IN ('upload','report') AND status IN ('queued','running') AND created > DATE_SUB(NOW(6), INTERVAL ("+jobStaleSQLInterval()+") MINUTE) LIMIT 1",
+		cid,
+	) != nil
 }
 
 // jobsLive 统计任意仍在排队/执行的后台任务（含 AI 分析）。
 // 前端用它轮询任务坞进度，但不会像 busy 那样锁住底稿编辑。
 func (s *Store) jobsLive(cid string) bool {
-	return s.one("SELECT id FROM ql_jobs WHERE customer_id=? AND status IN ('queued','running') AND created > DATE_SUB(NOW(6), INTERVAL ? MINUTE) LIMIT 1", cid, staleJobMinutes) != nil
+	return s.one(
+		"SELECT id FROM ql_jobs WHERE customer_id=? AND status IN ('queued','running') AND created > DATE_SUB(NOW(6), INTERVAL ("+jobStaleSQLInterval()+") MINUTE) LIMIT 1",
+		cid,
+	) != nil
 }
 func (s *Store) bump(cid string) {
 	s.exec("UPDATE ql_customers SET revision=revision+1 WHERE id=?", cid)

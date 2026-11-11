@@ -19,10 +19,10 @@ export function clientNextStep(client) {
 }
 
 export const CLIENT_FILTERS = [
-  { value: "all", label: "全部" },
+  { value: "all", label: "All" },
   { value: "pending", label: "待上传" },
   { value: "ready", label: "可继续" },
-  { value: "running", label: "处理中" },
+  { value: "running", label: "Running" },
 ];
 
 export function filterClients(clients, filter) {

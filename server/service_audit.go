@@ -14,7 +14,7 @@ import (
 // 不另起密钥，避免两边各维护一份然后漂移。
 func (a *App) requireServiceAuth(q *request) {
 	if !a.wb.Ready() {
-		bad(503, "尚未接入工作台")
+		bad(503, "Workbench is not connected")
 	}
 	client := strings.TrimSpace(q.r.Header.Get("X-Service-Client"))
 	secret := strings.TrimSpace(q.r.Header.Get("X-Service-Secret"))
@@ -102,7 +102,7 @@ func (a *App) registerServiceAuditRoutes(m *http.ServeMux) {
 	m.HandleFunc("GET /api/service/audit", a.route(func(q *request) {
 		a.requireServiceAuth(q)
 		query := parseAuditQuery(q)
-		require(len(query.Search) <= 120, "检索文字过长")
+		require(len(query.Search) <= 120, "Search text too long")
 		q.json(serviceAuditEventsPage(a.s, query))
 	}))
 	m.HandleFunc("POST /api/service/audit/purge", a.route(func(q *request) {

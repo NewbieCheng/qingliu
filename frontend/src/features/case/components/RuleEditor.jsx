@@ -68,7 +68,7 @@ export function RuleEditor({ rules, busy, onSave }) {
           ) : (
             <div className="relation-list">
               <div className="relation relation-head" aria-hidden="true">
-                <span>姓名</span>
+                <span>Name</span>
                 <span>账号（选填）</span>
                 <span>处理</span>
                 <span />
@@ -92,8 +92,8 @@ export function RuleEditor({ rules, busy, onSave }) {
                     }
                   />
                   <Select
-                    aria-label="关联人往来处理"
-                    label="关联人往来处理"
+                    aria-label="Related-party handling"
+                    label="Related-party handling"
                     className="relation-mode"
                     value={person.mode}
                     onChange={(event) =>

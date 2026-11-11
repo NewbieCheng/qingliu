@@ -96,7 +96,7 @@ func (a *App) spaces(q *request) Object {
 	if err != nil || status != http.StatusOK {
 		// 读不到就只回「当前空间」：界面仍然能显示自己在哪，只是不能切 ——
 		// 比整页报错好，也比假装能切好。
-		return Object{"items": []Object{currentSpaceItem(current)}, "current_space": current.Object(), "warn": "暂无多余空间"}
+		return Object{"items": []Object{currentSpaceItem(current)}, "current_space": current.Object(), "warn": "No other spaces"}
 	}
 	items := spaceItems(data)
 	out := make([]Object, 0, len(items))
@@ -174,9 +174,9 @@ func spaceFallbackName(space spaceRef) string {
 	case spaceTeam:
 		return "团队 #" + itoa(space.ID)
 	case spacePlatform:
-		return "平台空间"
+		return "Platform space"
 	default:
-		return "个人空间"
+		return "Personal space"
 	}
 }
 
@@ -188,7 +188,7 @@ func spaceTarget(body Object) spaceRef {
 	kind := strings.TrimSpace(str(body, "kind"))
 	if kind == "" {
 		if body["tenant_id"] == nil {
-			bad(400, "请指定要切换的空间")
+			bad(400, "Choose a space to switch to")
 		}
 		if tenant := integer(body["tenant_id"]); tenant > 0 {
 			return spaceRef{Kind: spaceTeam, ID: tenant}
@@ -200,7 +200,7 @@ func spaceTarget(body Object) spaceRef {
 		target.ID = 0
 	}
 	if target.Kind != spacePersonal && target.ID <= 0 {
-		bad(400, "请指定要切换的空间")
+		bad(400, "Choose a space to switch to")
 	}
 	return target
 }
@@ -214,7 +214,7 @@ func (a *App) switchSpace(q *request) Object {
 	target := spaceTarget(q.body())
 	if target.Kind == spacePlatform {
 		// 见文件头：清流没有平台视图，切进来只会看到一个空壳。
-		bad(400, "清流暂不支持平台空间，请在工作台里切换")
+		bad(400, "Qingliu does not support platform space yet. Switch in the workbench.")
 	}
 	uid := str(q.user, "id")
 	status, data, err := a.wbRequest(q.r.Context(), uid, http.MethodPost, "/api/v1/me/switch-space", target.Object())
@@ -250,7 +250,7 @@ func (a *App) switchSpace(q *request) Object {
 func (a *App) enableSpace(q *request) Object {
 	target := spaceTarget(q.body())
 	if target.Kind == spacePlatform {
-		bad(400, "平台空间只能由平台管理员在工作台开启")
+		bad(400, "Platform space can only be enabled by a platform admin in the workbench")
 	}
 	status, data, err := a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodPost, "/api/v1/me/spaces/enable", target.Object())
 	if err != nil {

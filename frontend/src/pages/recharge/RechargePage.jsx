@@ -163,7 +163,7 @@ export function RechargePage() {
       await openOrder(created);
       toast(
         reused
-          ? "已恢复未支付订单，二维码仍可继续使用"
+          ? "Restored unpaid order; QR code still works"
           : "订单已创建，请扫码支付",
         "info",
       );
@@ -196,7 +196,7 @@ export function RechargePage() {
     <main className="account-page">
       <PageHeader
         title="把每一次调用，算清楚。"
-        description="充值购买工作台积分；AI 解析按实际用量扣减，余额与流水以工作台为准。"
+        description="Top up workbench points; AI usage is billed by actual usage. Balance and ledger follow the workbench."
       />
       {error && (
         <p className="error" role="alert">

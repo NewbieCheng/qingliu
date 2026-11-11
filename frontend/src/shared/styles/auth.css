@@ -7,6 +7,7 @@
 /* —— 登录页外壳：一张有装订边的底稿，不是两张浮起来的卡片 —— */
 .auth-page {
   min-height: 100vh;
+  min-height: 100dvh;
   /* 覆盖 legacy.css 里给工作台 main 设置的 1120px 栅格宽度 */
   max-width: none;
   margin: 0;
@@ -196,6 +197,45 @@
 
 .auth-panel-head {
   margin-bottom: 26px;
+}
+
+.auth-panel-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 9px;
+}
+
+.auth-panel-head-row .auth-panel-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.lang-switch-btn.language-switch--login {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid #d9dfd8;
+  border-radius: 2px;
+  color: var(--ql-forest, #1e4a40);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-align: center;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.lang-switch-btn.language-switch--login:hover {
+  border-color: #bdc9bf;
+  background: #eef2eb;
+}
+
+.lang-switch-btn.language-switch--login:focus-visible {
+  outline: 2px solid var(--ql-forest, #1e4a40);
+  outline-offset: 2px;
 }
 
 .auth-panel-title {

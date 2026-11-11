@@ -98,7 +98,7 @@ export function WorkspaceShell({
         />
         <div className="page-wrap">{children}</div>
         <footer>
-          仅供内部初筛参考，宽松测算不等于银行认可营业收入；最终以核实资料和银行审核为准。
+          For internal screening only. Lenient figures are not bank-approved revenue; final decisions follow verified files and bank review.
         </footer>
       </div>
       {phone ? (

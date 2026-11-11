@@ -14,8 +14,8 @@ export function TeamTable({
     return (
       <p className="muted team-empty">
         {locked
-          ? "个人空间没有可管理的团队成员。"
-          : "暂无其他成员（当前登录账号不在本列表中）。"}
+          ? "Personal space has no team members to manage."
+          : "No other members (the signed-in account is not listed)."}
       </p>
     );
   }
@@ -25,16 +25,16 @@ export function TeamTable({
       <table className="admin-team-table">
         <thead>
           <tr>
-            <th>账号</th>
-            <th>姓名</th>
-            <th>角色</th>
-            <th>状态</th>
-            <th className="col-actions">操作</th>
+            <th>Account</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th className="col-actions">Actions</th>
           </tr>
         </thead>
         <tbody>
           {users.map((user) => {
-            const label = user.active ? "停用" : "启用";
+            const label = user.active ? "Disable" : "Enable";
             const title = user.active ? "停用账号" : "重新启用";
             const toggleButton = (
               <button
@@ -58,7 +58,7 @@ export function TeamTable({
                   <span
                     className={`status-pill${user.active ? " is-on" : " is-off"}`}
                   >
-                    {user.active ? "启用" : "停用"}
+                    {user.active ? "Enable" : "Disable"}
                   </span>
                 </td>
                 <td className="col-actions">
@@ -68,7 +68,7 @@ export function TeamTable({
                         type="button"
                         className={`btn-chip${user.active ? " is-danger" : " is-ok"}`}
                         disabled
-                        title="个人空间不支持启停成员，请开通或切换到团队空间"
+                        title="Personal space cannot enable/disable members. Open or switch to a team space."
                         onClick={onLockedAction}
                       >
                         {user.active ? <BanIcon size={14} /> : <PlayIcon size={14} />}
@@ -88,7 +88,7 @@ export function TeamTable({
                         onClick={onLockedAction}
                       >
                         <TrashIcon size={14} />
-                        <span>删除</span>
+                        <span>Delete</span>
                       </button>
                     ) : (
                       <button
@@ -99,7 +99,7 @@ export function TeamTable({
                         onClick={() => onDelete(user)}
                       >
                         <TrashIcon size={14} />
-                        <span>删除</span>
+                        <span>Delete</span>
                       </button>
                     )}
                   </div>

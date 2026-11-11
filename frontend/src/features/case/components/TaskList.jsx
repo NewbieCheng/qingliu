@@ -5,28 +5,28 @@ import { Form } from "@/shared/ui/Form.jsx";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
 
 const KIND_LABEL = {
-  upload: "资料识别",
-  report: "报告生成",
-  ai_analysis: "AI 辅助分析",
+  upload: "Document parse",
+  report: "Report",
+  ai_analysis: "AI analysis",
 };
 
 const STAGE_LABEL = {
-  queued: "排队中",
-  starting: "准备处理",
-  parsing: "逐页识别",
-  rendering: "生成文件",
-  uploading: "上传原件",
-  creating: "创建任务",
-  running: "AI 分析中",
-  summarizing: "汇总结果",
-  done: "已完成",
-  failed: "失败",
+  queued: "Queued",
+  starting: "Preparing",
+  parsing: "Page recognition",
+  rendering: "Generating files",
+  uploading: "Uploading original",
+  creating: "Creating task",
+  running: "AI analyzing",
+  summarizing: "Summarizing",
+  done: "Done",
+  failed: "Failed",
 };
 
 const ETA_HINT = {
-  upload: "预计约 1–5 分钟",
-  ai_analysis: "预计约 1–3 分钟",
-  report: "预计约 1 分钟",
+  upload: "Usually 1–5 minutes",
+  ai_analysis: "Usually 1–3 minutes",
+  report: "Usually about 1 minute",
 };
 
 const PAGE_SIZE = 5;
@@ -148,7 +148,7 @@ export function TaskList({ data, onRetry, onCancel }) {
   return createPortal(
     <div
       className={`task-dock${open ? " is-open" : ""}${hasUrgent ? " has-urgent" : ""}`}
-      aria-label="后台任务"
+      aria-label="Background jobs"
     >
       {!open ? (
         <button
@@ -172,7 +172,7 @@ export function TaskList({ data, onRetry, onCancel }) {
         <section className="task-dock-panel">
           <header className="task-dock-head">
             <div>
-              <strong>后台任务</strong>
+              <strong>Background jobs</strong>
               <span className="task-dock-summary">{summary}</span>
             </div>
             <button
@@ -181,7 +181,7 @@ export function TaskList({ data, onRetry, onCancel }) {
               onClick={() => setOpen(false)}
               aria-label="收起任务面板"
             >
-              收起
+              Collapse
             </button>
           </header>
 
@@ -199,7 +199,7 @@ export function TaskList({ data, onRetry, onCancel }) {
                 >
                   <div className="task-head">
                     <span className="task-title">
-                      {KIND_LABEL[job.kind] || "后台任务"} · {job.message}
+                      {KIND_LABEL[job.kind] || "Background jobs"} · {job.message}
                     </span>
                     <StatusBadge>{JOB_STATUS[job.status]}</StatusBadge>
                   </div>
@@ -238,14 +238,14 @@ export function TaskList({ data, onRetry, onCancel }) {
                           disabled={cancelling === job.id}
                           onClick={() => void cancel(job.id)}
                         >
-                          {cancelling === job.id ? "终止中…" : "终止"}
+                          {cancelling === job.id ? "终止中…" : "Cancel job"}
                         </button>
                       )}
                       {job.status === "failed" &&
                         job.kind === "upload" &&
                         !data.busy && (
                           <Form success="" onSave={() => onRetry(job.id)}>
-                            <button type="submit">重试</button>
+                            <button type="submit">Retry</button>
                           </Form>
                         )}
                     </div>
@@ -263,7 +263,7 @@ export function TaskList({ data, onRetry, onCancel }) {
                 disabled={safePage <= 1}
                 onClick={() => setPage((value) => Math.max(1, value - 1))}
               >
-                上一页
+                Previous
               </button>
               <span className="task-dock-page">
                 {safePage} / {pageCount}
@@ -274,7 +274,7 @@ export function TaskList({ data, onRetry, onCancel }) {
                 disabled={safePage >= pageCount}
                 onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
               >
-                下一页
+                Next
               </button>
             </div>
           )}

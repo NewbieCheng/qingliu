@@ -84,7 +84,13 @@ func TestMySQLWorkflow(t *testing.T) {
 	}
 	static := t.TempDir()
 	os.WriteFile(filepath.Join(static, "index.html"), []byte("<html>test</html>"), 0600)
-	a := &App{s: s, origin: "http://test.local", static: static, slots: make(chan struct{}, 4)}
+	a := &App{s: s, origin: "http://test.local", static: static, pools: requestPools{
+		read:   newRequestPool("read", 8, 0),
+		write:  newRequestPool("write", 8, 0),
+		proxy:  newRequestPool("proxy", 8, 0),
+		bulk:   newRequestPool("bulk", 2, 0),
+		render: newRequestPool("render", 2, 0),
+	}}
 	srv := httptest.NewServer(a.mux())
 	defer srv.Close()
 	login := func(name string) *testClient {

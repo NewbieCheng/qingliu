@@ -1,0 +1,38 @@
+{
+  "data": {
+    "analysis_id": 4,
+    "completed_at": "2026-11-11T09:07:06.988232Z",
+    "completion_tokens": 1276,
+    "created_at": "2026-11-11T09:07:00.818392Z",
+    "document_id": 8,
+    "error": "",
+    "model": "deepseek-flash",
+    "points": 5,
+    "progress": 100,
+    "prompt_tokens": 1083,
+    "result": {
+      "coverage": {
+        "pages_analyzed": 1,
+        "pages_failed": [],
+        "pages_total": 1
+      },
+      "disclaimer": "OCR 结果需人工核对",
+      "model": "deepseek-flash",
+      "process": [
+        {
+          "text": "开始逐页视觉识别，共 1 页"
+        },
+        {
+          "text": "已识别 1/1 页"
+        },
+        {
+          "text": "逐页识别完成，文字已写入文档"
+        }
+      ],
+      "summary": "已识别 1 页，其中 0 页未成功；识别文字已写入文档"
+    },
+    "status": "done",
+    "task": "page_ocr"
+  },
+  "trace_id": "01a1c9dc-7188-7a60-872a-1f0538c8d7f1"
+}

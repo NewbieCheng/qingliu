@@ -147,7 +147,7 @@ export async function loadPagePreview(cid, documentId, page, sha, url) {
     if (cached) return URL.createObjectURL(cached);
   }
   if (!response.ok) {
-    throw new Error(response.status === 401 ? "登录已过期请重新登录" : "原件页加载失败");
+    throw new Error(response.status === 401 ? "Session expired. Please sign in again." : "Failed to load original page");
   }
   const headerSha = response.headers.get("X-Document-SHA") || sha || "";
   const blob = await response.blob();

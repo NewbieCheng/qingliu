@@ -9,7 +9,7 @@ export function OrdersTable({ orders, onResume }) {
     <section className="card">
       <SectionTitle
         title="最近订单"
-        description="只显示当前账号的充值订单；待支付订单可重新打开二维码。"
+        description="Shows this account’s top-up orders; unpaid orders can reopen the QR code."
       />
       <div className="table-wrap">
         <table>
@@ -17,12 +17,12 @@ export function OrdersTable({ orders, onResume }) {
             <tr>
               <th>订单号</th>
               <th>套餐</th>
-              <th>金额</th>
+              <th>Amount</th>
               <th>积分</th>
-              <th>状态</th>
+              <th>Status</th>
               <th>创建时间</th>
               <th>有效期</th>
-              <th>操作</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>

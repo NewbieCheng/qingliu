@@ -37,7 +37,9 @@ type App struct {
 	secure bool
 	origin string
 	static string
-	slots  chan struct{}
+	// pools 是按代价分的请求准入档，见 pool.go：静态资源与 /health 不入池，
+	// 只有真吃 CPU/内存/上游等待的请求才排队，满池先等再 503。
+	pools  requestPools
 	wb     wbConfig
 	// pricing 缓存工作台「财务 → 解析计价」的三档单价，见 pricing.go。
 	pricing parsePricingCache
@@ -99,11 +101,11 @@ func (q *request) body() Object {
 	d := json.NewDecoder(q.r.Body)
 	d.UseNumber()
 	if d.Decode(&v) != nil || v == nil {
-		bad(400, "请求格式无效")
+		bad(400, "Invalid request")
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		bad(400, "请求格式无效")
+		bad(400, "Invalid request")
 	}
 	return v
 }
@@ -111,13 +113,14 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if e := recover(); e != nil {
-				code, message := 500, "处理失败，请联系管理员"
+				code, message := 500, "Something went wrong. Contact an administrator."
 				switch v := e.(type) {
 				case apiError:
 					code, message = v.code, v.message
 				default:
 					log.Printf("request failed: %T", e)
 				}
+				message = localizeStoredMessage(localeFromRequest(r), message)
 				w.Header().Set("Content-Type", "application/json; charset=utf-8")
 				w.WriteHeader(code)
 				_ = json.NewEncoder(w).Encode(Object{"error": message})
@@ -130,11 +133,14 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 		if a.secure {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 		}
-		select {
-		case a.slots <- struct{}{}:
-			defer func() { <-a.slots }()
-		default:
-			bad(503, "当前服务器繁忙，请稍后重试")
+		if pool := a.poolFor(r); pool != nil {
+			release, ok := pool.enter()
+			if !ok {
+				// 排队也没抢到槽：告诉调用方可以重试，别让浏览器把 503 当永久错误。
+				w.Header().Set("Retry-After", "1")
+				bad(503, "Server is busy. Please try again later.")
+			}
+			defer release()
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
 		q := &request{w: w, r: r, app: a}
@@ -153,7 +159,7 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 			r.URL.Path == "/health" ||
 			isServiceAPI(r.URL.Path)
 		if strings.HasPrefix(r.URL.Path, "/api/") && !public && q.user == nil {
-			bad(401, "请先登录")
+			bad(401, "Please sign in first")
 		}
 		if r.Method != "GET" && r.Method != "HEAD" {
 			// Same-origin JSON login and session-bound CSRF for every authenticated write.
@@ -161,15 +167,15 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 			if isServiceAPI(r.URL.Path) {
 				// fall through to handler
 			} else if origin := r.Header.Get("Origin"); origin != "" && origin != a.origin {
-				bad(403, "请求来源不允许")
+				bad(403, "Request origin not allowed")
 			} else if r.URL.Path == "/api/login" || r.URL.Path == "/api/register" ||
 				r.URL.Path == "/api/auth/verification-codes" || r.URL.Path == "/api/auth/reset-password" {
 				if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
-					bad(400, "请求格式无效")
+					bad(400, "Invalid request")
 				}
 			} else {
 				if q.session == nil || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(str(q.session, "csrf"))) != 1 {
-					bad(403, "页面已过期，请刷新")
+					bad(403, "Page expired. Please refresh.")
 				}
 			}
 		}
@@ -183,7 +189,7 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 // 权限快照，没有快照（本地过渡账号）时才退回旧的 role 判定。
 func (q *request) admin() {
 	if !q.isAdmin() {
-		bad(403, "仅管理员可操作")
+		bad(403, "Admin only")
 	}
 }
 
@@ -191,13 +197,13 @@ func (q *request) admin() {
 // 个人账号没有「团队新建成员」语义；要管理成员须先开通或切换到团队空间。
 func (q *request) requireTeamSpace() {
 	if q.space().Kind != spaceTeam {
-		bad(403, "个人空间不支持团队成员管理，请开通或切换到团队空间后再操作")
+		bad(403, "Personal space does not support team members. Open or switch to a team space.")
 	}
 }
 func (q *request) access() string {
 	cid := q.r.PathValue("cid")
 	if !q.app.s.allowed(q.customerAccess(), cid) {
-		bad(404, "客户不存在或没有访问权限")
+		bad(404, "Customer not found or no access")
 	}
 	return cid
 }
@@ -220,7 +226,7 @@ func (q *request) edit(fn func(string)) {
 	}
 	defer unlock()
 	if q.app.s.busy(cid) {
-		bad(409, "当前客户有后台任务，请等待完成")
+		bad(409, "This customer has a background job. Wait for it to finish.")
 	}
 	fn(cid)
 }
@@ -235,7 +241,7 @@ func (a *App) mux() http.Handler {
 		ctx, cancel := context.WithTimeout(q.r.Context(), 2*time.Second)
 		defer cancel()
 		if s.db.PingContext(ctx) != nil {
-			bad(503, "数据库不可用")
+			bad(503, "Database unavailable")
 		}
 		q.json(Object{"status": "ok"})
 	}))
@@ -254,13 +260,13 @@ func (a *App) mux() http.Handler {
 		key := hash([]byte(ipHost(ip) + "/" + name))
 		unlock, e := s.lock(q.r.Context(), "login:"+key)
 		if e != nil {
-			bad(429, "请稍后重试")
+			bad(429, "Please try again later")
 		}
 		defer unlock()
 		s.exec("DELETE FROM ql_login_failures WHERE at<?", time.Now().Unix()-900)
 		failure := s.one("SELECT COUNT(*) AS n FROM ql_login_failures WHERE failure_key=?", key)
 		if integer(failure["n"]) >= 5 {
-			bad(429, "尝试次数过多，请15分钟后重试")
+			bad(429, "Too many attempts. Try again in 15 minutes.")
 		}
 		// Workbench accounts are the primary identity. A local password remains
 		// as a transition fallback for the accounts created before the move; it
@@ -286,10 +292,10 @@ func (a *App) mux() http.Handler {
 			return
 		}
 		if code != "" {
-			bad(503, "邮箱验证码登录需要接入工作台")
+			bad(503, "Email OTP login requires the workbench connection")
 		}
 		if !a.localLoginAllowed() {
-			bad(503, "尚未接入工作台，请联系管理员")
+			bad(503, "Workbench is not connected. Contact an administrator.")
 		}
 		u := s.one("SELECT * FROM ql_users WHERE username=? AND active=1", name)
 		// Dummy bcrypt work also runs for an unknown account.
@@ -300,7 +306,7 @@ func (a *App) mux() http.Handler {
 		err := bcrypt.CompareHashAndPassword(hashed, []byte(pass))
 		if err != nil || u == nil {
 			s.exec("INSERT INTO ql_login_failures VALUES(?,?)", key, time.Now().Unix())
-			bad(401, "账号或密码不正确")
+			bad(401, "Incorrect account or password")
 		}
 		s.exec("DELETE FROM ql_login_failures WHERE failure_key=?", key)
 		// 本地应急登录没有工作台会话，也就没有 current_space：落到个人空间
@@ -345,20 +351,20 @@ func (a *App) mux() http.Handler {
 	// 注册相关：验证码与图形验证码都代理到工作台，浏览器不接触 service secret。
 	m.HandleFunc("GET /api/auth/captcha", a.route(func(q *request) {
 		if !a.wb.Ready() {
-			bad(503, "尚未接入工作台")
+			bad(503, "Workbench is not connected")
 		}
 		status, data, err := a.wb.captcha(q.r.Context(), q.r.URL.Query().Get("type"))
 		if err != nil {
 			bad(503, err.Error())
 		}
 		if status != http.StatusOK {
-			bad(status, wbMessage(data, "验证码加载失败"))
+			bad(status, wbMessage(data, "Failed to load captcha"))
 		}
 		// 工作台返回 {id, type, svg}；清流前端统一按 captcha_id + svg 渲染，
 		// 这里做一次归一化，避免前端去猜工作台的原始字段名。
 		payload, _ := wbPayload(data).(map[string]any)
 		if payload == nil {
-			bad(503, "验证码格式异常")
+			bad(503, "Invalid captcha payload")
 		}
 		q.json(Object{
 			"captcha_id":  str(payload, "id"),
@@ -373,7 +379,7 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("POST /api/auth/verification-codes", a.route(func(q *request) {
 		if !a.wb.Ready() {
-			bad(503, "尚未接入工作台")
+			bad(503, "Workbench is not connected")
 		}
 		b := q.body()
 		status, data, err := a.wb.verifyCode(q.r.Context(), b)
@@ -381,17 +387,17 @@ func (a *App) mux() http.Handler {
 			bad(503, err.Error())
 		}
 		if status < 200 || status >= 300 {
-			bad(status, wbMessage(data, "验证码发送失败"))
+			bad(status, wbMessage(data, "Failed to send verification code"))
 		}
 		q.json(wbPayload(data))
 	}))
 	m.HandleFunc("POST /api/auth/reset-password", a.route(func(q *request) {
 		if !a.wb.Ready() {
-			bad(503, "尚未接入工作台")
+			bad(503, "Workbench is not connected")
 		}
 		b := q.body()
 		email := strings.TrimSpace(str(b, "email"))
-		require(email != "", "请填写邮箱")
+		require(email != "", "Enter email")
 		require(strings.TrimSpace(str(b, "code")) != "", "请填写验证码")
 		require(str(b, "new_password") != "", "请填写新密码")
 		status, data, err := a.wb.resetPassword(q.r.Context(), Object{
@@ -402,17 +408,17 @@ func (a *App) mux() http.Handler {
 			bad(503, err.Error())
 		}
 		if status < 200 || status >= 300 {
-			bad(status, wbMessage(data, "重置密码失败"))
+			bad(status, wbMessage(data, "Failed to reset password"))
 		}
 		q.json(Object{"ok": true})
 	}))
 	m.HandleFunc("POST /api/register", a.route(func(q *request) {
 		if !a.wb.Ready() {
-			bad(503, "尚未接入工作台")
+			bad(503, "Workbench is not connected")
 		}
 		b := q.body()
 		email := strings.TrimSpace(str(b, "email"))
-		require(email != "", "请填写邮箱")
+		require(email != "", "Enter email")
 		body := Object{
 			"email": email, "phone": strings.TrimSpace(str(b, "phone")),
 			"password": str(b, "password"), "code": strings.TrimSpace(str(b, "code")),
@@ -433,7 +439,7 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("GET /api/billing/skus", a.route(func(q *request) {
 		if !a.wb.Ready() {
-			bad(503, "尚未接入工作台")
+			bad(503, "Workbench is not connected")
 		}
 		// 走鉴权列表，带上当前空间受益账户，才能拿到 purchasable / 灰显原因。
 		path := "/api/v1/payment/skus/mine?service_code=qingliu&owner_type=1"
@@ -445,7 +451,7 @@ func (a *App) mux() http.Handler {
 			bad(503, err.Error())
 		}
 		if status != http.StatusOK {
-			bad(status, wbMessage(data, "套餐加载失败"))
+			bad(status, wbMessage(data, "Failed to load packages"))
 		}
 		q.json(wbPayload(data))
 	}))
@@ -469,7 +475,7 @@ func (a *App) mux() http.Handler {
 			bad(503, err.Error())
 		}
 		if status < 200 || status >= 300 {
-			bad(status, wbMessage(data, "下单失败"))
+			bad(status, wbMessage(data, "Failed to create order"))
 		}
 		q.json(wbPayload(data))
 	}))
@@ -483,7 +489,7 @@ func (a *App) mux() http.Handler {
 			bad(503, err.Error())
 		}
 		if status != http.StatusOK {
-			bad(status, wbMessage(data, "订单加载失败"))
+			bad(status, wbMessage(data, "Failed to load orders"))
 		}
 		q.json(wbPayload(data))
 	}))
@@ -493,7 +499,7 @@ func (a *App) mux() http.Handler {
 			bad(503, err.Error())
 		}
 		if status != http.StatusOK {
-			bad(status, wbMessage(data, "订单不存在"))
+			bad(status, wbMessage(data, "Order not found"))
 		}
 		q.json(wbPayload(data))
 	}))
@@ -503,7 +509,7 @@ func (a *App) mux() http.Handler {
 			bad(503, err.Error())
 		}
 		if status != http.StatusOK {
-			bad(status, wbMessage(data, "余额加载失败"))
+			bad(status, wbMessage(data, "Failed to load balance"))
 		}
 		q.json(wbPayload(data))
 	}))
@@ -517,7 +523,7 @@ func (a *App) mux() http.Handler {
 			bad(503, err.Error())
 		}
 		if status != http.StatusOK {
-			bad(status, wbMessage(data, "流水加载失败"))
+			bad(status, wbMessage(data, "Failed to load ledger"))
 		}
 		q.json(wbPayload(data))
 	}))
@@ -535,14 +541,14 @@ func (a *App) mux() http.Handler {
 				"current_password": str(b, "current_password"), "new_password": p,
 			})
 			if err != nil || status != http.StatusOK {
-				bad(400, wbMessage(data, "当前密码不正确"))
+				bad(400, wbMessage(data, "Current password is incorrect"))
 			}
 			q.event("", "change_password", "workbench")
 			q.json(Object{"ok": true})
 			return
 		}
 		u := s.one("SELECT password FROM ql_users WHERE id=?", q.user["id"])
-		require(bcrypt.CompareHashAndPassword([]byte(str(u, "password")), []byte(str(b, "current_password"))) == nil, "当前密码不正确")
+		require(bcrypt.CompareHashAndPassword([]byte(str(u, "password")), []byte(str(b, "current_password"))) == nil, "Current password is incorrect")
 		h, e := bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
 		must(e)
 		s.exec("UPDATE ql_users SET password=? WHERE id=?", string(h), q.user["id"])
@@ -552,7 +558,7 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("GET /api/clients", a.route(func(q *request) {
 		search := q.r.URL.Query().Get("q")
-		require(len(search) <= 120, "检索文字过长")
+		require(len(search) <= 120, "Search text too long")
 		page, _ := strconv.Atoi(q.r.URL.Query().Get("page"))
 		if page < 1 {
 			page = 1
@@ -635,16 +641,18 @@ func (a *App) mux() http.Handler {
 		// 排队中的任务附带「前面还有几份」：串行解析时用户最想知道的是这个，
 		// 而不是一个笼统的「排队中」。
 		for _, job := range jobs {
+			job["message"] = localizeStoredMessage(localeFromRequest(q.r), str(job, "message"))
 			if str(job, "status") == "queued" {
 				job["queue_position"] = s.queuePosition(str(job, "id")) + 1
 			}
 		}
 		q.json(Object{"jobs": jobs})
 	}))
+	a.registerUploadParsed(m)
 	m.HandleFunc("POST /api/clients/{cid}/upload", a.route(func(q *request) {
 		q.edit(func(cid string) {
 			if e := q.r.ParseMultipartForm(2 << 20); e != nil {
-				bad(400, "上传失败；整批不能超过64MB")
+				bad(400, "Upload failed; batch must be under 64MB")
 			}
 			defer q.r.MultipartForm.RemoveAll()
 			files := q.r.MultipartForm.File["files"]
@@ -679,7 +687,7 @@ func (a *App) mux() http.Handler {
 			}()
 			seen := map[string]bool{}
 			for _, f := range files {
-				require(f.Size > 0 && f.Size <= 30<<20, "每份文件须为1字节至30MB")
+				require(f.Size > 0 && f.Size <= 30<<20, "Each file must be 1 byte–30MB")
 				name := filepath.Base(strings.ReplaceAll(f.Filename, "\\", "/"))
 				ext := strings.ToLower(filepath.Ext(name))
 				require((ext == ".pdf" || ext == ".csv" || ext == ".xlsx") && len([]rune(name)) <= 240, "仅支持PDF、CSV、XLSX文件")
@@ -688,7 +696,7 @@ func (a *App) mux() http.Handler {
 				b, e := io.ReadAll(io.LimitReader(stream, (30<<20)+1))
 				stream.Close()
 				must(e)
-				require(len(b) <= 30<<20, "文件超过30MB")
+				require(len(b) <= 30<<20, "File exceeds 30MB")
 				if ext == ".pdf" {
 					require(bytesPrefixPDF(b), "文件内容不是PDF")
 				}
@@ -733,7 +741,7 @@ func (a *App) mux() http.Handler {
 			for _, d := range docs {
 				sc := nested(scopes, str(d, "id"))
 				rel := str(sc, "relationship")
-				require(strings.TrimSpace(str(sc, "holder")) != "" && (rel == "本人" || rel == "配偶" || rel == "子女" || rel == "其他"), "每份资料须填写持有人及关系")
+				require(strings.TrimSpace(str(sc, "holder")) != "" && (rel == "Self" || rel == "配偶" || rel == "子女" || rel == "Other"), "每份资料须填写持有人及关系")
 				sc["confirmed"] = true
 				sc["operator"] = q.user["display"]
 				sc["at"] = time.Now().UTC().Format(time.RFC3339)
@@ -792,7 +800,7 @@ func (a *App) mux() http.Handler {
 			for _, v := range ids {
 				tid := text(v)
 				t := current[tid]
-				require(t != nil && !yes(t, "scope_excluded") && str(t, "quality") != "invalid", "记录不在可复核范围；错误金额须更正文件")
+				require(t != nil && !yes(t, "scope_excluded") && str(t, "quality") != "invalid", "Record not in reviewable range; fix amounts in the file")
 				label := str(b, "label")
 				if label == "undo" {
 					audits := s.query("SELECT label FROM ql_reviews WHERE transaction_id=? ORDER BY seq DESC LIMIT 2", tid)
@@ -833,18 +841,18 @@ func (a *App) mux() http.Handler {
 				return
 			}
 		}
-		bad(404, "交易不存在")
+		bad(404, "Transaction not found")
 	}))
 	m.HandleFunc("GET /api/clients/{cid}/original/{did}/{page}", a.route(func(q *request) {
 		cid := q.access()
 		did := q.r.PathValue("did")
 		d := s.one("SELECT name,sha,payload FROM ql_documents WHERE customer_id=? AND id=?", cid, did)
 		if d == nil || strings.ToLower(filepath.Ext(str(d, "name"))) != ".pdf" {
-			bad(404, "原PDF不存在")
+			bad(404, "Original PDF not found")
 		}
 		page, e := strconv.Atoi(q.r.PathValue("page"))
 		if e != nil || page < 1 || page > int(integer(obj(str(d, "payload"))["pages"])) {
-			bad(404, "页码无效")
+			bad(404, "Invalid page number")
 		}
 		etag := `"` + str(d, "sha") + ":" + fmt.Sprint(page) + `"`
 		q.w.Header().Set("ETag", etag)
@@ -884,9 +892,9 @@ func (a *App) mux() http.Handler {
 			require(str(d, "source") != "", "没有可生成报告的流水来源")
 			if stage == "formal" {
 				if !q.canSignReport() {
-					bad(403, "仅复核员或管理员可签发")
+					bad(403, "Only reviewers or admins can issue")
 				}
-				require(len(d["problems"].([]string)) == 0 && yes(d, "submitted_current") && yes(b, "attest") && strings.TrimSpace(str(b, "statement")) != "", "请完成资料核对与提交复核，并填写复核声明")
+				require(len(d["problems"].([]string)) == 0 && yes(d, "submitted_current") && yes(b, "attest") && strings.TrimSpace(str(b, "statement")) != "", "Finish file review, submit for review, and fill the review statement")
 			}
 			jid := id()
 			payload := Object{"stage": stage, "revision": nested(d, "customer")["revision"], "source": d["source"], "start": d["start"], "end": d["end"], "statement": str(b, "statement"), "operator": q.user["display"]}
@@ -909,42 +917,154 @@ func (a *App) mux() http.Handler {
 				bad(402, insufficientPointsMessage)
 			}
 			b := q.body()
-			docID := str(b, "document_id")
-			if docID == "" {
-				latest := s.one("SELECT id FROM ql_documents WHERE customer_id=? ORDER BY created DESC,id DESC LIMIT 1", cid)
-				require(latest != nil, "请先上传资料")
-				docID = str(latest, "id")
-			}
+			docID := strings.TrimSpace(str(b, "document_id"))
+			require(docID != "", "Select a document to analyze")
 			// task=page_ocr 时走工作台的「文档视觉识别」，适合扫描件/图片型流水。
 			task := strings.TrimSpace(str(b, "task"))
 			if task != "page_ocr" {
 				task = ""
 			}
 			row := a.startAIAnalysis(str(q.user, "id"), cid, docID, task, q.space())
-			require(row != nil, "资料不存在")
+			require(row != nil, "Document not found")
 			q.json(Object{"ok": true, "analysis": row})
+		})
+	}))
+	// S6：手动把某次 page_ocr 转写写回核对（自动路径失败时补刀）。
+	m.HandleFunc("POST /api/clients/{cid}/ai-writeback", a.route(func(q *request) {
+		q.edit(func(cid string) {
+			b := q.body()
+			analysisID := strings.TrimSpace(str(b, "analysis_id"))
+			require(analysisID != "", "Specify an analysis result")
+			row := s.one("SELECT status,result,document_id FROM ql_ai_analyses WHERE id=? AND customer_id=?", analysisID, cid)
+			require(row != nil && str(row, "status") == "done", "Analysis incomplete or missing")
+			result := obj(str(row, "result"))
+			docID := str(row, "document_id")
+			doc := s.one("SELECT name FROM ql_documents WHERE id=? AND customer_id=?", docID, cid)
+			require(doc != nil, "Document not found")
+			n, err := a.writebackPageOCR(cid, docID, str(doc, "name"), result)
+			if err != nil {
+				bad(400, err.Error())
+			}
+			q.event(cid, "ai_writeback", fmt.Sprint(n))
+			q.json(Object{"ok": true, "rows": n})
+		})
+	}))
+	// 把已完成分析结果里带 transaction_id 的条目写成交易行 ai_* 预勾（不改正式标签）。
+	m.HandleFunc("POST /api/clients/{cid}/ai-suggest", a.route(func(q *request) {
+		q.edit(func(cid string) {
+			b := q.body()
+			analysisID := strings.TrimSpace(str(b, "analysis_id"))
+			require(analysisID != "", "Specify an analysis result")
+			row := s.one("SELECT status,result FROM ql_ai_analyses WHERE id=? AND customer_id=?", analysisID, cid)
+			require(row != nil && str(row, "status") == "done", "Analysis incomplete or missing")
+			result := obj(str(row, "result"))
+			known := map[string]bool{}
+			allRows := s.rows(cid)
+			for _, t := range allRows {
+				known[str(t, "id")] = true
+			}
+			n := s.applyAISuggestions(cid, suggestionsFromAnalysisRows(result, known, allRows))
+			q.event(cid, "ai_suggest", fmt.Sprint(n))
+			q.json(Object{"ok": true, "applied": n})
+		})
+	}))
+	// 一键采纳本页/全案高置信 suggested → 写入 ql_reviews，ai_status=adopted。
+	m.HandleFunc("POST /api/clients/{cid}/ai-adopt", a.route(func(q *request) {
+		q.edit(func(cid string) {
+			candidates := highConfidenceSuggested(s.rows(cid))
+			require(len(candidates) > 0, "没有可采纳的高置信建议")
+			require(len(candidates) <= 50, "一次最多采纳 50 笔，请分批")
+			tx, e := s.db.Begin()
+			must(e)
+			defer tx.Rollback()
+			for _, t := range candidates {
+				tid := str(t, "id")
+				label := str(t, "ai_label")
+				reason := firstNonEmpty(str(t, "ai_reason"), "ai_adopted")
+				_, e = tx.Exec("INSERT INTO ql_reviews(transaction_id,label,operator,reason) VALUES(?,?,?,?)", tid, label, q.user["display"], "ai_adopted: "+reason)
+				must(e)
+			}
+			must(tx.Commit())
+			for _, t := range candidates {
+				tid := str(t, "id")
+				raw := s.one("SELECT payload FROM ql_transactions WHERE id=? AND customer_id=?", tid, cid)
+				if raw == nil {
+					continue
+				}
+				payload := obj(str(raw, "payload"))
+				payload["ai_status"] = aiStatusAdopted
+				s.exec("UPDATE ql_transactions SET payload=? WHERE id=? AND customer_id=?", js(payload), tid, cid)
+			}
+			s.bump(cid)
+			q.event(cid, "ai_adopt", fmt.Sprint(len(candidates)))
+			q.json(Object{"ok": true, "adopted": len(candidates)})
+		})
+	}))
+	// 撤销 AI 采纳：若最近一条 review 是 ai_adopted，回退并清 ai_status。
+	m.HandleFunc("POST /api/clients/{cid}/ai-revoke", a.route(func(q *request) {
+		q.edit(func(cid string) {
+			b := q.body()
+			ids := list(b["ids"])
+			require(len(ids) > 0 && len(ids) <= 50, "请选择 1 至 50 笔")
+			n := 0
+			for _, v := range ids {
+				tid := text(v)
+				raw := s.one("SELECT payload FROM ql_transactions WHERE id=? AND customer_id=?", tid, cid)
+				if raw == nil {
+					continue
+				}
+				payload := obj(str(raw, "payload"))
+				if str(payload, "ai_status") != aiStatusAdopted && str(payload, "ai_status") != aiStatusSuggested {
+					continue
+				}
+				latest := s.one("SELECT seq,label,reason FROM ql_reviews WHERE transaction_id=? ORDER BY seq DESC LIMIT 1", tid)
+				if latest != nil && strings.HasPrefix(str(latest, "reason"), "ai_adopted") {
+					s.exec("INSERT INTO ql_reviews(transaction_id,label,operator,reason) VALUES(?,?,?,?)", tid, "unreviewed", q.user["display"], "ai_revoked")
+				}
+				payload["ai_status"] = aiStatusNone
+				s.exec("UPDATE ql_transactions SET payload=? WHERE id=? AND customer_id=?", js(payload), tid, cid)
+				n++
+			}
+			require(n > 0, "没有可撤销的 AI 建议")
+			s.bump(cid)
+			q.event(cid, "ai_revoke", fmt.Sprint(n))
+			q.json(Object{"ok": true, "revoked": n})
 		})
 	}))
 	m.HandleFunc("POST /api/clients/{cid}/jobs/{jid}/cancel", a.route(func(q *request) {
 		cid := q.access()
 		j := s.one("SELECT * FROM ql_jobs WHERE id=? AND customer_id=?", q.r.PathValue("jid"), cid)
-		require(j != nil, "任务不存在")
+		require(j != nil, "Job not found")
 		status := str(j, "status")
-		require(status == "queued" || status == "running", "只有排队中或执行中的任务可以终止")
+		require(status == "queued" || status == "running", "Only queued or running jobs can be cancelled")
 		jid := str(j, "id")
 		// 取消只写终态，不试图强杀 goroutine：执行器会在下一次阶段回调
 		// 或超时后自行退出；busy() 立刻为假，用户不必等它跑完。
-		s.jobFinish(jid, "failed", "已手动终止")
-		s.exec("UPDATE ql_ai_analyses SET status='failed',stage='failed',error='已手动终止',completed=NOW(6) WHERE customer_id=? AND status IN ('queued','running','uploading')", cid)
+		s.jobFinish(jid, "failed", "Cancelled by user")
+		// 只收掉本任务对应的 AI 分析；禁止一刀切掉该客户其它进行中的分析。
+		if str(j, "kind") == "ai_analysis" {
+			payload := obj(str(j, "payload"))
+			analysisID := str(payload, "analysis_id")
+			if analysisID != "" {
+				s.exec("UPDATE ql_ai_analyses SET status='failed',stage='failed',error='已手动终止',completed=NOW(6) WHERE id=? AND status IN ('queued','running','uploading')", analysisID)
+				// 双边 cancel：通知工作台打断执行循环，避免清流停了后台仍扣费。
+				row := s.one("SELECT workbench_analysis_id FROM ql_ai_analyses WHERE id=?", analysisID)
+				if row != nil {
+					if wbID := integer(row["workbench_analysis_id"]); wbID > 0 {
+						_, _, _ = a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodPost, "/api/v1/ai/analyses/"+itoa(wbID)+"/cancel", Object{})
+					}
+				}
+			}
+		}
 		q.event(cid, "job_cancelled", jid)
 		q.json(Object{"ok": true})
 	}))
 	m.HandleFunc("POST /api/clients/{cid}/retry/{jid}", a.route(func(q *request) {
 		q.edit(func(cid string) {
 			j := s.one("SELECT * FROM ql_jobs WHERE id=? AND customer_id=?", q.r.PathValue("jid"), cid)
-			require(j != nil && str(j, "status") == "failed" && str(j, "kind") == "upload", "仅失败的上传任务可以重试；报告请重新生成")
+			require(j != nil && str(j, "status") == "failed" && str(j, "kind") == "upload", "Only failed upload jobs can be retried; regenerate reports instead")
 			p := obj(str(j, "payload"))
-			require(s.one("SELECT id FROM ql_documents WHERE customer_id=? AND sha=?", cid, p["sha"]) == nil, "原件已保存；请对照资料提示处理，格式更正后重新上传")
+			require(s.one("SELECT id FROM ql_documents WHERE customer_id=? AND sha=?", cid, p["sha"]) == nil, "Original saved; follow file tips, fix format, then re-upload")
 			s.exec("UPDATE ql_jobs SET status='queued',message='等待重试' WHERE id=?", j["id"])
 			q.json(Object{"ok": true})
 		})
@@ -953,12 +1073,12 @@ func (a *App) mux() http.Handler {
 		cid := q.access()
 		r := s.one("SELECT payload FROM ql_reports WHERE customer_id=? AND id=?", cid, q.r.PathValue("rid"))
 		if r == nil {
-			bad(404, "报告不存在")
+			bad(404, "Report not found")
 		}
 		filename := q.r.PathValue("file")
 		mime := map[string]string{"report.pdf": "application/pdf", "summary.xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "detail.xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "report.html": "text/html; charset=utf-8"}[filename]
 		if mime == "" {
-			bad(404, "文件不存在")
+			bad(404, "File not found")
 		}
 		b, e := s.read(filepath.Join(s.root, "reports", cid, q.r.PathValue("rid"), filename))
 		must(e)
@@ -982,7 +1102,7 @@ func (a *App) mux() http.Handler {
 		query := parseAuditQuery(q)
 		query.Space = q.space()
 		query.Actor = str(q.user, "id")
-		require(len(query.Search) <= 120, "检索文字过长")
+		require(len(query.Search) <= 120, "Search text too long")
 		result := auditEventsPage(s, query)
 		result["actions"] = auditActionOptions()
 		q.json(result)
@@ -1037,7 +1157,7 @@ func (a *App) mux() http.Handler {
 			return
 		}
 		if path != "/" && path != "/login" && !strings.HasPrefix(path, "/clients/") && path != "/admin" && path != "/recharge" && path != "/profile" {
-			bad(404, "页面不存在")
+			bad(404, "Page not found")
 		}
 		http.ServeFile(q.w, q.r, filepath.Join(a.static, "index.html"))
 	}))
@@ -1061,7 +1181,7 @@ func validSource(s string) bool {
 func (s *Store) addUser(name, display, pass, role string) error {
 	name = strings.TrimSpace(name)
 	if name == "" || len(name) > 60 || len(display) > 120 || len(pass) < 10 || len(pass) > 72 || (role != "sales" && role != "reviewer" && role != "admin") {
-		return errors.New("账号必填、密码10至72字节，角色须有效")
+		return errors.New("Account required; password 10–72 bytes; role must be valid")
 	}
 	if display == "" {
 		display = name
@@ -1092,7 +1212,7 @@ func main() {
 		if s.one("SELECT id FROM ql_users LIMIT 1") != nil {
 			log.Fatal("已有账号，初始化已关闭")
 		}
-		if e = s.addUser(os.Getenv("ADMIN_USERNAME"), "管理员", os.Getenv("ADMIN_PASSWORD"), "admin"); e != nil {
+		if e = s.addUser(os.Getenv("ADMIN_USERNAME"), "Admin", os.Getenv("ADMIN_PASSWORD"), "admin"); e != nil {
 			log.Fatal(e)
 		}
 		fmt.Println("管理员已创建，请删除 ADMIN_PASSWORD 环境变量")
@@ -1110,7 +1230,7 @@ func main() {
 	if _, e = os.Stat(filepath.Join(static, "index.html")); e != nil {
 		log.Fatal("找不到 React 构建产物")
 	}
-	a := &App{s: s, secure: secure, origin: origin, static: static, slots: make(chan struct{}, 4), wb: loadWBConfig()}
+	a := &App{s: s, secure: secure, origin: origin, static: static, pools: loadRequestPools(), wb: loadWBConfig()}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	startAuditRetention(ctx, s)
@@ -1177,11 +1297,11 @@ func resolveGrantSubject(s *Store, b Object) (localID string, wbID int64) {
 	wbID = integer(b["workbench_user_id"])
 	if wbID > 0 {
 		row := s.one("SELECT user_id FROM ql_workbench_accounts WHERE workbench_user_id=?", wbID)
-		require(row != nil, "用户不存在或未绑定工作台")
+		require(row != nil, "User not found or not linked to workbench")
 		return str(row, "user_id"), wbID
 	}
 	localID = strings.TrimSpace(str(b, "user_id"))
-	require(localID != "" && s.one("SELECT id FROM ql_users WHERE id=?", localID) != nil, "用户不存在")
+	require(localID != "" && s.one("SELECT id FROM ql_users WHERE id=?", localID) != nil, "User not found")
 	if account := s.one("SELECT workbench_user_id FROM ql_workbench_accounts WHERE user_id=?", localID); account != nil {
 		wbID = integer(account["workbench_user_id"])
 	}

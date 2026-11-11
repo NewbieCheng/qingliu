@@ -13,8 +13,8 @@ import (
 	"time"
 )
 
-var disclaimer = "仅供内部初筛参考，宽松测算不等于银行认可营业收入；最终以核实资料和银行审核为准。"
-var labels = map[string]string{"included": "暂计经营（未核实）", "excluded": "明确剔除", "pending": "待复核", "expense": "支出台账", "invalid": "解析失败", "neutral": "不计收支", "duplicate": "疑似重复待确认"}
+var disclaimer = "For internal screening only. Lenient figures are not bank-approved revenue; final decisions follow verified files and bank review."
+var labels = map[string]string{"included": "Tentative business (unverified)", "excluded": "Excluded", "pending": "Needs review", "expense": "Expense ledger", "invalid": "Parse failed", "neutral": "Neutral (no P/L)", "duplicate": "Possible duplicate"}
 
 func mask(s string) string {
 	return regexp.MustCompile(`\d{5,}`).ReplaceAllStringFunc(s, func(v string) string { return "***" + v[len(v)-4:] })
@@ -28,7 +28,7 @@ func privateName(s string) string {
 }
 func generateReport(s *Store, cid, jid string, data, p Object) error {
 	rid := id()
-	stage := "草稿 · 未完成复核"
+	stage := "Draft · review incomplete"
 	if str(p, "stage") == "formal" {
 		stage = "正式内部初筛版本 · 非授信审批"
 	}
@@ -37,10 +37,10 @@ func generateReport(s *Store, cid, jid string, data, p Object) error {
 	docs := data["docs"].([]Object)
 	customer := nested(data, "customer")
 	created := time.Now().UTC().Format(time.RFC3339)
-	lines := [][2]string{{"报告状态", stage}, {"客户代号", privateName(str(customer, "name"))}, {"统计来源", str(data, "source")}, {"统计期间", str(data, "start") + " 至 " + str(data, "end")}, {"生成时间（UTC）", created}, {"操作/签发人", privateName(str(p, "operator"))}, {"复核声明", mask(str(p, "statement"))}}
-	keys := [][2]string{{"原始总流入", "original_income"}, {"归属范围外", "scope_excluded_income"}, {"疑似重复隔离额", "quarantined_income"}, {"无效行可识别流入", "invalid_income"}, {"当前测算流入", "income"}, {"暂计经营（未核实）", "included"}, {"明确剔除", "excluded"}, {"待复核", "pending"}, {"人工已确认经营", "confirmed_income"}, {"当前范围支出", "expense"}, {"期间分摊月均", "average"}, {"完整自然月均", "complete_month_average"}}
+	lines := [][2]string{{"报告状态", stage}, {"Customer code", privateName(str(customer, "name"))}, {"统计来源", str(data, "source")}, {"统计期间", str(data, "start") + " 至 " + str(data, "end")}, {"生成时间（UTC）", created}, {"操作/签发人", privateName(str(p, "operator"))}, {"Review statement", mask(str(p, "statement"))}}
+	keys := [][2]string{{"Raw total inflow", "original_income"}, {"归属范围外", "scope_excluded_income"}, {"疑似重复隔离额", "quarantined_income"}, {"无效行可识别流入", "invalid_income"}, {"Current measured inflow", "income"}, {"Tentative business (unverified)", "included"}, {"Excluded", "excluded"}, {"Needs review", "pending"}, {"人工已确认经营", "confirmed_income"}, {"当前范围支出", "expense"}, {"期间分摊月均", "average"}, {"完整自然月均", "complete_month_average"}}
 	for _, k := range keys {
-		v := "无完整自然月"
+		v := "No full calendar month"
 		if sum[k[1]] != nil {
 			v = money(integer(sum[k[1]])) + " 元"
 		}
@@ -86,15 +86,26 @@ func generateReport(s *Store, cid, jid string, data, p Object) error {
 	for i, k := range qq {
 		setRow(report, "季度结息", i+1, []any{k, quarters[k]})
 	}
-	_, _ = report.NewSheet("资料与提示")
+	_, _ = report.NewSheet("Files & tips")
 	for i, d := range docs {
 		m := nested(d, "meta")
-		setRow(report, "资料与提示", i+1, []any{mask(str(d, "name")), m["source"], m["status"], m["coverage"], m["rows"]})
+		setRow(report, "Files & tips", i+1, []any{mask(str(d, "name")), m["source"], m["status"], m["coverage"], m["rows"]})
 	}
 	for i, w := range warnings {
-		setRow(report, "资料与提示", len(docs)+i+2, []any{w})
+		setRow(report, "Files & tips", len(docs)+i+2, []any{w})
 	}
-	setRow(report, "资料与提示", len(docs)+len(warnings)+3, []any{disclaimer})
+	setRow(report, "Files & tips", len(docs)+len(warnings)+3, []any{disclaimer})
+	// AI / 视觉写回只作备忘：不改上面金额公式与合计口径。
+	aiNoteRow := len(docs) + len(warnings) + 4
+	visionDocs := 0
+	for _, d := range docs {
+		if yes(nested(d, "meta"), "vision_writeback") {
+			visionDocs++
+		}
+	}
+	if visionDocs > 0 {
+		setRow(report, "Files & tips", aiNoteRow, []any{fmt.Sprintf("其中 %d 份资料含视觉转写写回交易；金额仍以人工核对标签为准，AI 不改合计。", visionDocs)})
+	}
 	_, _ = report.NewSheet("征信候选")
 	lineNo := 1
 	for _, d := range docs {
@@ -105,10 +116,10 @@ func generateReport(s *Store, cid, jid string, data, p Object) error {
 		}
 	}
 	detail := excelize.NewFile()
-	detail.SetSheetName("Sheet1", "逐笔底稿")
-	setRow(detail, "逐笔底稿", 1, []any{"日期", "时间", "来源", "原件", "页码", "定位", "对手方（脱敏）", "收入（分）", "支出（分）", "分类", "规则", "范围外", "隔离", "摘要", "确认人", "依据", "原始字段（脱敏）"})
+	detail.SetSheetName("Sheet1", "Line-by-line draft")
+	setRow(detail, "Line-by-line draft", 1, []any{"Date", "Time", "Source", "原件", "页码", "定位", "对手方（脱敏）", "收入（分）", "支出（分）", "分类", "规则", "Out of range", "隔离", "Memo", "确认人", "依据", "原始字段（脱敏）"})
 	for i, t := range rows {
-		setRow(detail, "逐笔底稿", i+2, []any{t["date"], t["time"], t["source"], mask(str(t, "filename")), t["page"], t["locator"], privateName(str(t, "counterparty")), t["income"], t["expense"], labels[str(t, "label")], t["rule_id"], yes(t, "scope_excluded"), quarantined(t), mask(str(t, "memo")), privateName(str(t, "review_operator")), mask(str(t, "review_reason")), mask(str(t, "raw"))})
+		setRow(detail, "Line-by-line draft", i+2, []any{t["date"], t["time"], t["source"], mask(str(t, "filename")), t["page"], t["locator"], privateName(str(t, "counterparty")), t["income"], t["expense"], labels[str(t, "label")], t["rule_id"], yes(t, "scope_excluded"), quarantined(t), mask(str(t, "memo")), privateName(str(t, "review_operator")), mask(str(t, "review_reason")), mask(str(t, "raw"))})
 	}
 	_, _ = detail.NewSheet("复核记录")
 	audits := s.query("SELECT r.* FROM ql_reviews r JOIN ql_transactions t ON t.id=r.transaction_id WHERE t.customer_id=? ORDER BY r.seq", cid)

@@ -68,10 +68,11 @@ func TestParseAuditQueryRejectsUnknownAction(t *testing.T) {
 func TestAuditActionCatalogCoversEveryEvent(t *testing.T) {
 	expected := []string{
 		"login", "change_password", "enable_space",
-		"create_customer", "upload_queued",
+		"create_customer", "upload_queued", "upload_parsed",
 		"confirm_ownership", "confirm_period", "update_rules",
 		"review_transactions", "submit_review",
 		"report_queued", "download_report", "job_cancelled",
+		"ai_suggest", "ai_adopt", "ai_revoke", "ai_writeback",
 		"add_user", "toggle_user", "remove_user", "change_grant",
 	}
 	for _, action := range expected {

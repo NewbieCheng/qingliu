@@ -9,7 +9,7 @@ import { toast } from "@/shared/ui/toast-api.js";
 import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
 import { DocumentList } from "../DocumentList.jsx";
 
-const RELATIONSHIPS = ["本人", "配偶", "子女", "其他"];
+const RELATIONSHIPS = ["Self", "配偶", "子女", "Other"];
 const VISIBLE_DOCS = 8;
 
 /**
@@ -31,7 +31,7 @@ export function OwnershipStep({ data, onSave, onNext }) {
     <section className="card ownership-card">
       <SectionTitle
         title="确认持有人与本次范围"
-        description="有几份原件就填几行；未确认的不进测算。"
+        description="One row per original; unconfirmed rows stay out of the calculation."
       />
 
       {docs.length === 0 ? (
@@ -125,7 +125,7 @@ export function OwnershipStep({ data, onSave, onNext }) {
                             aria-label={`${document.name}关系`}
                             name={`relationship_${document.id}`}
                             label={`${document.name}关系`}
-                            defaultValue={scope.relationship || "本人"}
+                            defaultValue={scope.relationship || "Self"}
                           >
                             {RELATIONSHIPS.map((value) => (
                               <option key={value}>{value}</option>
@@ -152,7 +152,7 @@ export function OwnershipStep({ data, onSave, onNext }) {
                 onClick={() => setShowAll((value) => !value)}
               >
                 {showAll
-                  ? "收起"
+                  ? "Collapse"
                   : `展开全部 ${docs.length} 份资料`}
               </button>
             )}
@@ -170,14 +170,14 @@ export function OwnershipStep({ data, onSave, onNext }) {
                 <input
                   name="spouse_name"
                   defaultValue={data.fields.spouse_name || ""}
-                  placeholder="选填"
+                  placeholder="Optional"
                 />
               </Field>
               <Field label="需要单列的子女完整姓名">
                 <input
                   name="child_name"
                   defaultValue={data.fields.child_name || ""}
-                  placeholder="选填"
+                  placeholder="Optional"
                 />
               </Field>
             </div>

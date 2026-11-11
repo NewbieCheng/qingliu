@@ -7,13 +7,14 @@ import { navigate } from "@/shared/router/index.js";
 import { LoginPassword } from "./LoginPassword.jsx";
 import { CaptchaChallenge } from "./CaptchaChallenge.jsx";
 import { ForgotPasswordPanel } from "./ForgotPasswordPanel.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 // 仅本地开发（vite dev）用：从 frontend/.env.local 读预填账号，构建产物里为空。
 const DEV_PRESETS = import.meta.env.DEV
   ? [
       {
         id: "admin",
-        label: "管理员",
+        label: "Admin",
         email:
           import.meta.env.VITE_DEV_LOGIN_ADMIN_EMAIL ||
           import.meta.env.VITE_DEV_LOGIN_USERNAME ||
@@ -25,7 +26,7 @@ const DEV_PRESETS = import.meta.env.DEV
       },
       {
         id: "sales",
-        label: "业务员",
+        label: "Sales",
         email: import.meta.env.VITE_DEV_LOGIN_SALES_EMAIL || "",
         password: import.meta.env.VITE_DEV_LOGIN_SALES_PASSWORD || "",
       },
@@ -43,6 +44,7 @@ const CODE_COOLDOWN_SECONDS = 60;
 const CANCELLED = Object.assign(new Error("已取消人机验证"), { silent: true });
 
 export function LoginForm({ onRegister }) {
+  const { t } = useI18n();
   const { login, rememberedUsername, rememberUsername } = useAuth();
   // password = 账号密码（默认）；email = 邮箱验证码。
   const [mode, setMode] = useState("password");
@@ -105,11 +107,11 @@ export function LoginForm({ onRegister }) {
   function requestCode() {
     const target = email.trim();
     if (!target) {
-      toast("请先填写邮箱", "error");
+      toast(t("auth.enter_email_first"), "error");
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) {
-      toast("邮箱格式不正确", "error");
+      toast(t("auth.invalid_email"), "error");
       return;
     }
     if (cooldown > 0 || sending) return;
@@ -128,9 +130,9 @@ export function LoginForm({ onRegister }) {
       });
       setCodeSent(true);
       startCooldown();
-      toast("验证码已发送请查收邮箱");
+      toast(t("auth.code_sent"));
     } catch (error) {
-      toast(error.message || "验证码发送失败", "error");
+      toast(error.message || t("auth.send_code_failed"), "error");
     } finally {
       setSending(false);
     }
@@ -154,8 +156,8 @@ export function LoginForm({ onRegister }) {
   return (
     <>
       {DEV_PRESETS.length > 0 && (
-        <div className="auth-dev-presets" role="group" aria-label="本地测试账号">
-          <span className="auth-dev-presets__hint">本地预填</span>
+        <div className="auth-dev-presets" role="group" aria-label={t("auth.dev_preset_group")}>
+          <span className="auth-dev-presets__hint">{t("auth.dev_preset")}</span>
           {DEV_PRESETS.map((preset) => (
             <button
               key={preset.id}
@@ -168,7 +170,7 @@ export function LoginForm({ onRegister }) {
           ))}
         </div>
       )}
-      <div className="auth-tabs" role="tablist" aria-label="登录方式">
+      <div className="auth-tabs" role="tablist" aria-label={t("auth.login_mode_label")}>
         <button
           type="button"
           role="tab"
@@ -176,7 +178,7 @@ export function LoginForm({ onRegister }) {
           className={`auth-tab ${mode === "password" ? "is-active" : ""}`}
           onClick={() => switchMode("password")}
         >
-          账号密码
+          {t("auth.login_password_tab")}
         </button>
         <button
           type="button"
@@ -185,24 +187,24 @@ export function LoginForm({ onRegister }) {
           className={`auth-tab ${mode === "email" ? "is-active" : ""}`}
           onClick={() => switchMode("email")}
         >
-          邮箱登录
+          {t("auth.login_email_tab")}
         </button>
       </div>
 
       <Form
         className="auth-form"
-        success="登录成功"
+        success={t("auth.login_success")}
         onSave={async (form) => {
-          if (!agreed) throw new Error("请先阅读并同意用户协议与隐私政策");
+          if (!agreed) throw new Error(t("auth.agree_required"));
           const account = String(
             mode === "email" ? email : form.get("username") || email,
           ).trim();
 
           try {
             if (mode === "email") {
-              if (!codeSent) throw new Error("请先获取邮箱验证码");
+              if (!codeSent) throw new Error(t("auth.request_code_first"));
               const code = String(form.get("code")).trim();
-              if (!code) throw new Error("请填写邮箱验证码");
+              if (!code) throw new Error(t("auth.email_code_required"));
               await login({ email: account, code });
             } else {
               let answer = captcha;
@@ -221,7 +223,7 @@ export function LoginForm({ onRegister }) {
             }
           } catch (error) {
             if (mode === "password") setCaptcha({ id: "", code: "" });
-            setSubmitError(error?.message || "登录失败，请重试");
+            setSubmitError(error?.message || t("auth.login_failed"));
             error.silent = true;
             throw error;
           }
@@ -233,20 +235,20 @@ export function LoginForm({ onRegister }) {
         {mode === "password" ? (
           <>
             <label className="auth-field">
-              <span className="auth-label">工作邮箱 / 手机号</span>
+              <span className="auth-label">{t("auth.email_or_phone")}</span>
               <input
                 name="username"
                 autoComplete="username"
                 required
                 maxLength="120"
-                placeholder="请输入工作台账号"
+                placeholder={t("auth.account_placeholder")}
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
             </label>
 
             <label className="auth-field">
-              <span className="auth-label">密码</span>
+              <span className="auth-label">{t("auth.password")}</span>
               <LoginPassword
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
@@ -256,7 +258,7 @@ export function LoginForm({ onRegister }) {
         ) : (
           <>
             <label className="auth-field">
-              <span className="auth-label">邮箱</span>
+              <span className="auth-label">{t("auth.email")}</span>
               <input
                 name="email"
                 type="email"
@@ -270,7 +272,7 @@ export function LoginForm({ onRegister }) {
             </label>
 
             <label className="auth-field">
-              <span className="auth-label">邮箱验证码</span>
+              <span className="auth-label">{t("auth.email_code")}</span>
               <div className="auth-code-row">
                 <input
                   name="code"
@@ -278,7 +280,7 @@ export function LoginForm({ onRegister }) {
                   maxLength="8"
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  placeholder="6 位验证码"
+                  placeholder={t("auth.code_placeholder")}
                 />
                 <button
                   type="button"
@@ -286,12 +288,12 @@ export function LoginForm({ onRegister }) {
                   disabled={sending || cooldown > 0}
                 >
                   {sending
-                    ? "发送中…"
+                    ? t("auth.sending")
                     : cooldown > 0
-                      ? `${cooldown}s 后重发`
+                      ? t("auth.resend_in", { seconds: cooldown })
                       : codeSent
-                        ? "重新发送"
-                        : "发送验证码"}
+                        ? t("auth.resend")
+                        : t("auth.send_code")}
                 </button>
               </div>
             </label>
@@ -304,7 +306,7 @@ export function LoginForm({ onRegister }) {
             checked={agreed}
             onChange={(event) => setAgreed(event.target.checked)}
           />
-          <span>我已阅读并同意《用户协议》与《隐私政策》</span>
+          <span>{t("auth.consent")}</span>
         </label>
 
         {submitError ? (
@@ -314,15 +316,15 @@ export function LoginForm({ onRegister }) {
         ) : null}
 
         <button className="auth-submit" disabled={!agreed}>
-          登录工作台
+          {t("auth.login_button")}
         </button>
       </Form>
 
       <div className="auth-links">
         <span>
-          还没有账号？
+          {t("auth.no_account")}
           <button type="button" className="auth-link" onClick={onRegister}>
-            注册
+            {t("auth.register_link")}
           </button>
         </span>
         <button
@@ -330,7 +332,7 @@ export function LoginForm({ onRegister }) {
           className="auth-link"
           onClick={() => setForgotOpen(true)}
         >
-          忘记密码
+          {t("auth.forgot_link")}
         </button>
       </div>
 
@@ -342,12 +344,8 @@ export function LoginForm({ onRegister }) {
 
       <CaptchaChallenge
         open={challengeOpen}
-        title={challengeKind === "send-code" ? "发送验证码前确认" : "登录前确认"}
-        reason={
-          challengeKind === "send-code"
-            ? "发送邮箱验证码前需要确认这一步由真人完成。"
-            : "这次登录需要确认由真人操作。点完提示中的图标后，会继续登录。"
-        }
+        title={challengeKind === "send-code" ? t("auth.confirm_send_code") : t("auth.confirm_login")}
+        reason={challengeKind === "send-code" ? t("auth.human_check_send") : t("auth.human_check_login")}
         onCancel={() => {
           if (challengeKind === "send-code") {
             setChallengeOpen(false);

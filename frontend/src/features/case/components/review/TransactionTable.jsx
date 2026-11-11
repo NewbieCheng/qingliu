@@ -2,6 +2,7 @@ import React from "react";
 import { TRANSACTION_LABELS } from "@/shared/lib/constants.js";
 import { formatCents } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
+import { aiStatusLabel } from "../../lib/ai-adopt.js";
 
 function selectableRows(rows) {
   return rows.filter((row) => !row.scope_excluded && row.quality !== "invalid");
@@ -30,7 +31,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onOpenOrigi
             <th
               title={
                 selectable.length === 0
-                  ? "本页没有可勾选交易（均为范围外、无效行，或后台识别/报告进行中）"
+                  ? "No selectable transactions on this page (out of range, invalid, or a background job is running)"
                   : undefined
               }
             >
@@ -62,7 +63,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onOpenOrigi
             const blocked =
               row.scope_excluded || row.quality === "invalid" || data.busy;
             const blockReason = row.scope_excluded
-              ? row.scope_reason || "范围外：未纳入本次测算，不可勾选处理"
+              ? row.scope_reason || "Out of range: not in this calculation; cannot be checked"
               : row.quality === "invalid"
                 ? "金额或格式无效，须更正原件后重新识别"
                 : data.busy
@@ -83,7 +84,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onOpenOrigi
               <td>
                 {row.date}
                 <strong className="block">
-                  {row.counterparty || "原件未提供"}
+                  {row.counterparty || "Original not provided"}
                 </strong>
               </td>
               <td className="number">{formatCents(row.income)}</td>
@@ -98,6 +99,14 @@ export function TransactionTable({ data, selected, onSelectedChange, onOpenOrigi
                     {alert}
                   </StatusBadge>
                 ))}
+                {aiStatusLabel(row) ? (
+                  <StatusBadge
+                    tone={row.ai_status === "adopted" ? "default" : "amber"}
+                    key="ai"
+                  >
+                    {aiStatusLabel(row)}
+                  </StatusBadge>
+                ) : null}
               </td>
               <td>
                 <StatusBadge
@@ -108,7 +117,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onOpenOrigi
                   }
                 >
                   {row.scope_excluded
-                    ? "范围外"
+                    ? "Out of range"
                     : row.duplicate && !row.review_label
                       ? "疑似重复隔离"
                       : TRANSACTION_LABELS[row.label]}

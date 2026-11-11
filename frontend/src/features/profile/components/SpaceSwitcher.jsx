@@ -2,39 +2,39 @@ import React, { useCallback, useEffect, useId, useState } from "react";
 import { toast } from "@/shared/ui/toast-api.js";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { BuildingIcon, CheckIcon, UserIcon } from "@/shared/ui/icons.jsx";
-import { ROLES } from "@/shared/lib/constants.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import { invalidateAll, querySpaces } from "@/app/queries/index.js";
 import { enableSpace, switchSpace } from "../api.js";
+import { LogoutConfirmDialog } from "../LogoutConfirmDialog.jsx";
 
 const SPACE_KIND = {
   personal: {
-    label: "个人空间",
-    short: "个人",
-    hint: "只看自己创建的资料，与团队完全隔离",
+    label: "space.personal",
+    short: "space.personal_short",
+    hint: "space.personal_hint",
   },
   team: {
-    label: "团队空间",
-    short: "团队",
-    hint: "查看并协作本团队全部资料",
+    label: "space.team",
+    short: "space.team_short",
+    hint: "space.team_hint",
   },
   platform: {
-    label: "平台空间",
-    short: "平台",
-    hint: "平台视图在工作台，青流仅显示自己创建的",
+    label: "space.platform",
+    short: "space.platform_short",
+    hint: "space.platform_hint",
   },
 };
 
-function spaceTitle(item) {
+function spaceTitle(item, t) {
   if (item?.name) return item.name;
-  return SPACE_KIND[item?.kind]?.label || "空间";
+  return t(SPACE_KIND[item?.kind]?.label || "space.generic");
 }
 
-function spaceDetail(item) {
-  if (!item) return SPACE_KIND.personal.hint;
-  if (item.kind === "personal") return SPACE_KIND.personal.hint;
-  if (item.kind === "platform") return SPACE_KIND.platform.hint;
-  const role = item.role_label || "成员";
-  return `${role} · ${SPACE_KIND.team.hint}`;
+function spaceDetail(item, t) {
+  if (!item || item.kind === "personal") return t(SPACE_KIND.personal.hint);
+  if (item.kind === "platform") return t(SPACE_KIND.platform.hint);
+  const role = item.role_label || t("space.member");
+  return `${role} · ${t(SPACE_KIND.team.hint)}`;
 }
 
 function SpaceGlyph({ kind }) {
@@ -49,15 +49,17 @@ function SpaceGlyph({ kind }) {
  * - 点开一律走居中二级弹层（避免收栏时菜单被挤坏）
  */
 export function SpaceSwitcher({ user, collapsed = false }) {
+  const { t } = useI18n();
   const listId = useId();
   const [open, setOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [warn, setWarn] = useState("");
   const [busy, setBusy] = useState("");
   const [loaded, setLoaded] = useState(false);
 
-  const initials = (user?.display || "清").slice(0, 1);
-  const accountLine = user?.email || ROLES[user?.role] || "工作台账号";
+  const initials = (user?.display || t("space.user_initial")).slice(0, 1);
+  const accountLine = user?.email || (user?.role ? t(`role.${user.role}`) : t("space.account"));
 
   const load = useCallback(async () => {
     try {
@@ -65,12 +67,12 @@ export function SpaceSwitcher({ user, collapsed = false }) {
       setItems(payload?.items ?? []);
       setWarn(payload?.warn ?? "");
     } catch (error) {
-      setWarn(error.message || "暂无多余空间");
+      setWarn(error.message || t("space.load_failed"));
       setItems([]);
     } finally {
       setLoaded(true);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -94,8 +96,8 @@ export function SpaceSwitcher({ user, collapsed = false }) {
       : null);
 
   const currentKind = current?.kind || "personal";
-  const currentTitle = spaceTitle(current);
-  const currentDetail = spaceDetail(current);
+  const currentTitle = spaceTitle(current, t);
+  const currentDetail = spaceDetail(current, t);
 
   async function onSwitch(item) {
     if (item.current || busy) return;
@@ -104,7 +106,7 @@ export function SpaceSwitcher({ user, collapsed = false }) {
     try {
       await switchSpace(item.kind, item.id);
       invalidateAll();
-      toast("已切换空间，正在刷新…");
+      toast(t("space.switched"));
       window.location.reload();
     } catch (error) {
       toast(error.message, "error");
@@ -119,7 +121,7 @@ export function SpaceSwitcher({ user, collapsed = false }) {
     try {
       const payload = await enableSpace(item.kind, item.id);
       setItems(payload?.items ?? []);
-      toast("空间已开启，可以切换了");
+      toast(t("space.enabled"));
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -134,6 +136,7 @@ export function SpaceSwitcher({ user, collapsed = false }) {
         className="rail-space-trigger"
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={t("space.open_switcher", { title: currentTitle })}
         title={`${currentTitle} · ${currentDetail}`}
         onClick={() => setOpen(true)}
       >
@@ -143,9 +146,9 @@ export function SpaceSwitcher({ user, collapsed = false }) {
         {!collapsed ? (
           <>
             <span className="rail-space-copy">
-              <strong className="rail-space-user">{user?.display || "用户"}</strong>
+              <strong className="rail-space-user">{user?.display || t("space.user")}</strong>
               <span className="rail-space-now">
-                <em>{SPACE_KIND[currentKind]?.short || "空间"}</em>
+                <em>{t(SPACE_KIND[currentKind]?.short || "space.generic")}</em>
                 {currentTitle}
               </span>
             </span>
@@ -155,26 +158,29 @@ export function SpaceSwitcher({ user, collapsed = false }) {
           </>
         ) : (
           <span className="rail-space-compact-meta" aria-hidden="true">
-            {SPACE_KIND[currentKind]?.short || "空间"}
+            {t(SPACE_KIND[currentKind]?.short || "space.generic")}
           </span>
         )}
       </button>
 
       {open ? (
         <Modal
-          title="切换工作空间"
+          title={t("space.switch_title")}
           className="modal--sm space-switch-sheet"
           onClose={() => setOpen(false)}
         >
           <p className="space-switch-account">{accountLine}</p>
           <p className="muted space-switch-hint">
-            当前：{SPACE_KIND[currentKind]?.short || "空间"} · {currentTitle}
+            {t("space.current", {
+              kind: t(SPACE_KIND[currentKind]?.short || "space.generic"),
+              title: currentTitle,
+            })}
           </p>
           <ul
             className="space-switch-list"
             role="listbox"
             id={listId}
-            aria-label="可选空间"
+            aria-label={t("space.available")}
           >
             {items.map((item) => {
               const key = `${item.kind}:${item.id}`;
@@ -205,20 +211,20 @@ export function SpaceSwitcher({ user, collapsed = false }) {
                       <SpaceGlyph kind={item.kind} />
                     </span>
                     <span className="space-switch-option-copy">
-                      <strong>{spaceTitle(item)}</strong>
-                      <span>{spaceDetail(item)}</span>
+                      <strong>{spaceTitle(item, t)}</strong>
+                      <span>{spaceDetail(item, t)}</span>
                     </span>
                     <span className="space-switch-option-meta">
                       {selected ? (
                         <CheckIcon size={14} />
                       ) : removed ? (
-                        "已移除"
+                        t("space.removed")
                       ) : locked ? (
-                        enabling ? "开启中…" : "开启"
+                        enabling ? t("space.enabling") : t("space.enable")
                       ) : switching ? (
-                        "切换中…"
+                        t("space.switching")
                       ) : (
-                        SPACE_KIND[item.kind]?.short || ""
+                        t(SPACE_KIND[item.kind]?.short || "space.generic")
                       )}
                     </span>
                   </button>
@@ -226,14 +232,34 @@ export function SpaceSwitcher({ user, collapsed = false }) {
               );
             })}
           </ul>
-          {!loaded ? <p className="muted space-switch-warn">正在读取空间…</p> : null}
+          {!loaded ? <p className="muted space-switch-warn">{t("space.loading")}</p> : null}
           {loaded && items.length === 0 ? (
-            <p className="muted space-switch-warn">{warn || "暂无多余空间"}</p>
+            <p className="muted space-switch-warn">{warn || t("space.no_other")}</p>
           ) : null}
           {loaded && items.length > 0 && warn ? (
             <p className="muted space-switch-warn">{warn}</p>
           ) : null}
+          <div className="space-switch-footer">
+            <button
+              type="button"
+              className="space-switch-logout"
+              onClick={() => {
+                setOpen(false);
+                setLogoutOpen(true);
+              }}
+            >
+              {t("auth.sign_out")}
+            </button>
+          </div>
         </Modal>
+      ) : null}
+      {logoutOpen ? (
+        <LogoutConfirmDialog
+          onClose={() => {
+            setLogoutOpen(false);
+            setOpen(true);
+          }}
+        />
       ) : null}
     </div>
   );

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { ArrowLeftIcon, RailToggleIcon, TopbarToggleIcon } from "@/shared/ui/icons.jsx";
 import { Link } from "@/shared/router/index.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
+import { LanguageSwitch } from "@/shared/ui/LanguageSwitch.jsx";
 import { invalidateBalance, queryBalance } from "@/app/queries/index.js";
 import {
   availablePoints,
@@ -22,6 +24,7 @@ export function Topbar({
   title,
   back,
 }) {
+  const { t } = useI18n();
   const [points, setPoints] = useState(null);
   const [balance, setBalance] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,11 +56,14 @@ export function Topbar({
   const balanceTitle =
     points === null
       ? undefined
-      : `可用合计 ${Number(points).toLocaleString("zh-CN")} 积分 · 永久 ${Number(permanent).toLocaleString("zh-CN")} · 临时 ${Number(period).toLocaleString("zh-CN")}${
-          period > 0 && expires
-            ? `（至 ${expires.toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })} 到期作废）`
-            : ""
-        }；扣费先扣临时，再扣永久。`;
+      : t("topbar.points_title", {
+          total: Number(points).toLocaleString(),
+          permanent: Number(permanent).toLocaleString(),
+          period: Number(period).toLocaleString(),
+          expire: period > 0 && expires
+            ? t("topbar.points_expire", { at: expires.toLocaleString() })
+            : "",
+        });
 
   return (
     <header className="topbar">
@@ -66,9 +72,9 @@ export function Topbar({
           <button
             type="button"
             className="topbar-toggle"
-            aria-label={railCollapsed ? "展开侧边栏" : "收起侧边栏"}
+            aria-label={t(railCollapsed ? "topbar.expand_rail" : "topbar.collapse_rail")}
             aria-expanded={!railCollapsed}
-            title={railCollapsed ? "展开侧边栏" : "收起侧边栏"}
+            title={t(railCollapsed ? "topbar.expand_rail" : "topbar.collapse_rail")}
             onClick={onToggleRail}
           >
             <RailToggleIcon collapsed={railCollapsed} />
@@ -85,14 +91,15 @@ export function Topbar({
       <div className="topbar-links">
         {points !== null && (
           <span className="topbar-balance" title={balanceTitle}>
-            可用积分<strong>{Number(points).toLocaleString("zh-CN")}</strong>
+            {t("topbar.points")}<strong>{Number(points).toLocaleString()}</strong>
             {period > 0 && (
               <small className="topbar-balance-period">
-                （含临时 {Number(period).toLocaleString("zh-CN")}）
+                {t("topbar.points_period", { n: Number(period).toLocaleString() })}
               </small>
             )}
           </span>
         )}
+        <LanguageSwitch />
         <button
           type="button"
           className="ghost topbar-refresh"
@@ -103,13 +110,14 @@ export function Topbar({
             setRefreshing(false);
           }}
         >
-          {refreshing ? "刷新中…" : "刷新"}
+          {refreshing ? t("topbar.refreshing") : t("topbar.refresh")}
         </button>
         <button
           type="button"
           className="topbar-toggle"
-          aria-label={collapsed ? "展开顶栏" : "收起顶栏"}
+          aria-label={t(collapsed ? "topbar.expand" : "topbar.collapse")}
           aria-expanded={!collapsed}
+          title={t(collapsed ? "topbar.expand" : "topbar.collapse")}
           onClick={onToggle}
         >
           <TopbarToggleIcon collapsed={collapsed} />

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 
 // 企业注册：与「今天不加班」工作台同一套线下开通流程。
@@ -8,9 +9,8 @@ import { toast } from "@/shared/ui/toast-api.js";
 
 const WECHAT_ID = "sihai332211";
 
-const COPY_TITLE = "【企业注册申请 - 今天不加班·智能团】";
-
 export function EnterpriseApplyPanel() {
+  const { t } = useI18n();
   const [companyName, setCompanyName] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
@@ -36,27 +36,27 @@ export function EnterpriseApplyPanel() {
   function validate() {
     const values = readForm();
     const nextErrors = {};
-    if (!values.company_name) nextErrors.company_name = "请输入企业名称";
-    if (!values.contact_name) nextErrors.contact_name = "请输入联系人姓名";
-    if (!values.contact_phone) nextErrors.contact_phone = "请输入联系电话";
-    if (!values.contact_email) nextErrors.contact_email = "请输入工作邮箱";
+    if (!values.company_name) nextErrors.company_name = t("enterprise.company_required");
+    if (!values.contact_name) nextErrors.contact_name = t("enterprise.contact_required");
+    if (!values.contact_phone) nextErrors.contact_phone = t("enterprise.phone_required");
+    if (!values.contact_email) nextErrors.contact_email = t("enterprise.email_required");
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.contact_email)) {
-      nextErrors.contact_email = "邮箱格式不正确";
+      nextErrors.contact_email = t("auth.invalid_email");
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0 ? values : null;
   }
 
   function buildCopyText(values) {
-    const optional = (label, value) => `${label}：${value || "—"}`;
+    const optional = (label, value) => `${label}: ${value || "—"}`;
     return [
-      COPY_TITLE,
-      `企业名称：${values.company_name}`,
-      `联系人：${values.contact_name}`,
-      `联系电话：${values.contact_phone}`,
-      `工作邮箱：${values.contact_email}`,
-      optional("职位", values.job_title),
-      optional("需求说明", values.remark),
+      t("enterprise.copy_title"),
+      optional(t("enterprise.company"), values.company_name),
+      optional(t("enterprise.contact"), values.contact_name),
+      optional(t("enterprise.phone"), values.contact_phone),
+      optional(t("enterprise.work_email"), values.contact_email),
+      optional(t("enterprise.job_title"), values.job_title),
+      optional(t("enterprise.remark"), values.remark),
     ].join("\n");
   }
 
@@ -65,7 +65,7 @@ export function EnterpriseApplyPanel() {
       await navigator.clipboard.writeText(text);
       toast(okMessage);
     } catch {
-      toast("复制失败请手动复制", "error");
+      toast(t("auth.copy_failed"), "error");
     }
   }
 
@@ -79,53 +79,53 @@ export function EnterpriseApplyPanel() {
   function onCopyInfo() {
     const values = validate();
     if (!values) return;
-    void copyText(buildCopyText(values), "申请信息已复制");
+    void copyText(buildCopyText(values), t("enterprise.info_copied"));
   }
 
   return (
     <>
       <p className="auth-enterprise-intro">
-        请填写企业信息，提交申请后添加微信客服完成开通。
+        {t("enterprise.intro")}
       </p>
 
       <div className="auth-form auth-enterprise-fields">
         <label className="auth-field">
-          <span className="auth-label">企业名称 *</span>
+          <span className="auth-label">{t("enterprise.company")} *</span>
           <input
             value={companyName}
             onChange={(event) => setCompanyName(event.target.value)}
             maxLength={60}
-            placeholder="例如：某某科技有限公司"
+            placeholder={t("enterprise.company_placeholder")}
           />
           {errors.company_name && <span className="auth-field-error">{errors.company_name}</span>}
         </label>
 
         <label className="auth-field">
-          <span className="auth-label">联系人 *</span>
+          <span className="auth-label">{t("enterprise.contact")} *</span>
           <input
             value={contactName}
             onChange={(event) => setContactName(event.target.value)}
             maxLength={30}
-            placeholder="您的姓名"
+            placeholder={t("enterprise.name_placeholder")}
           />
           {errors.contact_name && <span className="auth-field-error">{errors.contact_name}</span>}
         </label>
 
         <div className="auth-field-row">
           <label className="auth-field">
-            <span className="auth-label">联系电话 *</span>
+            <span className="auth-label">{t("enterprise.phone")} *</span>
             <input
               value={contactPhone}
               onChange={(event) => setContactPhone(event.target.value)}
               maxLength={20}
               inputMode="tel"
-              placeholder="手机或座机"
+              placeholder={t("enterprise.phone_placeholder")}
             />
             {errors.contact_phone && <span className="auth-field-error">{errors.contact_phone}</span>}
           </label>
 
           <label className="auth-field">
-            <span className="auth-label">工作邮箱 *</span>
+            <span className="auth-label">{t("enterprise.work_email")} *</span>
             <input
               value={contactEmail}
               onChange={(event) => setContactEmail(event.target.value)}
@@ -138,33 +138,33 @@ export function EnterpriseApplyPanel() {
         </div>
 
         <label className="auth-field">
-          <span className="auth-label">职位（可选）</span>
+          <span className="auth-label">{t("enterprise.job_title")}</span>
           <input
             value={jobTitle}
             onChange={(event) => setJobTitle(event.target.value)}
             maxLength={30}
-            placeholder="如：IT 负责人"
+            placeholder={t("enterprise.job_title_placeholder")}
           />
         </label>
 
         <label className="auth-field">
-          <span className="auth-label">需求说明（可选）</span>
+          <span className="auth-label">{t("enterprise.remark")}</span>
           <textarea
             value={remark}
             onChange={(event) => setRemark(event.target.value)}
             maxLength={300}
             rows={3}
-            placeholder="团队规模、使用场景等"
+            placeholder={t("enterprise.remark_placeholder")}
           />
         </label>
       </div>
 
       <div className="auth-enterprise-actions">
         <button type="button" className="auth-submit auth-enterprise-apply" onClick={onApply}>
-          提交申请
+          {t("enterprise.submit")}
         </button>
         <button type="button" className="auth-ghost auth-enterprise-copy" onClick={onCopyInfo}>
-          复制信息
+          {t("enterprise.copy")}
         </button>
       </div>
 
@@ -182,11 +182,11 @@ export function EnterpriseApplyPanel() {
             aria-labelledby="auth-wechat-title"
           >
             <header className="auth-modal-head">
-              <h2 id="auth-wechat-title">添加微信客服完成开通</h2>
+              <h2 id="auth-wechat-title">{t("enterprise.wechat_title")}</h2>
               <button
                 type="button"
                 className="auth-modal-close"
-                aria-label="关闭"
+                aria-label={t("common.close")}
                 onClick={() => setWechatOpen(false)}
               >
                 <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
@@ -196,24 +196,24 @@ export function EnterpriseApplyPanel() {
             </header>
 
             <p className="auth-modal-reason">
-              请按以下步骤联系专属客服，我们将尽快为您开通企业账号。
+              {t("enterprise.steps_intro")}
             </p>
 
             <ol className="auth-wechat-steps">
-              <li><span className="auth-wechat-step-no">1</span>复制下方微信号，打开微信添加好友</li>
-              <li><span className="auth-wechat-step-no">2</span>将申请信息发送给客服（可先点「复制信息」）</li>
-              <li><span className="auth-wechat-step-no">3</span>等待审核通过即可登录企业控制台</li>
+              <li><span className="auth-wechat-step-no">1</span>{t("enterprise.step_copy_contact")}</li>
+              <li><span className="auth-wechat-step-no">2</span>{t("enterprise.step_send_info")}</li>
+              <li><span className="auth-wechat-step-no">3</span>{t("enterprise.step_wait")}</li>
             </ol>
 
             <div className="auth-wechat-card">
-              <span className="auth-wechat-label">联系微信客服：</span>
+              <span className="auth-wechat-label">{t("auth.wechat_support")}</span>
               <span className="auth-wechat-id">{WECHAT_ID}</span>
               <button
                 type="button"
                 className="auth-verify-btn"
-                onClick={() => void copyText(WECHAT_ID, "微信号已复制")}
+                onClick={() => void copyText(WECHAT_ID, t("auth.wechat_copied"))}
               >
-                复制微信号
+                {t("auth.copy_wechat")}
               </button>
             </div>
 
@@ -222,17 +222,17 @@ export function EnterpriseApplyPanel() {
                 type="button"
                 className="auth-ghost auth-enterprise-copy"
                 onClick={() => {
-                  if (validated) void copyText(buildCopyText(validated), "申请信息已复制");
+                  if (validated) void copyText(buildCopyText(validated), t("enterprise.info_copied"));
                 }}
               >
-                复制信息
+                {t("enterprise.copy")}
               </button>
               <button
                 type="button"
                 className="auth-modal-primary"
                 onClick={() => setWechatOpen(false)}
               >
-                我知道了
+                {t("auth.got_it")}
               </button>
             </div>
           </div>

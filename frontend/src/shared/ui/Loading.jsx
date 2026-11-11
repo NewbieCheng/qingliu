@@ -1,13 +1,16 @@
 import React from "react";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
-export function Loading({ text = "正在加载…", error = "", onRetry, compact = false }) {
+export function Loading({ text, error = "", onRetry, compact = false }) {
+  const { t } = useI18n();
+  const loadingText = text ?? t("common.loading");
   if (error) {
     return (
       <div className={`ql-loading${compact ? " compact" : ""}`} role="alert">
         <p className="error">{error}</p>
         {onRetry && (
           <button type="button" onClick={onRetry}>
-            重新加载
+            {t("common.retry")}
           </button>
         )}
       </div>
@@ -20,7 +23,7 @@ export function Loading({ text = "正在加载…", error = "", onRetry, compact
       aria-live="polite"
     >
       <span className="ql-spinner" aria-hidden="true" />
-      <span className="ql-loading-text">{text}</span>
+      <span className="ql-loading-text">{loadingText}</span>
     </div>
   );
 }

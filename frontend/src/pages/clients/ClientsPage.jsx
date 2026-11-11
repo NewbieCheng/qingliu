@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import { Loading } from "@/shared/ui/Loading.jsx";
 import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { Pagination } from "@/shared/ui/Pagination.jsx";
@@ -15,6 +16,7 @@ import {
 } from "@/features/clients/index.js";
 
 export function ClientsPage() {
+  const { t } = useI18n();
   const [data, setData] = useState(null);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -53,7 +55,7 @@ export function ClientsPage() {
   return (
     <main className="clients-page">
       <PageHeader
-        title="我的客户"
+        title={t("clients.title")}
         actions={
           <button
             type="button"
@@ -68,13 +70,13 @@ export function ClientsPage() {
         <div className="toolbar clients-toolbar">
           <div className="toolbar-start">
             <SegmentedControl
-              aria-label="客户进度筛选"
+              aria-label={t("clients.filter_aria_label")}
               options={CLIENT_FILTERS}
               value={filter}
               onChange={setFilter}
             />
             <span className="muted clients-count">
-              {data ? `共 ${data.count} 位` : "—"}
+              {data ? t("clients.count", { count: data.count }) : "—"}
             </span>
           </div>
           <div className="toolbar-actions">
@@ -87,8 +89,8 @@ export function ClientsPage() {
               }}
             >
               <SearchInput
-                aria-label="搜索客户代号"
-                placeholder="搜索客户代号"
+                aria-label={t("clients.search_aria_label")}
+                placeholder={t("clients.search_placeholder")}
                 value={search}
                 onChange={setSearch}
                 onSearch={(value) => {
@@ -101,8 +103,8 @@ export function ClientsPage() {
               type="button"
               className="ghost icon-btn"
               disabled={refreshing}
-              aria-label={refreshing ? "刷新中" : "刷新列表"}
-              title={refreshing ? "刷新中…" : "刷新"}
+              aria-label={t(refreshing ? "clients.refreshing" : "clients.refresh")}
+              title={t(refreshing ? "clients.refreshing" : "clients.refresh")}
               onClick={() => void refresh()}
             >
               <RefreshIcon size={15} />
@@ -110,31 +112,31 @@ export function ClientsPage() {
           </div>
         </div>
         {error && <p className="error">{error}</p>}
-        {!data && !error && <Loading compact text="正在读取客户列表…" />}
+        {!data && !error && <Loading compact text={t("clients.loading")} />}
         {data && visibleClients.length > 0 && (
           <ClientsTable clients={visibleClients} />
         )}
         {data?.clients.length === 0 && (
-          <EmptyState title="从第一份资料开始">
-            <p>新建客户并确认资料处理授权，然后上传流水或征信。</p>
+          <EmptyState title={t("clients.empty_title")}>
+            <p>{t("clients.empty_description")}</p>
             <button
               type="button"
               className="primary"
               onClick={() => setCreating(true)}
             >
-              ＋ 新建客户
+              {t("clients.create")}
             </button>
           </EmptyState>
         )}
         {data && data.clients.length > 0 && visibleClients.length === 0 && (
-          <EmptyState title="当前筛选下没有客户">
-            <p>试试切换到「全部」，或翻到其他页。</p>
+          <EmptyState title={t("clients.filtered_empty_title")}>
+            <p>{t("clients.filtered_empty_description")}</p>
             <button
               type="button"
               className="ghost"
               onClick={() => setFilter("all")}
             >
-              查看全部
+              {t("clients.show_all")}
             </button>
           </EmptyState>
         )}
