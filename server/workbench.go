@@ -389,10 +389,53 @@ func (a *App) wbAccessToken(userID string) (string, error) {
 	return token, nil
 }
 
+// wbRefresh 刷新工作台 access token，并按 userID 做单飞：同一时刻只允许
+// 一次上游 /auth/refresh。工作台 refresh token 轮换后复用会吊销整个
+// family（见后端 auth.Refresh → ErrRefreshTokenReused），并发刷新等于自踢。
 func (a *App) wbRefresh(userID string) (string, error) {
+	if a == nil {
+		return "", errors.New("请重新登录工作台账号")
+	}
+	a.refreshMu.Lock()
+	if a.refreshGates == nil {
+		a.refreshGates = map[string]*wbRefreshGate{}
+	}
+	if gate, ok := a.refreshGates[userID]; ok {
+		a.refreshMu.Unlock()
+		<-gate.done
+		return gate.token, gate.err
+	}
+	gate := &wbRefreshGate{done: make(chan struct{})}
+	a.refreshGates[userID] = gate
+	a.refreshMu.Unlock()
+
+	token, err := a.wbRefreshOnce(userID)
+	if err != nil {
+		// 瞬时失败时：可能同伴已刷成功并写库，优先复用仍有效的 access。
+		if fresh, ok := a.wbFreshAccess(userID); ok {
+			token, err = fresh, nil
+		}
+	}
+	gate.token, gate.err = token, err
+	a.refreshMu.Lock()
+	delete(a.refreshGates, userID)
+	a.refreshMu.Unlock()
+	close(gate.done)
+	return token, err
+}
+
+func (a *App) wbRefreshOnce(userID string) (string, error) {
 	account := a.wbAccount(userID)
 	if account == nil {
 		return "", errors.New("请重新登录工作台账号")
+	}
+	// 进闸后再次检查：同伴可能刚刷完，不必再拿旧 refresh 去撞轮换。
+	expires := integer(account["token_expires"])
+	if expires > time.Now().Unix()+60 {
+		token := string(a.s.unseal(bytesOf(account["access_token"])))
+		if token != "" {
+			return token, nil
+		}
 	}
 	rawRefresh := string(a.s.unseal(bytesOf(account["refresh_token"])))
 	if rawRefresh == "" {
@@ -404,6 +447,23 @@ func (a *App) wbRefresh(userID string) (string, error) {
 	}
 	a.wbSaveLogin(userID, session)
 	return session.AccessToken, nil
+}
+
+// wbFreshAccess 读库里仍可用的 access token（距过期 >60s）。
+func (a *App) wbFreshAccess(userID string) (string, bool) {
+	account := a.wbAccount(userID)
+	if account == nil {
+		return "", false
+	}
+	expires := integer(account["token_expires"])
+	if expires <= time.Now().Unix()+60 {
+		return "", false
+	}
+	token := string(a.s.unseal(bytesOf(account["access_token"])))
+	if token == "" {
+		return "", false
+	}
+	return token, true
 }
 
 // wbRequest calls the workbench on behalf of a local session. A 401 triggers

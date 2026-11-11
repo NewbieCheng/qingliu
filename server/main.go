@@ -46,6 +46,19 @@ type App struct {
 	// 的唯一来源是工作台的 /me/spaces；缓存避免每次页面渲染都打一次工作台。
 	spaceMu    sync.Mutex
 	spaceNames map[string]spaceCaption
+	// refreshGates 按本地 user_id 串行化工作台 refresh：access token 约 15
+	// 分钟过期，充值页顶栏与正文会并发打 /api/billing/*，若各刷一次同
+	// 一个 refresh token，工作台会判定复用并吊销整个 family，页面就出现
+	// 「请重新登录工作台账号」。见 docs/02-后端开发.md §5.1。
+	refreshMu    sync.Mutex
+	refreshGates map[string]*wbRefreshGate
+}
+
+// wbRefreshGate 让同一用户的并发 refresh 共用一次结果。
+type wbRefreshGate struct {
+	done  chan struct{}
+	token string
+	err   error
 }
 type request struct {
 	w       http.ResponseWriter
@@ -422,7 +435,12 @@ func (a *App) mux() http.Handler {
 		if !a.wb.Ready() {
 			bad(503, "尚未接入工作台")
 		}
-		status, data, err := a.wb.do(q.r.Context(), http.MethodGet, "/api/v1/payment/skus?service_code=qingliu", nil, "")
+		// 走鉴权列表，带上当前空间受益账户，才能拿到 purchasable / 灰显原因。
+		path := "/api/v1/payment/skus/mine?service_code=qingliu&owner_type=1"
+		if space := q.space(); space.Kind == spaceTeam && space.teamID() > 0 {
+			path = "/api/v1/payment/skus/mine?service_code=qingliu&owner_type=2&owner_id=" + itoa(space.teamID())
+		}
+		status, data, err := a.wbRequest(q.r.Context(), str(q.user, "id"), http.MethodGet, path, nil)
 		if err != nil {
 			bad(503, err.Error())
 		}

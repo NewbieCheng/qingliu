@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { filterSkusByAudience, orderOwnerForSku, skuAudience } from "../sku.js";
+import {
+  filterSkusByAudience,
+  ineligibleLabel,
+  isSkuPurchasable,
+  orderOwnerForSku,
+  skuAudience,
+  skuKind,
+} from "../sku.js";
 
 describe("skuAudience", () => {
   it("normalizes metadata.audience", () => {
@@ -28,6 +35,22 @@ describe("filterSkusByAudience", () => {
       "t",
       "any",
     ]);
+  });
+});
+
+describe("skuKind / purchasable", () => {
+  it("derives plan vs topup", () => {
+    expect(skuKind({ sku_kind: "plan" })).toBe("plan");
+    expect(skuKind({ subscription: true })).toBe("plan");
+    expect(skuKind({ points_kind: "permanent" })).toBe("topup");
+  });
+
+  it("keeps unavailable cards visible but not purchasable", () => {
+    expect(isSkuPurchasable({ purchasable: false })).toBe(false);
+    expect(isSkuPurchasable({})).toBe(true);
+    expect(ineligibleLabel({ ineligible_reason: "purchase_window_limit" })).toMatch(
+      /本月/,
+    );
   });
 });
 

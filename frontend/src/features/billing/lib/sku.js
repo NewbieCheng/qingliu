@@ -9,6 +9,37 @@ export function skuAudience(sku) {
   return "";
 }
 
+/** plan=周期套餐，topup=额度充值包；缺省按 subscription / points_kind 回推。 */
+export function skuKind(sku) {
+  const raw = String(sku?.sku_kind || "")
+    .trim()
+    .toLowerCase();
+  if (raw === "plan" || raw === "topup") return raw;
+  if (sku?.subscription || sku?.points_kind === "period") return "plan";
+  return "topup";
+}
+
+/** purchasable 缺省视为可买（兼容旧接口未返回该字段）。 */
+export function isSkuPurchasable(sku) {
+  if (sku?.purchasable === false) return false;
+  return true;
+}
+
+export function ineligibleLabel(sku) {
+  switch (String(sku?.ineligible_reason || "")) {
+    case "purchase_window_limit":
+      return "本月已购买，下月可再买";
+    case "not_new_user":
+      return "仅新用户可购";
+    case "audience_mismatch":
+      return "与当前账户类型不匹配";
+    case "inactive":
+      return "已下架";
+    default:
+      return "";
+  }
+}
+
 export function filterSkusByAudience(skus, tab) {
   const list = Array.isArray(skus) ? skus : [];
   if (tab !== "personal" && tab !== "team") return list;
