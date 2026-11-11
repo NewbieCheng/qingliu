@@ -51,6 +51,9 @@ describe("skuKind / purchasable", () => {
     expect(ineligibleLabel({ ineligible_reason: "purchase_window_limit" })).toMatch(
       /本月/,
     );
+    expect(ineligibleLabel({ ineligible_reason: "owner_not_authorized" })).toMatch(
+      /无权为企业购买/,
+    );
   });
 });
 

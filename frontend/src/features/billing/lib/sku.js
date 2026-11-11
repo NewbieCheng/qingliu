@@ -35,6 +35,8 @@ export function ineligibleLabel(sku) {
       return "与当前账户类型不匹配";
     case "inactive":
       return "已下架";
+    case "owner_not_authorized":
+      return "当前账号无权为企业购买，请联系管理员";
     default:
       return "";
   }
