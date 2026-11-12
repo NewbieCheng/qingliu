@@ -1,9 +1,12 @@
 import React from "react";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import { Field, Form } from "@/shared/ui/Form.jsx";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { ModalActions } from "@/shared/ui/ModalActions.jsx";
 
 export function DeleteMemberDialog({ member, onClose, onConfirm }) {
+  const { locale, t } = useI18n();
+  const copy = (zh, en) => (locale === "en-US" ? en : zh);
   if (!member) return null;
 
   return (
@@ -13,8 +16,8 @@ export function DeleteMemberDialog({ member, onClose, onConfirm }) {
       className="modal--sm delete-member-dialog"
     >
       <p className="delete-member-dialog-lead">
-        将解除 <strong>{member.display || member.username}</strong>
-        （{member.username}）与当前企业的关联。工作台个人账号保留，可继续登录个人空间或其他企业。
+        {copy("将解除", "Remove")} <strong>{member.display || member.username}</strong>
+        {copy(`（${member.username}）`, `(${member.username})`)}{copy("与当前企业的关联。工作台个人账号保留，可继续登录个人空间或其他企业。", " is no longer part of this team. Their Workbench personal account remains active and can still access personal space or other teams.")}
       </p>
       <Form
         success=""
@@ -37,10 +40,10 @@ export function DeleteMemberDialog({ member, onClose, onConfirm }) {
         </Field>
         <ModalActions>
           <button type="button" className="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button type="submit" className="primary is-danger-action">
-            确认删除
+            {copy("确认删除", "Confirm removal")}
           </button>
         </ModalActions>
       </Form>

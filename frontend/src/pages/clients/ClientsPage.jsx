@@ -62,7 +62,7 @@ export function ClientsPage() {
             className="primary"
             onClick={() => setCreating(true)}
           >
-            ＋ 新建客户
+            {t("clients.create")}
           </button>
         }
       />
@@ -71,7 +71,10 @@ export function ClientsPage() {
           <div className="toolbar-start">
             <SegmentedControl
               aria-label={t("clients.filter_aria_label")}
-              options={CLIENT_FILTERS}
+              options={CLIENT_FILTERS.map((option) => ({
+                ...option,
+                label: t(option.labelKey),
+              }))}
               value={filter}
               onChange={setFilter}
             />

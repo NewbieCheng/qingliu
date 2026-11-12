@@ -11,10 +11,8 @@ import {
   reviewCanNext,
   reviewPagerLabel,
 } from "../../lib/review-paging.js";
-import {
-  adoptedAIRows,
-  highConfidenceSuggested,
-} from "../../lib/ai-adopt.js";
+import { adoptedAIRows, highConfidenceSuggested } from "../../lib/ai-adopt.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 export function ReviewStep({
   data,
@@ -36,6 +34,7 @@ export function ReviewStep({
   onOpenOriginal,
   onStepChange,
 }) {
+  const { t } = useI18n();
   const highAI = highConfidenceSuggested(data.rows);
   const adoptedAI = adoptedAIRows(data.rows);
   function changeView(value) {
@@ -62,9 +61,9 @@ export function ReviewStep({
       <AccountingSummary summary={summary} />
       <FoldPanel
         className="card fold-panel--card review-table-card"
-        title="逐笔核对"
+        title={t("case.review.title")}
         badge={
-          <em className="fold-panel-badge">{data.row_count} 笔</em>
+          <em className="fold-panel-badge">{t("case.tx_stat", { n: data.row_count })}</em>
         }
         defaultOpen
       >
@@ -76,19 +75,19 @@ export function ReviewStep({
         />
         {!data.rows.length && (
           <p className="empty">
-            当前筛选没有交易。可以切换“全部交易”检查，或继续确认统计期间。
+            {t("case.review.no_transactions")}
           </p>
         )}
         <div className="review-table-foot">
           {data.rows?.length > 0 &&
           data.rows.every((row) => row.scope_excluded) ? (
             <p className="muted" role="status">
-              本页交易均标记为「范围外」，勾选不可用。请先到「确认归属」把对应原件勾上「纳入本次」。
+              {t("case.review.all_out_of_range")}
             </p>
           ) : null}
           {data.busy ? (
             <p className="muted" role="status">
-              资料识别或报告生成进行中，暂不可批量保存处理；AI 辅助分析不会锁住勾选。
+              {t("case.review.busy_notice")}
             </p>
           ) : null}
           <Pagination
@@ -100,7 +99,7 @@ export function ReviewStep({
             label={reviewPagerLabel(page, data.row_count)}
           />
           {(highAI.length > 0 || adoptedAI.length > 0) && (
-            <div className="review-action review-action--ai" role="group" aria-label="AI 预勾">
+            <div className="review-action review-action--ai" role="group" aria-label={t("case.review.ai_group")}>
               {highAI.length > 0 ? (
                 <button
                   type="button"
@@ -108,7 +107,7 @@ export function ReviewStep({
                   disabled={data.busy || !onAIAdopt}
                   onClick={() => onAIAdopt?.()}
                 >
-                  采纳高置信 AI 建议（{highAI.length}）
+                  {t("case.review.adopt_ai_suggestions", { count: highAI.length })}
                 </button>
               ) : null}
               {adoptedAI.length > 0 ? (
@@ -125,7 +124,7 @@ export function ReviewStep({
                     )
                   }
                 >
-                  撤销 AI 采纳
+                  {t("case.review.revoke_ai_adoption")}
                 </button>
               ) : null}
             </div>

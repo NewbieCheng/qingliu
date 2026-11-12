@@ -3,22 +3,24 @@ import { Link } from "@/shared/router/index.js";
 import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { EmptyState } from "@/shared/ui/EmptyState.jsx";
 import { ArrowLeftIcon } from "@/shared/ui/icons.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 export function NotFoundPage() {
+  const { t } = useI18n();
   return (
     <main>
       <PageHeader
-        title="这里没有可打开的工作底稿。"
-        description="Link may have expired, or this account has no access."
+        title={t("route.not_found_title")}
+        description={t("route.not_found_description")}
         actions={
           <Link className="back" to="/">
             <ArrowLeftIcon />
-            Back to customers
+            {t("route.back_customers")}
           </Link>
         }
       />
-      <EmptyState title="检查地址后再试">
-        <p>内部链接会保留登录状态；如需新建客户，请从客户档案页开始。</p>
+      <EmptyState title={t("route.not_found_check_address")}>
+        <p>{t("route.not_found_help")}</p>
       </EmptyState>
     </main>
   );

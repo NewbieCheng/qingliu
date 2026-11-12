@@ -1,22 +1,23 @@
 import React from "react";
 import { formatCents } from "@/shared/lib/format.js";
 import { AlertIcon } from "@/shared/ui/icons.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 export function AccountingSummary({ summary }) {
+  const { t } = useI18n();
   const note =
-    `原始总流入 = 范围外 + 重复隔离 + 无效行可识别流入 + 当前测算流入。` +
-    `无效行可识别流入：${formatCents(summary.invalid_income)} 元。不同来源分别统计。`;
+    t("case.summary.note", { amount: formatCents(summary.invalid_income) });
 
   const stats = [
-    ["Raw total inflow", summary.original_income, true],
-    ["Out of range", summary.scope_excluded_income, false],
-    ["重复隔离", summary.quarantined_income, false],
-    ["Current measured inflow", summary.income, false],
-    ["Tentative business (unverified)", summary.included, false],
+    [t("summary.raw_inflow"), summary.original_income, true],
+    [t("summary.scope_excluded"), summary.scope_excluded_income, false],
+    [t("summary.duplicate_quarantined"), summary.quarantined_income, false],
+    [t("summary.current_inflow"), summary.income, false],
+    [t("summary.included_biz"), summary.included, false],
   ];
 
   return (
-    <section className="accounting-panel" aria-label="核算摘要">
+    <section className="accounting-panel" aria-label={t("case.summary.aria_label")}>
       <div className="accounting">
         {stats.map(([title, value, withNote], index) => (
           <div key={title} className={index === 4 ? "emphasis" : ""}>
@@ -34,7 +35,7 @@ export function AccountingSummary({ summary }) {
               ) : null}
             </span>
             <strong>{formatCents(value)}</strong>
-            <small>元</small>
+            <small>{t("summary.yuan")}</small>
           </div>
         ))}
       </div>

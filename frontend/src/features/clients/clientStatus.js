@@ -10,19 +10,38 @@ export function clientNextStep(client) {
   const docs = Number(client.doc_count) || 0;
   switch (clientBucket(client)) {
     case "running":
-      return { label: "识别中", tone: "amber", docs, action: "" };
+      return {
+        label: "识别中",
+        labelKey: "clients.step_parsing",
+        tone: "amber",
+        docs,
+        action: "",
+      };
     case "pending":
-      return { label: "待上传资料", tone: "amber", docs: 0, action: "去上传" };
+      return {
+        label: "待上传资料",
+        labelKey: "clients.step_pending_upload",
+        tone: "amber",
+        docs: 0,
+        action: "去上传",
+        actionKey: "clients.step_go_upload",
+      };
     default:
-      return { label: "继续核对", tone: "default", docs, action: "" };
+      return {
+        label: "继续核对",
+        labelKey: "clients.step_continue_review",
+        tone: "default",
+        docs,
+        action: "",
+      };
   }
 }
 
 export const CLIENT_FILTERS = [
-  { value: "all", label: "All" },
-  { value: "pending", label: "待上传" },
-  { value: "ready", label: "可继续" },
-  { value: "running", label: "Running" },
+  { value: "all", label: "All", labelKey: "clients.filter_all" },
+  { value: "pending", label: "待上传", labelKey: "clients.filter_pending" },
+  { value: "ready", label: "可继续", labelKey: "clients.filter_ready" },
+  { value: "running", label: "Running", labelKey: "clients.filter_running" },
 ];
 
 export function filterClients(clients, filter) {

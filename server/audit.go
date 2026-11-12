@@ -93,11 +93,11 @@ func auditSpaceDetailLabel(detail string) string {
 	kind, _, _ := strings.Cut(strings.TrimSpace(detail), ":")
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case spaceTeam, "enterprise":
-		return "Team space"
+		return "团队空间"
 	case spacePlatform:
-		return "Platform space"
+		return "平台空间"
 	case spacePersonal:
-		return "Personal space"
+		return "个人空间"
 	case "":
 		return ""
 	default:
@@ -112,15 +112,15 @@ func auditReportFileLabel(detail string) string {
 	}
 	switch name {
 	case "report.pdf":
-		return "PDF report"
+		return "PDF 报告"
 	case "report.html":
-		return "Web report"
+		return "网页报告"
 	case "summary.xlsx":
 		return "汇总表"
 	case "detail.xlsx":
 		return "明细表"
 	case "":
-		return "Download report"
+		return "下载报告"
 	default:
 		return "报告文件"
 	}
@@ -154,14 +154,14 @@ func auditDetailLabel(action, detail string) string {
 		return "已确认统计期间"
 	case "change_password":
 		if detail == "workbench" {
-			return "Workbench account"
+			return "工作台账号"
 		}
 		if detail == "" {
 			return "本系统账号"
 		}
 		return detail
 	case "change_grant":
-		return "Access updated"
+		return "已调整授权"
 	case "report_queued":
 		return "报告已排队"
 	case "job_cancelled":

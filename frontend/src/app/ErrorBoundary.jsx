@@ -1,4 +1,5 @@
 import React from "react";
+import { tStandalone } from "@/shared/i18n/core.js";
 
 export class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -19,14 +20,14 @@ export class ErrorBoundary extends React.Component {
     return (
       <main>
         <div className="card">
-          <h1>This page did not load correctly.</h1>
+          <h1>{tStandalone("app.error_title")}</h1>
           <p className="muted">{this.state.error.message}</p>
           <button
             type="button"
             className="primary"
             onClick={() => window.location.reload()}
           >
-            Reload page
+            {tStandalone("common.reload")}
           </button>
         </div>
       </main>

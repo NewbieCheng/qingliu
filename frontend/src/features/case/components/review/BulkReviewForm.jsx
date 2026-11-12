@@ -2,13 +2,15 @@ import React from "react";
 import { Form } from "@/shared/ui/Form.jsx";
 import { Select } from "@/shared/ui/FormRow.jsx";
 import { REVIEW_OPTIONS } from "../../constants.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 export function BulkReviewForm({ selectedCount, busy, onSave }) {
+  const { t } = useI18n();
   return (
     <Form onSave={onSave}>
       <div className="review-action">
-        <strong>已选 {selectedCount} 笔</strong>
-        <Select name="label" label="Handling" aria-label="Handling">
+        <strong>{t("review.bulk_selected", { n: selectedCount })}</strong>
+        <Select name="label" label={t("review.bulk_handling")} aria-label={t("review.bulk_handling")}>
           {REVIEW_OPTIONS.map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -17,8 +19,8 @@ export function BulkReviewForm({ selectedCount, busy, onSave }) {
         </Select>
         <input
           name="reason"
-          aria-label="处理依据"
-          placeholder="填写适用于每笔交易的原件或凭证依据"
+          aria-label={t("case.review.bulk_reason_label")}
+          placeholder={t("review.bulk_reason_placeholder")}
           required
         />
         <button
@@ -26,7 +28,7 @@ export function BulkReviewForm({ selectedCount, busy, onSave }) {
           disabled={busy || !selectedCount}
           type="submit"
         >
-          保存处理
+          {t("review.bulk_submit")}
         </button>
       </div>
     </Form>

@@ -3,30 +3,31 @@ import { createPortal } from "react-dom";
 import { JOB_STATUS } from "@/shared/lib/constants.js";
 import { Form } from "@/shared/ui/Form.jsx";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 const KIND_LABEL = {
-  upload: "Document parse",
-  report: "Report",
-  ai_analysis: "AI analysis",
+  upload: "case.tasks.kind_upload",
+  report: "case.tasks.kind_report",
+  ai_analysis: "case.tasks.kind_ai_analysis",
 };
 
 const STAGE_LABEL = {
-  queued: "Queued",
-  starting: "Preparing",
-  parsing: "Page recognition",
-  rendering: "Generating files",
-  uploading: "Uploading original",
-  creating: "Creating task",
-  running: "AI analyzing",
-  summarizing: "Summarizing",
-  done: "Done",
-  failed: "Failed",
+  queued: "ai.status_queued",
+  starting: "case.tasks.stage_starting",
+  parsing: "case.tasks.stage_parsing",
+  rendering: "case.tasks.stage_rendering",
+  uploading: "case.tasks.stage_uploading",
+  creating: "case.tasks.stage_creating",
+  running: "ai.status_running",
+  summarizing: "case.tasks.stage_summarizing",
+  done: "ai.status_done",
+  failed: "ai.status_failed",
 };
 
 const ETA_HINT = {
-  upload: "Usually 1–5 minutes",
-  ai_analysis: "Usually 1–3 minutes",
-  report: "Usually about 1 minute",
+  upload: "case.tasks.eta_upload",
+  ai_analysis: "case.tasks.eta_analysis",
+  report: "case.tasks.eta_report",
 };
 
 const PAGE_SIZE = 5;
@@ -91,6 +92,7 @@ function writeDockCache(cid, next) {
  * 展开态与页码记在 sessionStorage（标签页会话内），任务数据仍走底稿内存短 TTL。
  */
 export function TaskList({ data, onRetry, onCancel }) {
+  const { t } = useI18n();
   const cid = data?.customer?.id || "";
   const cached = useMemo(() => readDockCache(cid), [cid]);
 
@@ -131,10 +133,10 @@ export function TaskList({ data, onRetry, onCancel }) {
   const visible = jobs.slice(start, start + PAGE_SIZE);
   const summary =
     activeCount > 0
-      ? `${activeCount} 项进行中`
+      ? t("case.tasks.active_count", { count: activeCount })
       : failedCount > 0
-        ? `${failedCount} 项失败`
-        : `${jobs.length} 项任务`;
+        ? t("case.tasks.failed_count", { count: failedCount })
+        : t("case.tasks.total_count", { count: jobs.length });
 
   async function cancel(jobId) {
     setCancelling(jobId);
@@ -148,18 +150,18 @@ export function TaskList({ data, onRetry, onCancel }) {
   return createPortal(
     <div
       className={`task-dock${open ? " is-open" : ""}${hasUrgent ? " has-urgent" : ""}`}
-      aria-label="Background jobs"
+      aria-label={t("case.tasks.aria_label")}
     >
       {!open ? (
         <button
           type="button"
           className="task-dock-fab"
           onClick={() => setOpen(true)}
-          title="查看后台任务"
+          title={t("case.tasks.open_title")}
           aria-expanded="false"
         >
           <ActivityIcon size={15} />
-          <span>任务</span>
+          <span>{t("case.tasks.short_label")}</span>
           {(activeCount > 0 || failedCount > 0) && (
             <em
               className={`task-dock-badge${failedCount && !activeCount ? " is-fail" : ""}`}
@@ -172,16 +174,16 @@ export function TaskList({ data, onRetry, onCancel }) {
         <section className="task-dock-panel">
           <header className="task-dock-head">
             <div>
-              <strong>Background jobs</strong>
+              <strong>{t("case.tasks.title")}</strong>
               <span className="task-dock-summary">{summary}</span>
             </div>
             <button
               type="button"
               className="ghost task-dock-collapse"
               onClick={() => setOpen(false)}
-              aria-label="收起任务面板"
+              aria-label={t("case.tasks.collapse")}
             >
-              Collapse
+              {t("case.tasks.collapse")}
             </button>
           </header>
 
@@ -199,7 +201,7 @@ export function TaskList({ data, onRetry, onCancel }) {
                 >
                   <div className="task-head">
                     <span className="task-title">
-                      {KIND_LABEL[job.kind] || "Background jobs"} · {job.message}
+                      {t(KIND_LABEL[job.kind] || "case.tasks.title")} · {job.message}
                     </span>
                     <StatusBadge>{JOB_STATUS[job.status]}</StatusBadge>
                   </div>
@@ -210,7 +212,7 @@ export function TaskList({ data, onRetry, onCancel }) {
                       aria-valuenow={percent}
                       aria-valuemin={0}
                       aria-valuemax={100}
-                      aria-label="任务进度"
+                      aria-label={t("case.tasks.progress_aria_label")}
                     >
                       <div
                         className="task-progress-bar"
@@ -222,9 +224,9 @@ export function TaskList({ data, onRetry, onCancel }) {
                     <div className="task-meta">
                       <span>
                         {job.status === "queued" && job.queue_position > 1
-                          ? `排队中 · 前面还有 ${job.queue_position - 1} 份`
-                          : STAGE_LABEL[job.stage] || JOB_STATUS[job.status]}
-                        {active ? ` · ${ETA_HINT[job.kind] || "预计稍候完成"}` : ""}
+                          ? t("case.tasks.queue_position", { count: job.queue_position - 1 })
+                          : t(STAGE_LABEL[job.stage]) || JOB_STATUS[job.status]}
+                        {active ? ` · ${t(ETA_HINT[job.kind] || "case.tasks.eta_short")}` : ""}
                       </span>
                       <span>{percent}%</span>
                     </div>
@@ -238,14 +240,14 @@ export function TaskList({ data, onRetry, onCancel }) {
                           disabled={cancelling === job.id}
                           onClick={() => void cancel(job.id)}
                         >
-                          {cancelling === job.id ? "终止中…" : "Cancel job"}
+                          {cancelling === job.id ? t("case.tasks.cancelling") : t("case.tasks.cancel_job")}
                         </button>
                       )}
                       {job.status === "failed" &&
                         job.kind === "upload" &&
                         !data.busy && (
                           <Form success="" onSave={() => onRetry(job.id)}>
-                            <button type="submit">Retry</button>
+                            <button type="submit">{t("common.retry")}</button>
                           </Form>
                         )}
                     </div>
@@ -256,14 +258,14 @@ export function TaskList({ data, onRetry, onCancel }) {
           </div>
 
           {pageCount > 1 && (
-            <div className="task-dock-pager" role="navigation" aria-label="任务翻页">
+            <div className="task-dock-pager" role="navigation" aria-label={t("case.tasks.pagination_aria_label")}>
               <button
                 type="button"
                 className="ghost"
                 disabled={safePage <= 1}
                 onClick={() => setPage((value) => Math.max(1, value - 1))}
               >
-                Previous
+                {t("common.previous")}
               </button>
               <span className="task-dock-page">
                 {safePage} / {pageCount}
@@ -274,7 +276,7 @@ export function TaskList({ data, onRetry, onCancel }) {
                 disabled={safePage >= pageCount}
                 onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
               >
-                Next
+                {t("common.next")}
               </button>
             </div>
           )}

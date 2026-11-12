@@ -44,15 +44,15 @@ export function ClientsTable({ clients }) {
                 </td>
                 <td>
                   <div className="clients-progress">
-                    <StatusBadge tone={step.tone}>{step.label}</StatusBadge>
+                    <StatusBadge tone={step.tone}>{t(step.labelKey)}</StatusBadge>
                     {step.docs > 0 && (
                       <span className="clients-progress-meta">
-                      {t("clients.docs_count", { n: step.docs })}
+        {t("clients.docs_count", { n: step.docs })}
                       </span>
                     )}
                     {step.action ? (
                       <span className="clients-progress-action">
-                        {step.action}
+                        {t(step.actionKey)}
                       </span>
                     ) : null}
                   </div>

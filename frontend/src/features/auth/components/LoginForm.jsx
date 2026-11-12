@@ -41,7 +41,7 @@ const defaultDev = DEV_PRESETS[0] || {
 const CODE_COOLDOWN_SECONDS = 60;
 
 // 用户取消人机验证时用它中断提交流程：它不是错误，不该弹错误 toast。
-const CANCELLED = Object.assign(new Error("已取消人机验证"), { silent: true });
+const CANCELLED = Object.assign(new Error("captcha_cancelled"), { silent: true });
 
 export function LoginForm({ onRegister }) {
   const { t } = useI18n();

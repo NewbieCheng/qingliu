@@ -8,8 +8,10 @@ import { FoldPanel } from "@/shared/ui/FoldPanel.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
 import { DocumentList } from "../DocumentList.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 const RELATIONSHIPS = ["Self", "配偶", "子女", "Other"];
+const RELATIONSHIP_KEYS = { Self: "ownership.rel_self", "配偶": "ownership.rel_spouse", "子女": "ownership.rel_child", Other: "ownership.rel_other" };
 const VISIBLE_DOCS = 8;
 
 /**
@@ -18,6 +20,7 @@ const VISIBLE_DOCS = 8;
  * 配偶/子女姓名是可选补充，给流水匹配用，不是替代上面的表格。
  */
 export function OwnershipStep({ data, onSave, onNext }) {
+  const { t } = useI18n();
   const [confirmed, setConfirmed] = useState({});
   const [showAll, setShowAll] = useState(false);
   const docs = data.docs || [];
@@ -30,15 +33,13 @@ export function OwnershipStep({ data, onSave, onNext }) {
   return (
     <section className="card ownership-card">
       <SectionTitle
-        title="确认持有人与本次范围"
-        description="One row per original; unconfirmed rows stay out of the calculation."
+        title={t("ownership.title")}
+        description={t("ownership.desc")}
       />
 
       {docs.length === 0 ? (
-        <EmptyState title="还没有可确认的资料">
-          <p>
-            请先回到「上传资料」上传流水或征信。上传多份时，这里会按原件逐行列出持有人、关系和是否纳入。
-          </p>
+        <EmptyState title={t("ownership.empty_title")}>
+          <p>{t("ownership.empty_desc")}</p>
         </EmptyState>
       ) : (
         <Form
@@ -50,7 +51,7 @@ export function OwnershipStep({ data, onSave, onNext }) {
                 !confirmed[document.id],
             );
             if (unconfirmed.length > 0) {
-              toast("请先逐行填写持有人并点击 ✓ 确认", "error");
+              toast(t("ownership.confirm_all_prompt"), "error");
               return;
             }
             const scopes = {};
@@ -73,21 +74,21 @@ export function OwnershipStep({ data, onSave, onNext }) {
           <div className="ownership-section">
             <div className="ownership-section-head">
               <h3 className="ownership-section-title">
-                逐份确认原件
-                <small>{docs.length} 份</small>
+                {t("ownership.section_title")}
+                <small>{t("case.docs_stat", { n: docs.length })}</small>
               </h3>
               <p className="muted ownership-section-hint">
-                持有人＝账户归属人；关系相对本客户；关「纳入本次」则不进测算。
+                {t("ownership.section_hint")}
               </p>
             </div>
             <div className="table-wrap table-compact ownership-table">
               <table>
                 <thead>
                   <tr>
-                    <th>原件</th>
-                    <th>持有人</th>
-                    <th>关系</th>
-                    <th>纳入本次</th>
+                    <th>{t("ownership.col_doc")}</th>
+                    <th>{t("ownership.col_holder")}</th>
+                    <th>{t("ownership.col_relation")}</th>
+                    <th>{t("ownership.col_include")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -101,13 +102,12 @@ export function OwnershipStep({ data, onSave, onNext }) {
                             {document.name}
                           </span>
                           <small className="ownership-doc-meta">
-                            识别署名：
-                            {document.meta.subject_name || "未识别"}
+                            {t("ownership.subject_name", { name: document.meta.subject_name || t("ownership.unidentified") })}
                           </small>
                         </td>
                         <td>
                           <InputWithCheck
-                            aria-label={`${document.name}持有人`}
+                            aria-label={t("case.ownership.holder_label", { name: document.name })}
                             name={`holder_${document.id}`}
                             defaultValue={
                               scope.holder ||
@@ -117,25 +117,25 @@ export function OwnershipStep({ data, onSave, onNext }) {
                             required
                             checked={!!confirmed[document.id]}
                             onToggle={() => toggleConfirmed(document.id)}
-                            checkLabel={`确认${document.name}持有人`}
+                            checkLabel={t("case.ownership.confirm_holder", { name: document.name })}
                           />
                         </td>
                         <td>
                           <Select
-                            aria-label={`${document.name}关系`}
+                            aria-label={t("case.ownership.relationship_label", { name: document.name })}
                             name={`relationship_${document.id}`}
-                            label={`${document.name}关系`}
+                            label={t("case.ownership.relationship_label", { name: document.name })}
                             defaultValue={scope.relationship || "Self"}
                           >
                             {RELATIONSHIPS.map((value) => (
-                              <option key={value}>{value}</option>
+                              <option key={value}>{t(RELATIONSHIP_KEYS[value])}</option>
                             ))}
                           </Select>
                         </td>
                         <td>
                           <Switch
                             name={`include_${document.id}`}
-                            label={`${document.name}纳入本次`}
+                            label={t("case.ownership.include_label", { name: document.name })}
                             defaultChecked={scope.include ?? true}
                           />
                         </td>
@@ -151,29 +151,25 @@ export function OwnershipStep({ data, onSave, onNext }) {
                 className="ghost task-toggle"
                 onClick={() => setShowAll((value) => !value)}
               >
-                {showAll
-                  ? "Collapse"
-                  : `展开全部 ${docs.length} 份资料`}
+                {showAll ? t("common.collapse") : t("case.ownership.expand_docs", { count: docs.length })}
               </button>
             )}
           </div>
 
           <FoldPanel
-            title="可选：家庭成员姓名（流水匹配）"
+            title={t("case.ownership.family_names_title")}
             className="ownership-extra"
           >
-            <p className="muted ownership-section-hint">
-              不是替代上面表格。若流水里会出现配偶/子女姓名，可在此填写以便规则匹配；没有就留空。
-            </p>
+            <p className="muted ownership-section-hint">{t("case.ownership.family_names_hint")}</p>
             <div className="grid2">
-              <Field label="需要剔除的配偶完整姓名">
+              <Field label={t("case.ownership.exclude_spouse_name")}>
                 <input
                   name="spouse_name"
                   defaultValue={data.fields.spouse_name || ""}
                   placeholder="Optional"
                 />
               </Field>
-              <Field label="需要单列的子女完整姓名">
+              <Field label={t("case.ownership.child_name_label")}>
                 <input
                   name="child_name"
                   defaultValue={data.fields.child_name || ""}
@@ -181,18 +177,18 @@ export function OwnershipStep({ data, onSave, onNext }) {
                 />
               </Field>
             </div>
-            <Field label="归属核对依据">
+            <Field label={t("case.ownership.note_label")}>
               <textarea
                 name="note"
                 defaultValue={data.fields.relationship_note || ""}
-                placeholder="可选：写清核对依据"
+                placeholder={t("case.ownership.note_placeholder")}
               />
             </Field>
           </FoldPanel>
 
           <div className="actions-end">
             <button className="primary" disabled={data.busy}>
-              保存归属进入交易核对
+              {t("case.ownership.save_continue_review")}
             </button>
           </div>
         </Form>

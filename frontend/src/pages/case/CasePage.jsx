@@ -21,10 +21,12 @@ import {
   useCaseData,
 } from "@/features/case/index.js";
 import { invalidateCase } from "@/app/queries/index.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 const VALID_STEPS = new Set(CASE_STEPS.map(([key]) => key));
 
 export function CasePage({ cid, user }) {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedStep = searchParams.get("step");
   const step = VALID_STEPS.has(requestedStep) ? requestedStep : "upload";
@@ -70,7 +72,7 @@ export function CasePage({ cid, user }) {
   if (!data) {
     return (
       <main>
-        <Loading text="正在读取客户档案…" error={error} onRetry={load} />
+        <Loading text={t("common.loading")} error={error} onRetry={load} />
       </main>
     );
   }

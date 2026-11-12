@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import { formatDateTime } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
 import { Modal } from "@/shared/ui/Modal.jsx";
@@ -26,17 +27,17 @@ import {
   formatLocator,
 } from "./format-result.js";
 
-const STATUS = {
-  uploading: "正在上传",
-  queued: "Queued",
-  running: "Analyzing",
-  done: "Done",
-  failed: "Failed",
+const STATUS_KEY = {
+  uploading: "ai.status_uploading",
+  queued: "ai.status_queued",
+  running: "ai.status_running",
+  done: "ai.status_done",
+  failed: "ai.status_failed",
 };
 
-const ETA_HINT = {
-  analysis: "Usually 1–3 minutes",
-  page_ocr: "预计约 3–8 分钟",
+const ETA_HINT_KEY = {
+  analysis: "job.eta.ai_analysis",
+  page_ocr: "job.eta.upload",
 };
 
 const RESULT_PAGE_SIZE = 10;
@@ -44,13 +45,13 @@ const RESULT_PAGE_SIZE = 10;
 const AI_MODES = [
   {
     value: "analysis",
-    label: "Smart analysis",
-    hint: "Reads layout directly; fast for native PDF / clear table statements",
+    labelKey: "ai.mode_analysis",
+    hintKey: "ai.mode_analysis_hint",
   },
   {
     value: "page_ocr",
-    label: "文档 OCR 转写",
-    hint: "Page render + vision OCR; good for scans/images; slower with many pages",
+    labelKey: "ai.mode_ocr",
+    hintKey: "ai.mode_ocr_hint",
   },
 ];
 
@@ -62,40 +63,42 @@ function progressValue(item) {
   return Math.max(0, Math.min(100, Number(item?.progress) || 0));
 }
 
-async function handleCopyExport(result, action) {
+async function handleCopyExport(result, action, t) {
   try {
     const text = formatAIExportText(result);
     if (action === "copy") {
       await copyText(text);
-      toast("已复制分析结果", "success");
+      toast(t("common.copy"), "success");
       return;
     }
     downloadText(`ai-analysis-${Date.now()}.txt`, text);
-    toast("已导出分析结果", "success");
+    toast(t("common.export"), "success");
   } catch (requestError) {
-    toast(requestError.message || "Failed", "error");
+    toast(requestError.message || t("common.retry"), "error");
   }
 }
 
 function AIProcessLog({ process }) {
+  const { t } = useI18n();
   if (!process?.length) return null;
   const visible = process.slice(-12);
   return (
     <div className="ai-process" aria-live="polite">
-      <h3>思考过程</h3>
+      <h3>{t("ai.process_title")}</h3>
       <ol>
         {visible.map((line, index) => (
           <li key={`${index}-${line.slice(0, 24)}`}>{line}</li>
         ))}
       </ol>
       {process.length > visible.length ? (
-        <p className="muted">仅显示最近 {visible.length} 条</p>
+        <p className="muted">{t("ai.process_recent", { n: visible.length })}</p>
       ) : null}
     </div>
   );
 }
 
 function AIResultActions({ result, disabled }) {
+  const { t } = useI18n();
   if (!result || disabled) return null;
   const text = formatAIExportText(result);
   if (!text) return null;
@@ -104,26 +107,27 @@ function AIResultActions({ result, disabled }) {
       <button
         type="button"
         className="ghost"
-        onClick={() => void handleCopyExport(result, "copy")}
+        onClick={() => void handleCopyExport(result, "copy", t)}
       >
-        Copy
+        {t("common.copy")}
       </button>
       <button
         type="button"
         className="ghost"
-        onClick={() => void handleCopyExport(result, "export")}
+        onClick={() => void handleCopyExport(result, "export", t)}
       >
-        Export
+        {t("common.export")}
       </button>
     </div>
   );
 }
 
 function AIResultDialog({ open, onClose, result }) {
+  const { t } = useI18n();
   const tabs = [
-    { key: "income_structure", label: "Income mix" },
-    { key: "anomalies", label: "异常点" },
-    { key: "questions", label: "Suggested review" },
+    { key: "income_structure", label: t("ai.mode_analysis") },
+    { key: "anomalies", label: t("case.review.title") },
+    { key: "questions", label: t("ai.write_suggest") },
   ].filter((tab) => (result?.[tab.key] || []).length > 0);
   const [tab, setTab] = useState(tabs[0]?.key || "");
   const [page, setPage] = useState(1);
@@ -139,24 +143,24 @@ function AIResultDialog({ open, onClose, result }) {
     page * RESULT_PAGE_SIZE,
   );
   return (
-    <Modal title="AI 分析完整结果" onClose={onClose}>
+    <Modal title={t("ai.title")} onClose={onClose}>
       <div className="ai-result-actions ai-result-actions--top">
         <button
           type="button"
           className="ghost"
-          onClick={() => void handleCopyExport(result, "copy")}
+          onClick={() => void handleCopyExport(result, "copy", t)}
         >
-          复制全部
+          {t("common.copy")}
         </button>
         <button
           type="button"
           className="ghost"
-          onClick={() => void handleCopyExport(result, "export")}
+          onClick={() => void handleCopyExport(result, "export", t)}
         >
-          导出全部
+          {t("common.export")}
         </button>
       </div>
-      <div className="modal-tabs" role="tablist" aria-label="分析结果分类">
+      <div className="modal-tabs" role="tablist" aria-label={t("ai.panel_title")}>
         {tabs.map((item) => (
           <button
             key={item.key}
@@ -183,7 +187,7 @@ function AIResultDialog({ open, onClose, result }) {
                 {row.item || row.source || row.label || ""}
                 {row.amount ? ` · ${row.amount}` : ""}
                 {formatLocator(row) ? (
-                  <small> 定位：{formatLocator(row)}</small>
+                  <small> {t("case.original.location")}: {formatLocator(row)}</small>
                 ) : null}
               </>
             )}
@@ -197,7 +201,7 @@ function AIResultDialog({ open, onClose, result }) {
           onNext={() => setPage((value) => value + 1)}
           canPrevious={page > 1}
           canNext={page * RESULT_PAGE_SIZE < rows.length}
-          label={`第 ${page} 页 / 共 ${rows.length} 条`}
+          label={`${t("common.page", { page })} · ${rows.length}`}
         />
       )}
     </Modal>
@@ -205,6 +209,7 @@ function AIResultDialog({ open, onClose, result }) {
 }
 
 function AIAnalysisDialog({ cid, docs = [], onClose }) {
+  const { t } = useI18n();
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -266,9 +271,7 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
 
   async function start() {
     if (!documentId) {
-      const message = docs.length
-        ? "Select a document to analyze"
-        : "Upload documents before starting analysis";
+      const message = docs.length ? t("ai.pick_doc") : t("ai.need_upload");
       setError(message);
       toast(message, "error");
       return;
@@ -281,9 +284,7 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
         task: mode === "page_ocr" ? mode : undefined,
       });
       toast(
-        mode === "page_ocr"
-          ? `已提交文档视觉识别；${ETA_HINT.page_ocr}，进度与思考过程会在下方陆续出现。`
-          : `已提交，AI 正在阅读原件；${ETA_HINT.analysis}，过程会在下方陆续出现。`,
+        mode === "page_ocr" ? t("ai.start_ocr") : t("ai.start_analysis"),
         "info",
       );
       await load();
@@ -305,12 +306,12 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
       const n = Number(data?.applied) || 0;
       toast(
         n > 0
-          ? `已写入 ${n} 笔核对预勾；请到「逐笔核对」查看并采纳`
-          : "No entries with transaction anchors; could not write pre-checks",
+          ? t("ai.write_suggest")
+          : t("ai.pick_doc"),
         n > 0 ? "success" : "info",
       );
     } catch (requestError) {
-      toast(requestError.message || "写入预勾失败", "error");
+      toast(requestError.message || t("ai.write_suggest"), "error");
     } finally {
       setBusy(false);
     }
@@ -324,12 +325,12 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
       const n = Number(data?.rows) || 0;
       toast(
         n > 0
-          ? `已写回 ${n} 笔交易，请到「逐笔核对」查看`
-          : "没有可写回的交易行",
+          ? t("case.review.adopt_ai_suggestions", { count: n })
+          : t("ai.pick_doc"),
         n > 0 ? "success" : "info",
       );
     } catch (requestError) {
-      toast(requestError.message || "写回核对失败", "error");
+      toast(requestError.message || t("case.review.title"), "error");
     } finally {
       setBusy(false);
     }
@@ -349,16 +350,15 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
   const summaryText = displayResult
     ? formatAISummary(displayResult) || displayResult.summary || ""
     : "";
-  const modeHint =
-    AI_MODES.find((item) => item.value === mode)?.hint || AI_MODES[0].hint;
-  const eta = ETA_HINT[mode] || ETA_HINT.analysis;
+  const modeHint = t(AI_MODES.find((item) => item.value === mode)?.hintKey || AI_MODES[0].hintKey);
+  const eta = t(ETA_HINT_KEY[mode] || ETA_HINT_KEY.analysis);
 
   return (
     <>
-      <Modal title="AI analysis" onClose={onClose} className="modal--sm">
+      <Modal title={t("ai.title")} onClose={onClose} className="modal--sm">
         <div className="ai-dialog-body">
           <p className="muted" style={{ margin: 0 }}>
-            基于原件文字与页面视觉生成摘要、异常点和需核实问题；不替代规则结论，不自动签发报告。
+            {t("ai.panel_title")}
           </p>
           {error ? (
             <p className="error" role="alert">
@@ -368,8 +368,7 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
           {needRecharge ? (
             <div className="billing-notice" role="status">
               <span>
-                当前积分 {Number(points).toLocaleString("zh-CN")}
-                ，AI 解析与文档解析按用量扣积分，充值后即可提交。
+                {t("ai.recharge_prompt_body")}
               </span>
               <button
                 type="button"
@@ -379,44 +378,44 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
                   navigate("/recharge");
                 }}
               >
-                前往充值
+                {t("ai.go_recharge")}
               </button>
             </div>
           ) : null}
           <label className="field">
-            <span>分析文档（必选）</span>
+            <span>{t("ai.pick_doc")}</span>
             {docs.length ? (
               <select
                 value={documentId}
                 onChange={(event) => setDocumentId(event.target.value)}
                 disabled={busy || running}
-                aria-label="选择要分析的文档"
+                aria-label={t("ai.pick_doc")}
               >
                 {docs.map((doc) => (
                   <option key={doc.id} value={doc.id}>
                     {doc.name}
-                    {doc.meta?.pages ? ` · ${doc.meta.pages} 页` : ""}
-                    {doc.meta?.rows ? ` · ${doc.meta.rows} 笔` : ""}
+                    {doc.meta?.pages ? ` · ${doc.meta.pages} pages` : ""}
+                    {doc.meta?.rows ? ` · ${doc.meta.rows} rows` : ""}
                   </option>
                 ))}
               </select>
             ) : (
               <p className="muted" style={{ margin: 0 }}>
-                还没有可分析的资料，请先在上传步骤提交原件。
+                {t("ai.need_upload")}
               </p>
             )}
             {selectedDoc ? (
               <p className="ai-mode-hint">
-                将阅读「{selectedDoc.name}」；定位说明会出现在异常点与建议核实条目中。
+                {t("ai.mode_analysis_hint")}
               </p>
             ) : null}
           </label>
           <div>
             <SegmentedControl
-              aria-label="AI 分析方式"
+              aria-label={t("ai.panel_title")}
               value={mode}
               onChange={setMode}
-              options={AI_MODES}
+              options={AI_MODES.map((item) => ({ ...item, label: t(item.labelKey) }))}
             />
             <p className="ai-mode-hint">
               {modeHint} · {eta}
@@ -424,7 +423,7 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
           </div>
           <ModalActions>
             <button type="button" className="ghost" onClick={() => void load()}>
-              Refresh
+              {t("common.retry")}
             </button>
             <button
               type="button"
@@ -432,13 +431,13 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
               disabled={!canStart || running}
               onClick={() => void start()}
             >
-              {busy ? "提交中…" : "Start analysis"}
+              {busy ? t("ai.status_queued") : t("ai.btn_start")}
             </button>
           </ModalActions>
           {latest ? (
             <div className="ai-result">
               <p className="muted">
-                状态：
+                {t("ai.title")}:
                 <StatusBadge
                   tone={
                     latest.status === "done"
@@ -448,7 +447,7 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
                         : "amber"
                   }
                 >
-                  {STATUS[latest.status] || latest.status}
+                  {t(STATUS_KEY[latest.status] || "ai.status_failed")}
                 </StatusBadge>
                 {latest.error ? ` · ${latest.error}` : ""}
               </p>
@@ -460,7 +459,7 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
                     aria-valuenow={percent}
                     aria-valuemin={0}
                     aria-valuemax={100}
-                    aria-label="AI 分析进度"
+                    aria-label={t("ai.panel_title")}
                   >
                     <div
                       className="task-progress-bar"
@@ -469,7 +468,7 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
                   </div>
                   <p className="task-meta">
                     <span>
-                      {latest.stage === "running" ? "Analyzing" : STATUS[latest.status] || "Analyzing"}
+                      {latest.stage === "running" ? t("ai.status_running") : t(STATUS_KEY[latest.status] || "ai.status_running")}
                       {" · "}
                       {eta}
                     </span>
@@ -484,9 +483,9 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
                   {running && displayResult?.partial ? "…" : ""}
                 </p>
               ) : latest.status === "done" ? (
-                <p className="muted">分析已完成，但没有可展示的中文摘要。</p>
+                <p className="muted">{t("ai.status_done")}</p>
               ) : running ? (
-                <p className="muted">正在整理片段，稍后会陆续出现摘要与思考过程。</p>
+                <p className="muted">{t("ai.status_running")}</p>
               ) : null}
               <AIResultActions result={displayResult} />
               {latest.status === "done" ? (
@@ -506,7 +505,7 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
                   disabled={busy}
                   onClick={() => void writeOCRRows()}
                 >
-                  写回核对交易
+                  {t("ai.write_suggest")}
                 </button>
               ) : null}
               {detailCount > 0 ? (
@@ -515,7 +514,7 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
                   className="ghost"
                   onClick={() => setResultOpen(true)}
                 >
-                  查看完整结果（{detailCount} 项）→
+                  {t("ai.title")} ({detailCount}) →
                 </button>
               ) : null}
               {displayResult?.disclaimer ? (
@@ -524,12 +523,12 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
             </div>
           ) : null}
           {items.length > 1 ? (
-            <FoldPanel title={`历史分析（${items.length}）`}>
+            <FoldPanel title={`${t("ai.panel_title")} (${items.length})`}>
               <ul>
                 {items.slice(1).map((item) => (
                   <li key={item.id}>
                     {formatDateTime(item.created)} ·{" "}
-                    {STATUS[item.status] || item.status}
+                    {t(STATUS_KEY[item.status] || "ai.status_failed")}
                   </li>
                 ))}
               </ul>
@@ -548,6 +547,7 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
 
 /** 报告页入口：右侧入口按钮 + 弹窗，不再常驻侧栏。 */
 export function AIAnalysisPanel({ cid, docs = [] }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [latest, setLatest] = useState(null);
 
@@ -587,25 +587,24 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
   const running = latest && isActiveStatus(latest.status);
   const failed = latest?.status === "failed";
   const percent = progressValue(latest);
-  const eta = ETA_HINT.analysis;
+  const eta = t(ETA_HINT_KEY.analysis);
 
-  let statusLine =
-    "Summaries and anomalies from originals; does not replace rule conclusions or auto-issue.";
+  let statusLine = t("ai.panel_title");
   if (running) {
-    statusLine = `分析进行中（${STATUS[latest.status] || latest.status} ${percent}% · ${eta}）`;
+    statusLine = `${t("ai.status_running")} (${t(STATUS_KEY[latest.status] || "ai.status_running")} ${percent}% · ${eta})`;
   } else if (failed) {
-    statusLine = `上次分析失败${latest.error ? `：${latest.error}` : ""}`;
+    statusLine = `${t("ai.status_failed")}${latest.error ? `: ${latest.error}` : ""}`;
   }
 
   return (
     <>
       <div className="ai-entry-bar">
         <div>
-          <strong className="ai-entry-title">AI analysis</strong>
+          <strong className="ai-entry-title">{t("ai.panel_title")}</strong>
           <p>{statusLine}</p>
         </div>
         <button type="button" className="primary" onClick={() => setOpen(true)}>
-          {running ? "查看进度" : failed ? "查看并重试" : "Start analysis"}
+          {running ? t("ai.status_running") : failed ? t("ai.status_failed") : t("ai.btn_start")}
         </button>
       </div>
       {open ? (

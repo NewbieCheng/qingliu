@@ -298,8 +298,8 @@ export function ForgotPasswordPanel({ open, onClose, initialEmail = "" }) {
 
       <CaptchaChallenge
         open={challengeOpen}
-        title="Confirm before sending code"
-        reason="Confirm you are human before sending the reset-password code."
+        title={t("auth.confirm_send_code")}
+        reason={t("auth.human_check_send")}
         onCancel={() => setChallengeOpen(false)}
         onSolved={(code, id) => {
           setChallengeOpen(false);

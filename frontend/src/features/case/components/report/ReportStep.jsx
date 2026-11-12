@@ -8,17 +8,18 @@ import { DownloadIcon, EyeIcon } from "@/shared/ui/icons.jsx";
 import { AIAnalysisPanel } from "@/features/ai-analysis/index.js";
 import { FoldPanel } from "@/shared/ui/FoldPanel.jsx";
 import { downloadReport, previewReport } from "../../api.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 const DOWNLOADS = [
   ["report.pdf", "PDF"],
-  ["summary.xlsx", "汇总Excel"],
+  ["summary.xlsx", "case.report.summary_excel"],
   ["detail.xlsx", "Line-by-line draft"],
   ["report.html", "Web snapshot"],
 ];
 
 const VISIBLE_QUARTERS = 4;
 
-function ReportNumbers({ summary }) {
+function ReportNumbers({ summary, t }) {
   const [showAllQuarters, setShowAllQuarters] = useState(false);
   const quarterEntries = Object.entries(summary.quarters);
   const visibleQuarters = showAllQuarters
@@ -26,34 +27,34 @@ function ReportNumbers({ summary }) {
     : quarterEntries.slice(0, VISIBLE_QUARTERS);
   return (
     <section className="card">
-      <h2>测算口径</h2>
+      <h2>{t("case.report.calculation_basis")}</h2>
       <div className="grid2 report-numbers">
         <div>
-          <span>期间分摊月均</span>
+          <span>{t("case.report.period_average")}</span>
           <strong>
-            {formatCents(summary.average)} <small>元</small>
+            {formatCents(summary.average)} <small>{t("summary.yuan")}</small>
           </strong>
-          <p>按选择范围涉及的 {summary.month_count} 个月分摊，不年化。</p>
+          <p>{t("case.report.average_months", { count: summary.month_count })}</p>
         </div>
         <div>
-          <span>完整自然月均</span>
+          <span>{t("case.report.complete_month_average")}</span>
           <strong>
             {formatCents(summary.complete_month_average)}{" "}
             <small>
-              {summary.complete_month_average == null ? "No full calendar month" : "元"}
+              {summary.complete_month_average == null ? t("case.report.no_full_month") : t("summary.yuan")}
             </small>
           </strong>
-          <p>只统计范围内 {summary.complete_month_count} 个完整自然月。</p>
+          <p>{t("case.report.complete_months", { count: summary.complete_month_count })}</p>
         </div>
       </div>
-      <FoldPanel title="查看月度与季度结息" className="report-interest">
+      <FoldPanel title={t("case.report.interest_panel_title")} className="report-interest">
         <table>
           <thead>
             <tr>
-              <th>月份</th>
-              <th>总流入（元）</th>
-              <th>暂计经营（元）</th>
-              <th>待核实（元）</th>
+              <th>{t("case.report.month")}</th>
+              <th>{t("case.report.total_inflow_yuan")}</th>
+              <th>{t("case.report.tentative_business_yuan")}</th>
+              <th>{t("case.report.pending_yuan")}</th>
             </tr>
           </thead>
           <tbody>
@@ -69,10 +70,10 @@ function ReportNumbers({ summary }) {
         </table>
         {visibleQuarters.map(([quarter, interest]) => (
           <p key={quarter}>
-            {quarter} 存款结息：
+            {t("case.report.quarter_interest", { quarter })}
             {interest == null
-              ? "未找到结息记录，非实际零利息"
-              : `${formatCents(interest)} 元（不计经营收入）`}
+              ? t("case.report.interest_not_found")
+              : t("case.report.interest_amount", { amount: formatCents(interest) })}
           </p>
         ))}
         {quarterEntries.length > VISIBLE_QUARTERS && (
@@ -81,7 +82,7 @@ function ReportNumbers({ summary }) {
             className="ghost task-toggle"
             onClick={() => setShowAllQuarters((value) => !value)}
           >
-            {showAllQuarters ? "Collapse" : `展开全部 ${quarterEntries.length} 条`}
+            {showAllQuarters ? t("common.collapse") : t("case.report.show_quarters", { count: quarterEntries.length })}
           </button>
         )}
       </FoldPanel>
@@ -89,13 +90,13 @@ function ReportNumbers({ summary }) {
   );
 }
 
-function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal }) {
+function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal, t }) {
   return (
     <section className="card">
-      <h2>提交复核与生成报告</h2>
+      <h2>{t("case.report.submit_generate_title")}</h2>
       {data.problems.length > 0 ? (
         <div className="notice">
-          <strong>正式版本尚有未完成事项</strong>
+          <strong>{t("case.report.formal_incomplete")}</strong>
           <ul>
             {data.problems.map((problem, index) => (
               <li key={index}>{problem}</li>
@@ -103,12 +104,12 @@ function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal }) {
           </ul>
         </div>
       ) : (
-        <p className="success">流程核对已完成，可以提交复核。</p>
+        <p className="success">{t("case.report.ready_for_review")}</p>
       )}
       <div className="actions-end">
         <Form success="" onSave={() => onGenerate({ stage: "draft" })}>
           <button className="ghost" disabled={data.busy || !data.source}>
-            生成草稿报告
+            {t("case.report.generate_draft")}
           </button>
         </Form>
         <Form success="" onSave={() => onSubmit({})}>
@@ -116,7 +117,7 @@ function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal }) {
             className="primary"
             disabled={data.busy || data.problems.length > 0}
           >
-            Submit for review
+            {t("case.report.submit_for_review")}
           </button>
         </Form>
       </div>
@@ -130,17 +131,17 @@ function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal }) {
             })
           }
         >
-          <Field label="Review statement">
+          <Field label={t("case.report.review_statement")}>
             <textarea
               name="statement"
               required
-              placeholder="填写原件核对与签发依据"
+              placeholder={t("case.report.review_statement_placeholder")}
             />
           </Field>
           <div className="form-footer">
             <label className="check">
               <input type="checkbox" name="attest" required />
-              确认当前版本已核对，理解该报告不代表授信审批
+              {t("case.report.formal_attestation")}
             </label>
             <div className="actions-end">
               <button
@@ -151,7 +152,7 @@ function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal }) {
                   data.problems.length > 0
                 }
               >
-                签发正式内部初筛版本
+                {t("case.report.issue_formal_version")}
               </button>
             </div>
           </div>
@@ -163,7 +164,7 @@ function SubmitPanel({ data, user, onGenerate, onSubmit, onFormal }) {
 
 const VISIBLE_REPORTS = 3;
 
-function ReportVersions({ cid, data }) {
+function ReportVersions({ cid, data, t }) {
   const [showAll, setShowAll] = useState(false);
   const [downloading, setDownloading] = useState("");
   const [preview, setPreview] = useState({ open: false, title: "", html: "" });
@@ -187,36 +188,34 @@ function ReportVersions({ cid, data }) {
       const html = await previewReport(cid, report.id);
       setPreview({
         open: true,
-        title: `网页快照 · ${formatDateTime(report.created)}`,
+        title: t("case.report.web_snapshot_title", { date: formatDateTime(report.created) }),
         html,
       });
     } catch (error) {
       setPreview({ open: false, title: "", html: "" });
-      toast(error.message || "快照加载失败", "error");
+      toast(error.message || t("case.report.snapshot_load_failed"), "error");
     }
   }
 
   return (
     <section className="card">
-      <h2>已保存的报告版本</h2>
+      <h2>{t("case.report.saved_versions")}</h2>
       {data.reports.length === 0 && (
-        <p className="muted">
-          生成报告后，PDF、Excel与网页快照会保存在这里。
-        </p>
+        <p className="muted">{t("case.report.saved_versions_empty")}</p>
       )}
       {visible.map((report) => (
         <div className="report-item" key={report.id}>
           <div>
             <strong>
               {report.info.stage === "formal"
-                ? "正式内部初筛版本"
-                : "Draft · review incomplete"}
+                ? t("case.report.formal_version")
+                : t("case.report.draft_version")}
             </strong>
             <small className="block">
               {formatDateTime(report.created)} · {SOURCES[report.info.source]} ·{" "}
-              {report.info.start} 至 {report.info.end}
+              {report.info.start} – {report.info.end}
               {report.info.revision !== data.customer.revision
-                ? " · 资料已有更新"
+                ? ` · ${t("case.report.data_updated")}`
                 : ""}
             </small>
           </div>
@@ -230,7 +229,7 @@ function ReportVersions({ cid, data }) {
                   onClick={() => void onPreview(report)}
                 >
                   <EyeIcon size={13} />
-                  {label}预览
+                  {t("case.report.preview", { label: t(label) })}
                 </button>
               ) : (
                 <button
@@ -241,7 +240,7 @@ function ReportVersions({ cid, data }) {
                   onClick={() => void onDownload(report, file)}
                 >
                   <DownloadIcon size={13} />
-                  {downloading === `${report.id}/${file}` ? "下载中…" : label}
+                  {downloading === `${report.id}/${file}` ? t("case.report.downloading") : t(label)}
                 </button>
               ),
             )}
@@ -254,7 +253,7 @@ function ReportVersions({ cid, data }) {
           className="ghost task-toggle"
           onClick={() => setShowAll((value) => !value)}
         >
-          {showAll ? "Collapse" : `展开全部 ${data.reports.length} 个版本`}
+          {showAll ? t("common.collapse") : t("case.report.show_versions", { count: data.reports.length })}
         </button>
       )}
       {preview.open && (
@@ -270,7 +269,7 @@ function ReportVersions({ cid, data }) {
               srcDoc={preview.html}
             />
           ) : (
-            <p className="muted">快照加载中…</p>
+            <p className="muted">{t("case.report.snapshot_loading")}</p>
           )}
         </Modal>
       )}
@@ -279,20 +278,22 @@ function ReportVersions({ cid, data }) {
 }
 
 export function ReportStep({ cid, data, user, summary, onGenerate, onSubmit, onFormal }) {
+  const { t } = useI18n();
   return (
     <div className="report-layout">
       <section className="card ai-entry-card" aria-label="AI analysis">
         <AIAnalysisPanel cid={cid} docs={data.docs || []} />
       </section>
-      <ReportNumbers summary={summary} />
+      <ReportNumbers summary={summary} t={t} />
       <SubmitPanel
         data={data}
         user={user}
         onGenerate={onGenerate}
         onSubmit={onSubmit}
         onFormal={onFormal}
+        t={t}
       />
-      <ReportVersions cid={cid} data={data} />
+      <ReportVersions cid={cid} data={data} t={t} />
     </div>
   );
 }

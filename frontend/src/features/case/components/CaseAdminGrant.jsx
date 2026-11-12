@@ -1,12 +1,13 @@
 import React, { useState } from "react";
-import { ROLES } from "@/shared/lib/constants.js";
 import { api } from "@/shared/api/client.js";
 import { Form } from "@/shared/ui/Form.jsx";
 import { FormRow, Select } from "@/shared/ui/FormRow.jsx";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { ModalActions } from "@/shared/ui/ModalActions.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 export function CaseAdminGrant({ onGrant, onError }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [admin, setAdmin] = useState(null);
 
@@ -28,11 +29,11 @@ export function CaseAdminGrant({ onGrant, onError }) {
         className="case-grant-trigger"
         onClick={() => void openDialog()}
       >
-        分配访问权限
+        {t("case.grant.trigger")}
       </button>
       {open ? (
         <Modal
-          title="分配客户访问权限"
+          title={t("case.grant.title")}
           onClose={() => setOpen(false)}
           className="modal--sm"
         >
@@ -45,23 +46,23 @@ export function CaseAdminGrant({ onGrant, onError }) {
               setOpen(false);
             }}
           >
-            <FormRow label="Select member">
-              <Select label="Select member" name="workbench_user_id" required>
-                <option value="">请选择工作台成员</option>
+            <FormRow label={t("case.grant.select_member")}>
+              <Select label={t("case.grant.select_member")} name="workbench_user_id" required>
+                <option value="">{t("case.grant.choose_member")}</option>
                 {(admin?.users || []).map((member) => (
                   <option
                     key={member.workbench_user_id || member.id}
                     value={member.workbench_user_id}
                   >
-                    {member.display}（{ROLES[member.role]}）
+                    {member.display} ({t(`role.${member.role}`) === `role.${member.role}` ? member.role : t(`role.${member.role}`)})
                   </option>
                 ))}
               </Select>
             </FormRow>
-            <FormRow label="Access actions">
-              <Select label="Access actions" name="action" defaultValue="grant">
-                <option value="grant">授予访问</option>
-                <option value="revoke">撤销访问</option>
+            <FormRow label={t("case.grant.access_actions")}>
+              <Select label={t("case.grant.access_actions")} name="action" defaultValue="grant">
+                <option value="grant">{t("case.grant.grant_access")}</option>
+                <option value="revoke">{t("case.grant.revoke_access")}</option>
               </Select>
             </FormRow>
             <ModalActions>
@@ -70,9 +71,9 @@ export function CaseAdminGrant({ onGrant, onError }) {
                 className="ghost"
                 onClick={() => setOpen(false)}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
-              <button className="primary">保存权限</button>
+              <button className="primary">{t("case.grant.save_permission")}</button>
             </ModalActions>
           </Form>
         </Modal>

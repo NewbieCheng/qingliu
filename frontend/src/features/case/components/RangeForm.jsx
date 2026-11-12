@@ -3,6 +3,7 @@ import { Form } from "@/shared/ui/Form.jsx";
 import { Select } from "@/shared/ui/FormRow.jsx";
 import { SearchInput } from "@/shared/ui/SearchInput.jsx";
 import { SOURCES } from "@/shared/lib/constants.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 /**
  * 核对页单行工具条：左侧改测算范围（需点「应用范围」）；
@@ -16,6 +17,7 @@ export function RangeForm({
   query,
   onQueryChange,
 }) {
+  const { t } = useI18n();
   const choiceCount = data.choices?.length || 0;
   const [draft, setDraft] = useState(query || "");
 
@@ -33,17 +35,17 @@ export function RangeForm({
           key={`${data.start}-${data.end}-${data.source}-${choiceCount}`}
         >
           <label className="review-filter-field is-source">
-            <span>Source</span>
+            <span>{t("review.filter_source")}</span>
             <Select
               name="source"
-              label="Source"
+              label={t("review.filter_source")}
               className="review-filter-select"
               defaultValue={data.source}
-              title="After changing source or dates, click Apply range to recalculate"
+              title={t("review.apply_range_tip")}
             >
               {choiceCount === 0 ? (
                 <option value={data.source || "other"}>
-                  {SOURCES[data.source] || "暂无来源"}
+                  {SOURCES[data.source] || t("case.review.no_source")}
                 </option>
               ) : (
                 data.choices.map((value) => (
@@ -55,31 +57,31 @@ export function RangeForm({
             </Select>
           </label>
           <label className="review-filter-field">
-            <span>开始</span>
+            <span>{t("review.filter_start")}</span>
             <input
               name="start"
               type="date"
               defaultValue={data.start}
               required
-              title="After changing dates, click Apply range to recalculate"
+              title={t("review.apply_range_tip")}
             />
           </label>
           <label className="review-filter-field">
-            <span>截止</span>
+            <span>{t("review.filter_end")}</span>
             <input
               name="end"
               type="date"
               defaultValue={data.end}
               required
-              title="After changing dates, click Apply range to recalculate"
+              title={t("review.apply_range_tip")}
             />
           </label>
           <button
             type="submit"
             className="primary review-filter-apply"
-            title="应用后才会按新来源与日期重算"
+            title={t("review.apply_range_tip")}
           >
-            Apply range
+            {t("review.apply_range")}
           </button>
         </Form>
 
@@ -88,29 +90,29 @@ export function RangeForm({
         <div
           className="review-filter-view"
           role="group"
-          aria-label="交易列表筛选"
+          aria-label={t("case.review.filter_aria_label")}
         >
           <label className="review-filter-field">
-            <span>Status</span>
+            <span>{t("review.filter_status")}</span>
             <Select
-              aria-label="Transaction status"
-              label="Transaction status"
+              aria-label={t("review.filter_status")}
+              label={t("review.filter_status")}
               className="review-filter-select"
               value={view}
               onChange={(event) => onViewChange(event.target.value)}
-              title="只影响下方交易表，不改测算范围"
+              title={t("case.review.range_scope_tip")}
             >
-              <option value="issues">待处理疑点</option>
-              <option value="all">全部交易</option>
-              <option value="confirmed">已人工确认</option>
-              <option value="duplicate">疑似重复</option>
+              <option value="issues">{t("review.view_issues")}</option>
+              <option value="all">{t("review.view_all")}</option>
+              <option value="confirmed">{t("review.view_confirmed")}</option>
+              <option value="duplicate">{t("review.view_duplicate")}</option>
             </Select>
           </label>
           <label className="review-filter-field is-search">
-            <span>Search</span>
+            <span>{t("common.search")}</span>
             <SearchInput
-              aria-label="搜索交易"
-              placeholder="对手方、摘要或日期"
+              aria-label={t("case.review.search_aria_label")}
+              placeholder={t("review.search_placeholder")}
               value={draft}
               onChange={setDraft}
               onSearch={onQueryChange}

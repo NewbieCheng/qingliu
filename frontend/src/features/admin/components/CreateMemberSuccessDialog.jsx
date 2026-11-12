@@ -1,10 +1,21 @@
 import React, { useEffect, useRef } from "react";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { ModalActions } from "@/shared/ui/ModalActions.jsx";
 import { CheckIcon } from "@/shared/ui/icons.jsx";
-import { ROLES } from "@/shared/lib/constants.js";
 
 export function CreateMemberSuccessDialog({ member, onClose }) {
+  const { locale } = useI18n();
+  const copy = (zh, en) => (locale === "en-US" ? en : zh);
+  const roleLabelFor = (role) => {
+    const labels = {
+      admin: copy("管理员", "Admin"),
+      sales: copy("业务员", "Sales"),
+      reviewer: copy("复核员", "Reviewer"),
+      readonly: copy("只读成员", "Read-only member"),
+    };
+    return labels[role] || role || "—";
+  };
   const doneRef = useRef(null);
 
   useEffect(() => {
@@ -13,11 +24,11 @@ export function CreateMemberSuccessDialog({ member, onClose }) {
 
   if (!member) return null;
 
-  const roleLabel = ROLES[member.role] || member.role || "—";
+  const roleLabel = roleLabelFor(member.role) || "—";
 
   return (
     <Modal
-      title="Member created"
+      title={copy("成员已创建", "Member created")}
       className="modal--sm create-member-success"
       onClose={onClose}
     >
@@ -25,25 +36,25 @@ export function CreateMemberSuccessDialog({ member, onClose }) {
         <span className="create-member-success-mark" aria-hidden="true">
           <CheckIcon size={14} />
         </span>
-        工作台账号已就绪，可用初始密码登录清流。
+        {copy("工作台账号已就绪，可用初始密码登录清流。", "The Workbench account is ready. Use the initial password to sign in to Qingliu.")}
       </p>
       <dl className="create-member-success-meta">
         <div>
-          <dt>Account</dt>
+          <dt>{copy("账号", "Account")}</dt>
           <dd>{member.username}</dd>
         </div>
         <div>
-          <dt>Name</dt>
+          <dt>{copy("姓名", "Name")}</dt>
           <dd>{member.display}</dd>
         </div>
         <div>
-          <dt>Role</dt>
+          <dt>{copy("角色", "Role")}</dt>
           <dd>{roleLabel}</dd>
         </div>
       </dl>
       <ModalActions>
         <button type="button" className="primary" ref={doneRef} onClick={onClose}>
-          知道了
+          {copy("知道了", "Got it")}
         </button>
       </ModalActions>
     </Modal>

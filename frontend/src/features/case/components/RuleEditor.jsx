@@ -3,8 +3,10 @@ import { Field, Form } from "@/shared/ui/Form.jsx";
 import { Select } from "@/shared/ui/FormRow.jsx";
 import { FoldPanel } from "@/shared/ui/FoldPanel.jsx";
 import { TrashIcon } from "@/shared/ui/icons.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 export function RuleEditor({ rules, busy, onSave }) {
+  const { t } = useI18n();
   const [related, setRelated] = useState(rules.related || []);
 
   function updatePerson(index, patch) {
@@ -18,7 +20,7 @@ export function RuleEditor({ rules, busy, onSave }) {
   return (
     <FoldPanel
       className="card fold-panel--card rule-editor-panel"
-      title="客户独立规则与关联名单"
+      title={t("case.rules.title")}
       badge={
         related.length > 0 ? (
           <em className="fold-panel-badge">{related.length}/50</em>
@@ -26,7 +28,7 @@ export function RuleEditor({ rules, busy, onSave }) {
       }
     >
       <p className="muted rule-editor-hint">
-        完整账号优先匹配；未填账号时使用完整姓名。规则修改会使已提交的复核失效。
+        {t("case.rules.hint")}
       </p>
       <Form
         className="rule-editor-form"
@@ -48,7 +50,7 @@ export function RuleEditor({ rules, busy, onSave }) {
       >
         <section className="rule-section">
           <div className="rule-section-head">
-            <strong>关联人</strong>
+            {t("case.rules.related_people")}
             <button
               type="button"
               className="ghost rule-add"
@@ -60,54 +62,54 @@ export function RuleEditor({ rules, busy, onSave }) {
                 ])
               }
             >
-              ＋ 添加关联人
+              {t("case.rules.add_related_person")}
             </button>
           </div>
           {related.length === 0 ? (
-            <p className="muted rule-empty">暂无关联人，需要时再添加。</p>
+            <p className="muted rule-empty">{t("case.rules.related_empty")}</p>
           ) : (
             <div className="relation-list">
               <div className="relation relation-head" aria-hidden="true">
-                <span>Name</span>
-                <span>账号（选填）</span>
-                <span>处理</span>
+                <span>{t("case.rules.name")}</span>
+                <span>{t("case.rules.account_optional")}</span>
+                <span>{t("case.rules.action")}</span>
                 <span />
               </div>
               {related.map((person, index) => (
                 <div className="relation" key={index}>
                   <input
-                    aria-label="关联人姓名"
-                    placeholder="完整姓名"
+                    aria-label={t("case.rules.related_name")}
+                    placeholder={t("case.rules.full_name")}
                     value={person.name}
                     onChange={(event) =>
                       updatePerson(index, { name: event.target.value })
                     }
                   />
                   <input
-                    aria-label="关联人账号"
-                    placeholder="完整账号"
+                    aria-label={t("case.rules.related_account")}
+                    placeholder={t("case.rules.full_account")}
                     value={person.account}
                     onChange={(event) =>
                       updatePerson(index, { account: event.target.value })
                     }
                   />
                   <Select
-                    aria-label="Related-party handling"
-                    label="Related-party handling"
+                    aria-label={t("case.rules.handling")}
+                    label={t("case.rules.handling")}
                     className="relation-mode"
                     value={person.mode}
                     onChange={(event) =>
                       updatePerson(index, { mode: event.target.value })
                     }
                   >
-                    <option value="pending">待核实</option>
-                    <option value="excluded">剔除</option>
+                    <option value="pending">{t("case.rules.pending")}</option>
+                    <option value="excluded">{t("case.rules.exclude")}</option>
                   </Select>
                   <button
                     type="button"
                     className="ghost relation-remove"
-                    aria-label={`移除第 ${index + 1} 位关联人`}
-                    title="移除"
+                    aria-label={t("case.rules.remove_related_person", { index: index + 1 })}
+                    title={t("common.remove")}
                     onClick={() =>
                       setRelated((rows) =>
                         rows.filter((_, current) => current !== index),
@@ -124,17 +126,17 @@ export function RuleEditor({ rules, busy, onSave }) {
 
         <section className="rule-section">
           <div className="rule-section-head">
-            <strong>关键词</strong>
+            <strong>{t("case.rules.keywords")}</strong>
           </div>
           <div className="grid2 rule-keywords">
-            <Field label="正向（逗号分隔）">
+            <Field label={t("case.rules.positive_keywords")}>
               <textarea
                 name="positive"
                 rows={3}
                 defaultValue={rules.positive.join("，")}
               />
             </Field>
-            <Field label="负向（逗号分隔）">
+            <Field label={t("case.rules.negative_keywords")}>
               <textarea
                 name="negative"
                 rows={3}
@@ -151,11 +153,11 @@ export function RuleEditor({ rules, busy, onSave }) {
               name="require_counterparty"
               defaultChecked={rules.require_counterparty}
             />
-            银行卡未提供对手姓名及账号时标为待核实
+            {t("case.rules.require_counterparty_note")}
           </label>
           <div className="actions-end">
             <button className="primary" disabled={busy}>
-              保存客户规则
+              {t("case.rules.save")}
             </button>
           </div>
         </div>

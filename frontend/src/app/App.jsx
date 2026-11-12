@@ -14,7 +14,7 @@ import { isQingliuAdmin } from "@/shared/lib/constants.js";
 import { ROUTES } from "./routes.jsx";
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import { ChangePasswordDialog } from "./ChangePasswordDialog.jsx";
-import { LocaleProvider } from "@/shared/i18n/index.jsx";
+import { LocaleProvider, useI18n } from "@/shared/i18n/index.jsx";
 
 function resolveRoute(pathname) {
   let fallback = null;
@@ -30,6 +30,7 @@ function resolveRoute(pathname) {
 }
 
 function Workspace() {
+  const { t } = useI18n();
   const { user, ready, logout } = useAuth();
   const location = useLocation();
   useLinkInterceptor();
@@ -40,12 +41,19 @@ function Workspace() {
   );
 
   const { route, params } = resolveRoute(location.pathname);
+  const routeTitle = route.titleKey ? t(route.titleKey) : route.title;
+  const routeBack = route.back
+    ? {
+        ...route.back,
+        label: route.back.labelKey ? t(route.back.labelKey) : route.back.label,
+      }
+    : undefined;
 
   useEffect(() => {
-    document.title = route.title
-      ? `${route.title} · 青流`
-      : "Qingliu · Customer files & statement screening";
-  }, [route.title]);
+    document.title = routeTitle
+      ? `${routeTitle} · ${t("app.name")}`
+      : t("app.title_suffix");
+  }, [routeTitle, t]);
 
   const mustGoHome = ready && route.public && Boolean(user);
   const mustLogin = ready && !route.public && !user;
@@ -58,7 +66,7 @@ function Workspace() {
   if (!ready || mustGoHome || mustLogin) {
     return (
       <main>
-        <Loading text="Opening workspace…" />
+        <Loading text={t("app.loading")} />
       </main>
     );
   }
@@ -74,8 +82,8 @@ function Workspace() {
       <WorkspaceShell
         user={user}
         pathname={location.pathname}
-        title={route.title}
-        back={route.back}
+        title={routeTitle}
+        back={routeBack}
         onPassword={() => setPasswordOpen(true)}
         onLogout={async () => {
           await logout();
@@ -85,8 +93,8 @@ function Workspace() {
       >
         <main>
           <div className="card">
-            <h1>You do not have access to this page.</h1>
-            <p className="muted">Ask an admin to grant the required role or customer access.</p>
+            <h1>{t("app.forbidden_title")}</h1>
+            <p className="muted">{t("app.forbidden_body")}</p>
           </div>
         </main>
       </WorkspaceShell>
@@ -100,8 +108,8 @@ function Workspace() {
       <WorkspaceShell
         user={user}
         pathname={location.pathname}
-        title={route.title}
-        back={route.back}
+        title={routeTitle}
+        back={routeBack}
         onPassword={() => setPasswordOpen(true)}
         onLogout={async () => {
           await logout();

@@ -6,8 +6,10 @@ import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { originalPageURL } from "../../api.js";
 import { loadPagePreview } from "../../lib/page-preview-cache.js";
 import { prefetchNeighborPages } from "../../lib/prefetch-pages.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 export function OriginalEvidenceDialog({ cid, original, onClose }) {
+  const { t } = useI18n();
   const row = original.row;
   const isPdf = row.filename.toLowerCase().endsWith(".pdf");
   const total = Math.max(Number(original.pages) || row.page || 1, 1);
@@ -44,17 +46,17 @@ export function OriginalEvidenceDialog({ cid, original, onClose }) {
         });
       })
       .catch((error) => {
-        if (!cancelled) setPreviewError(error.message || "Failed to load original page");
+        if (!cancelled) setPreviewError(error.message || t("case.original.load_failed"));
       });
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [cid, isPdf, original.sha, page, row.document_id, total]);
+  }, [cid, isPdf, original.sha, page, row.document_id, t, total]);
 
   return (
     <Modal
-      title={`原件与确认记录${isPdf && total > 1 ? `（第 ${page}/${total} 页）` : ""}`}
+      title={t("case.original.title", { page: page, total })}
       onClose={onClose}
     >
       <div className="original">
@@ -65,9 +67,9 @@ export function OriginalEvidenceDialog({ cid, original, onClose }) {
                 {previewError}
               </p>
             ) : previewUrl ? (
-              <img alt={`原件第${page}页`} src={previewUrl} />
+              <img alt={t("case.original.page_image_alt", { page })} src={previewUrl} />
             ) : (
-              <p style={{ color: "var(--muted)" }}>正在加载原件页…</p>
+              <p style={{ color: "var(--muted)" }}>{t("case.original.loading_page")}</p>
             )}
             {total > 1 && (
               <Pagination
@@ -76,7 +78,7 @@ export function OriginalEvidenceDialog({ cid, original, onClose }) {
                 onNext={() => setPage((value) => value + 1)}
                 canPrevious={page > 1}
                 canNext={page < total}
-                label={`第 ${page} 页 / 共 ${total} 页`}
+                label={t("case.original.page_label", { page, total })}
               />
             )}
           </>
@@ -86,26 +88,26 @@ export function OriginalEvidenceDialog({ cid, original, onClose }) {
             {[
               ["Date", row.date],
               ["Counterparty", row.counterparty],
-              ["收入（元）", formatCents(row.income)],
-              ["支出（元）", formatCents(row.expense)],
-              ["余额（元）", formatCents(row.balance)],
-              ["本方账户", row.account],
-              ["对方账户", row.counter_account],
+              [t("case.original.income"), formatCents(row.income)],
+              [t("case.original.expense"), formatCents(row.expense)],
+              [t("case.original.balance"), formatCents(row.balance)],
+              [t("case.original.own_account"), row.account],
+              [t("case.original.counterparty_account"), row.counter_account],
               ["Memo", row.memo],
               [
-                "定位",
-                `${row.filename} · 第${row.page}页 · ${row.locator}`,
+                t("case.original.location"),
+                t("case.original.location_value", { filename: row.filename, page: row.page, locator: row.locator }),
               ],
             ].map(([label, value]) => (
               <React.Fragment key={label}>
                 <dt>{label}</dt>
-                <dd>{value || "Original not provided"}</dd>
+                <dd>{value || t("review.original_not_provided")}</dd>
               </React.Fragment>
             ))}
           </dl>
-          <h3>原始字段</h3>
+          <h3>{t("case.original.raw_fields")}</h3>
           <pre>{row.raw}</pre>
-          <h3>确认记录</h3>
+          <h3>{t("case.original.confirmation_records")}</h3>
           {original.audits.map((audit, index) => (
             <p key={index}>
               {audit.created} · {audit.operator} ·{" "}

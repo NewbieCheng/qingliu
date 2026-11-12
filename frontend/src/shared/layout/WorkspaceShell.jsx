@@ -3,6 +3,7 @@ import { useStoredFlag } from "@/shared/hooks/useStoredFlag.js";
 import { Sidebar } from "./Sidebar.jsx";
 import { Topbar } from "./Topbar.jsx";
 import { MobileTabBar } from "./MobileTabBar.jsx";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 const RAIL_KEY = "ql.rail.collapsed";
 const TOPBAR_KEY = "ql.topbar.collapsed";
@@ -23,6 +24,7 @@ export function WorkspaceShell({
   spaceSwitcher = null,
   children,
 }) {
+  const { t } = useI18n();
   const [railCollapsed, setRailCollapsed] = useStoredFlag(RAIL_KEY);
   const [topbarCollapsed, setTopbarCollapsed] = useStoredFlag(TOPBAR_KEY);
   const [narrow, setNarrow] = useState(() =>
@@ -97,9 +99,7 @@ export function WorkspaceShell({
           back={back}
         />
         <div className="page-wrap">{children}</div>
-        <footer>
-          For internal screening only. Lenient figures are not bank-approved revenue; final decisions follow verified files and bank review.
-        </footer>
+        <footer>{t("layout.footer_disclaimer")}</footer>
       </div>
       {phone ? (
         <MobileTabBar

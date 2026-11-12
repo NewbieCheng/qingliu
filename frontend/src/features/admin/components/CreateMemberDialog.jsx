@@ -1,4 +1,5 @@
 import React from "react";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import { Field, Form } from "@/shared/ui/Form.jsx";
 import { Select } from "@/shared/ui/Select.jsx";
 import { Modal } from "@/shared/ui/Modal.jsx";
@@ -6,12 +7,14 @@ import { ModalActions } from "@/shared/ui/ModalActions.jsx";
 import { UserPlusIcon } from "@/shared/ui/icons.jsx";
 
 export function CreateMemberDialog({ open, onClose, onCreate }) {
+  const { locale } = useI18n();
+  const copy = (zh, en) => (locale === "en-US" ? en : zh);
   if (!open) return null;
 
   return (
     <Modal title="Add account" onClose={onClose} className="modal--sm create-member-dialog">
       <p className="muted create-member-dialog-lead">
-        在工作台开通企业成员；个人账号与企业关联同一邮箱，清流角色写在产品权限里。
+        {copy("在工作台开通企业成员；个人账号与企业关联同一邮箱，清流角色写在产品权限里。", "Create a team member in the Workbench. Use the same email for their personal and team account; assign their Qingliu role here.")}
       </p>
       <Form
         className="create-member-form"
@@ -60,7 +63,7 @@ export function CreateMemberDialog({ open, onClose, onCreate }) {
           </button>
           <button type="submit" className="primary btn-with-icon">
             <UserPlusIcon size={15} />
-            <span>开通成员</span>
+            <span>{copy("开通成员", "Add member")}</span>
           </button>
         </ModalActions>
       </Form>

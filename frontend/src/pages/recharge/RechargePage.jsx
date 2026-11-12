@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import QRCode from "qrcode";
 import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { Loading } from "@/shared/ui/Loading.jsx";
@@ -23,6 +24,8 @@ import {
 import { orderOwnerForSku } from "@/features/billing/lib/sku.js";
 
 export function RechargePage() {
+  const { locale } = useI18n();
+  const copy = (zh, en) => (locale === "en-US" ? en : zh);
   const { user } = useAuth();
   const space = user?.space || { kind: user?.kind || "personal", id: 0 };
   const [skus, setSkus] = useState([]);
@@ -164,7 +167,7 @@ export function RechargePage() {
       toast(
         reused
           ? "Restored unpaid order; QR code still works"
-          : "订单已创建，请扫码支付",
+          : copy("订单已创建，请扫码支付", "Order created. Scan the QR code to pay."),
         "info",
       );
       await load(false);
@@ -184,7 +187,7 @@ export function RechargePage() {
     return (
       <main className="account-page">
         <Loading
-          text="正在读取账户信息…"
+          text={copy("正在读取账户信息…", "Loading account information…")}
           error={error}
           onRetry={() => void load()}
         />
@@ -195,7 +198,7 @@ export function RechargePage() {
   return (
     <main className="account-page">
       <PageHeader
-        title="把每一次调用，算清楚。"
+        title={copy("把每一次调用，算清楚。", "Know the cost of every request.")}
         description="Top up workbench points; AI usage is billed by actual usage. Balance and ledger follow the workbench."
       />
       {error && (

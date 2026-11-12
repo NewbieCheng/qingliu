@@ -1,5 +1,6 @@
 import React from "react";
 import { formatDateTime, formatNumber } from "@/shared/lib/format.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import {
   availablePoints,
   permanentPoints,
@@ -8,6 +9,8 @@ import {
 } from "../lib/balance.js";
 
 export function BalanceStrip({ balance }) {
+  const { locale } = useI18n();
+  const copy = (zh, en) => (locale === "en-US" ? en : zh);
   if (!balance) return null;
   const total = availablePoints(balance);
   const permanent = permanentPoints(balance);
@@ -16,38 +19,38 @@ export function BalanceStrip({ balance }) {
   const hasPeriod = period > 0;
 
   return (
-    <section className="card balance-strip" aria-label="当前积分">
+    <section className="card balance-strip" aria-label={copy("当前积分", "Current points")}>
       <div className="balance-strip-body">
         <div className="balance-strip-main">
           <span className="balance-strip-label">Available points</span>
           <strong className="balance-strip-total">
             {formatNumber(total)}
-            <small>积分</small>
+            <small>{copy("积分", "points")}</small>
           </strong>
         </div>
 
         <div className="balance-strip-buckets" role="list">
           <div className="balance-strip-bucket" role="listitem">
-            <span className="balance-strip-bucket-label">永久</span>
+            <span className="balance-strip-bucket-label">{copy("永久", "Permanent")}</span>
             <strong className="balance-strip-bucket-value">
               {formatNumber(permanent)}
             </strong>
-            <span className="balance-strip-bucket-meta muted">不过期</span>
+            <span className="balance-strip-bucket-meta muted">{copy("不过期", "No expiry")}</span>
           </div>
           <div
             className={`balance-strip-bucket${hasPeriod ? " has-period" : ""}`}
             role="listitem"
           >
-            <span className="balance-strip-bucket-label">临时</span>
+            <span className="balance-strip-bucket-label">{copy("临时", "Temporary")}</span>
             <strong className="balance-strip-bucket-value">
               {formatNumber(period)}
             </strong>
             {hasPeriod && expires ? (
               <span className="balance-strip-bucket-meta balance-strip-expire">
-                至 {formatDateTime(expires)}
+                {copy("至", "Until")} {formatDateTime(expires)}
               </span>
             ) : (
-              <span className="balance-strip-bucket-meta muted">暂无</span>
+              <span className="balance-strip-bucket-meta muted">{copy("暂无", "None")}</span>
             )}
           </div>
         </div>

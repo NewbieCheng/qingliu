@@ -1,14 +1,15 @@
 import React from "react";
 import { Field, Form } from "@/shared/ui/Form.jsx";
 import { SOURCES } from "@/shared/lib/constants.js";
+import { useI18n } from "@/shared/i18n/index.jsx";
 
 export function CoverageForm({ data, onSave }) {
+  const { t } = useI18n();
   return (
     <section className="card coverage-card">
-      <h2>确认统计期间与完整性</h2>
+      <h2>{t("case.coverage.title")}</h2>
       <p className="muted coverage-lead">
-        当前：{SOURCES[data.source]}，{data.start} 至 {data.end}
-        。请核对原件声明期间、缺页及完整性。
+        {t("case.coverage.current_range", { source: SOURCES[data.source], start: data.start, end: data.end })}
       </p>
       <Form
         onSave={async (form) => {
@@ -18,17 +19,17 @@ export function CoverageForm({ data, onSave }) {
           });
         }}
       >
-        <Field label="核对说明">
+        <Field label={t("case.coverage.note_label")}>
           <input name="note" defaultValue={data.fields.coverage_note || ""} />
         </Field>
         <div className="form-footer">
           <label className="check">
             <input type="checkbox" name="confirmed" required />
-            我已对照原件核对当前范围与完整性
+            {t("case.coverage.confirm_checkbox")}
           </label>
           <div className="actions-end">
             <button className="primary" disabled={data.busy}>
-              确认期间，查看报告
+              {t("case.coverage.continue_to_report")}
             </button>
           </div>
         </div>

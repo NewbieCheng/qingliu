@@ -1,4 +1,5 @@
 import React from "react";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import { Field, Form } from "@/shared/ui/Form.jsx";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { ModalActions } from "@/shared/ui/ModalActions.jsx";
@@ -7,8 +8,9 @@ import { invalidateClients } from "@/app/queries/index.js";
 import { navigate } from "@/shared/router/index.js";
 
 export function CreateClientDialog({ onClose }) {
+  const { t } = useI18n();
   return (
-    <Modal title="新建客户档案" onClose={onClose} className="modal--sm">
+    <Modal title={t("clients.create_dialog_title")} onClose={onClose} className="modal--sm">
       <Form
         onSave={async (form) => {
           const data = await createClient({
@@ -19,27 +21,27 @@ export function CreateClientDialog({ onClose }) {
           navigate(`/clients/${data.id}`);
         }}
       >
-        <Field label="客户内部代号">
+        <Field label={t("clients.internal_code_label")}>
           <input
             name="name"
             maxLength="120"
             required
-            placeholder="请输入内部代号"
+            placeholder={t("clients.internal_code_placeholder")}
           />
         </Field>
-        <Field label="企业名称（选填）">
-          <input name="company" placeholder="Optional" />
+        <Field label={t("clients.company_label")}>
+          <input name="company" placeholder={t("clients.optional_placeholder")} />
         </Field>
         <div className="form-footer">
           <label className="check">
             <input type="checkbox" name="authorized" required />
-            已获得客户资料处理授权
+            {t("clients.authorization_label")}
           </label>
           <ModalActions className="actions-end">
             <button type="button" className="ghost" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </button>
-            <button className="primary">创建档案</button>
+            <button className="primary">{t("clients.create_record")}</button>
           </ModalActions>
         </div>
       </Form>
