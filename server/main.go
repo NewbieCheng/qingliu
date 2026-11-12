@@ -1036,11 +1036,11 @@ func (a *App) mux() http.Handler {
 		j := s.one("SELECT * FROM ql_jobs WHERE id=? AND customer_id=?", q.r.PathValue("jid"), cid)
 		require(j != nil, "Job not found")
 		status := str(j, "status")
-		require(status == "queued" || status == "running", "Only queued or running jobs can be cancelled")
+		require(status == "queued" || status == "running", "只有排队中或执行中的任务可以终止")
 		jid := str(j, "id")
 		// 取消只写终态，不试图强杀 goroutine：执行器会在下一次阶段回调
 		// 或超时后自行退出；busy() 立刻为假，用户不必等它跑完。
-		s.jobFinish(jid, "failed", "Cancelled by user")
+		s.jobFinish(jid, "failed", "已手动终止")
 		// 只收掉本任务对应的 AI 分析；禁止一刀切掉该客户其它进行中的分析。
 		if str(j, "kind") == "ai_analysis" {
 			payload := obj(str(j, "payload"))

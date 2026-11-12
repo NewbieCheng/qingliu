@@ -212,7 +212,7 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, pay
 func (a *App) writebackPageOCR(cid, docID, name string, result Object) (int, error) {
 	ocrText := str(result, "text")
 	if strings.TrimSpace(ocrText) == "" {
-		return 0, fmt.Errorf("Analysis result has no transcribed text")
+		return 0, fmt.Errorf("分析结果没有转写正文")
 	}
 	doc := a.s.one("SELECT payload FROM ql_documents WHERE id=? AND customer_id=?", docID, cid)
 	preferred := ""
