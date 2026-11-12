@@ -15,6 +15,12 @@ function localProxy() {
 }
 
 export default defineConfig({
+  // 与 jsconfig `jsx: react-jsx`、eslint `react-in-jsx-scope: off` 对齐。
+  // 无 plugin-react 时 esbuild 默认经典转换，漏写 `import React` 会在运行时报
+  // "React is not defined"（充值页 SkuGrid 已踩过）。
+  esbuild: {
+    jsx: "automatic",
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

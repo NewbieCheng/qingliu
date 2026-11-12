@@ -1,5 +1,5 @@
 import { randomId } from "@/shared/lib/format.js";
-import { readStoredLocale } from "@/shared/i18n/core.js";
+import { readStoredLocale, tStandalone } from "@/shared/i18n/core.js";
 
 let csrfToken = "";
 let unauthorizedHandler = null;
@@ -39,25 +39,25 @@ function newRequestId() {
 
 // 浏览器与后端之间断开时 fetch 只抛 TypeError("Failed to fetch")；对用户来说
 // 这句话没有意义，而且掩盖了“可能已经提交成功”的事实，因此统一翻译成可操作提示。
-const NETWORK_MESSAGES = {
-  upload: "Network interrupted; the file may not have uploaded fully. Please retry.",
-  default: "Network interrupted. Check your connection and retry.",
-};
-
 function transportMessage(path) {
-  if (typeof path !== "string") return NETWORK_MESSAGES.default;
-  return path.includes("/upload") ? NETWORK_MESSAGES.upload : NETWORK_MESSAGES.default;
+  if (typeof path === "string" && path.includes("/upload")) {
+    return tStandalone("api.network_upload");
+  }
+  return tStandalone("api.network_default");
 }
 
 function statusMessage(status, fallback) {
-  if (status === 413) return "File is too large for the server upload limit.";
+  if (status === 413) return tStandalone("api.file_too_large");
   // 业务侧 503 常带具体原因（如「请重新登录工作台账号」），优先展示原文。
   if (status === 502 || status === 503 || status === 504) {
     const detail = typeof fallback === "string" ? fallback.trim() : "";
-    if (detail && detail !== "Request incomplete. Please retry later.") return detail;
-    return "Server temporarily unavailable. Please try again later.";
+    const incomplete = tStandalone("api.request_incomplete");
+    if (detail && detail !== incomplete && detail !== "Request incomplete. Please retry later.") {
+      return detail;
+    }
+    return tStandalone("api.server_unavailable");
   }
-  if (status === 524) return "Server timed out. Please try again later.";
+  if (status === 524) return tStandalone("api.server_timeout");
   return fallback;
 }
 
@@ -104,7 +104,7 @@ export async function api(path, body, options = {}) {
       throw error;
     }
     if (error?.message === "timeout") {
-      throw new ApiError("请求超时，请稍后重试", 0, null, requestId);
+      throw new ApiError(tStandalone("api.timeout"), 0, null, requestId);
     }
     throw new ApiError(transportMessage(path), 0, null, requestId);
   } finally {
@@ -121,7 +121,7 @@ export async function api(path, body, options = {}) {
     }
     const message = statusMessage(
       response.status,
-      data.error || "Request incomplete. Please retry later.",
+      data.error || tStandalone("api.request_incomplete"),
     );
     const suffix = responseRequestId && response.status >= 500 ? `（请求 ${responseRequestId.slice(0, 8)}）` : "";
     throw new ApiError(`${message}${suffix}`, response.status, data, responseRequestId);

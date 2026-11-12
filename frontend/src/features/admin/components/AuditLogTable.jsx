@@ -5,6 +5,7 @@ import { formatDateTime } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
 
 function AuditDetailCell({ event }) {
+  const { t } = useI18n();
   const customerName = (event.customer_name || "").trim();
   const detailLabel = (event.detail_label || "").trim();
   const hasCustomer = Boolean(event.customer_id);
@@ -17,7 +18,7 @@ function AuditDetailCell({ event }) {
     <span className="audit-detail-cell">
       {hasCustomer ? (
         <Link to={`/clients/${event.customer_id}`}>
-          {customerName || "Customers"}
+          {customerName || t("nav.clients")}
         </Link>
       ) : null}
       {detailLabel ? (

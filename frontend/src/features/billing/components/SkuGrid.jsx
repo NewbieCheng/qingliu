@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useI18n } from "@/shared/i18n/index.jsx";
 import { formatCurrencyFen, formatNumber } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";

@@ -4,6 +4,8 @@
  * 这是加速层，不是权威源；清缓存/换设备后会回源拉取。
  */
 
+import { tStandalone } from "@/shared/i18n/core.js";
+
 const DB_NAME = "qingliu-page-preview";
 const DB_VERSION = 1;
 const STORE = "pages";
@@ -147,7 +149,11 @@ export async function loadPagePreview(cid, documentId, page, sha, url) {
     if (cached) return URL.createObjectURL(cached);
   }
   if (!response.ok) {
-    throw new Error(response.status === 401 ? "Session expired. Please sign in again." : "Failed to load original page");
+    throw new Error(
+      response.status === 401
+        ? tStandalone("auth.session_expired")
+        : tStandalone("api.page_load_failed"),
+    );
   }
   const headerSha = response.headers.get("X-Document-SHA") || sha || "";
   const blob = await response.blob();

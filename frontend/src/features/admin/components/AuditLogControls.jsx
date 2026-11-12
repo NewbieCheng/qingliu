@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useI18n } from "@/shared/i18n/index.jsx";
 import { SearchInput } from "@/shared/ui/SearchInput.jsx";
 import { Select } from "@/shared/ui/Select.jsx";
 import { RefreshIcon } from "@/shared/ui/icons.jsx";
@@ -13,6 +14,7 @@ export function AuditLogControls({
   onRefresh,
   refreshing,
 }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState(search);
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export function AuditLogControls({
   return (
     <div className="toolbar audit-toolbar">
       <h2>
-        Recent activity <small>{count}</small>
+        {t("admin.audit_title")} <small>{count}</small>
       </h2>
       <form
         className="audit-toolbar-tools"
@@ -32,20 +34,20 @@ export function AuditLogControls({
         }}
       >
         <SearchInput
-          aria-label="Search activity"
-          placeholder="Search members, details, or actions"
+          aria-label={t("admin.audit_search")}
+          placeholder={t("admin.audit_search_placeholder")}
           value={draft}
           onChange={setDraft}
           onSearch={(value) => onSearchChange(value)}
         />
         <Select
-          aria-label="Filter by action type"
-          label="Filter by action type"
+          aria-label={t("admin.audit_filter")}
+          label={t("admin.audit_filter")}
           className="audit-action-select"
           value={action}
           onChange={(event) => onActionChange(event.target.value)}
         >
-          <option value="">All actions</option>
+          <option value="">{t("admin.audit_all_actions")}</option>
           {actions.map((item) => (
             <option key={item.value} value={item.value}>
               {item.label}
@@ -56,12 +58,12 @@ export function AuditLogControls({
           type="button"
           className="btn-chip"
           disabled={refreshing}
-          title={refreshing ? "Refreshing…" : "Refresh activity"}
-          aria-label={refreshing ? "Refreshing" : "Refresh"}
+          title={refreshing ? t("admin.audit_refreshing") : t("admin.audit_refresh_title")}
+          aria-label={refreshing ? t("admin.audit_refreshing") : t("admin.audit_refresh")}
           onClick={onRefresh}
         >
           <RefreshIcon size={14} />
-          <span>{refreshing ? "Refreshing" : "Refresh"}</span>
+          <span>{refreshing ? t("admin.audit_refreshing") : t("admin.audit_refresh")}</span>
         </button>
       </form>
     </div>

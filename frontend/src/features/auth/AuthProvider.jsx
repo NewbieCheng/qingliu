@@ -3,6 +3,8 @@ import { api, setCsrf, setUnauthorizedHandler } from "@/shared/api/client.js";
 import { navigate } from "@/shared/router/index.js";
 import { readStorage, removeStorage, writeStorage } from "@/shared/lib/storage.js";
 import { clearApiCache } from "@/shared/api/cache.js";
+import { tStandalone } from "@/shared/i18n/core.js";
+import { toast } from "@/shared/ui/toast-api.js";
 
 import { AuthContext } from "./context.js";
 const REMEMBER_KEY = "ql.login.username";
@@ -59,6 +61,7 @@ export function AuthProvider({ children }) {
     const dispose = setUnauthorizedHandler(() => {
       clearApiCache();
       setUser(null);
+      toast(tStandalone("auth.session_expired"), "error");
       navigate("/login", { replace: true });
     });
     return dispose;

@@ -32,10 +32,10 @@ export function LedgerTable({ ledgers, page = 1, pageSize = 10, total = 0, onPag
         <table>
           <thead>
             <tr>
-              <th>Time</th>
-              <th>Type</th>
-              <th>{copy("变动", "Change")}</th>
-              <th>Notes</th>
+              <th>{t("billing.ledger_time")}</th>
+              <th>{t("billing.ledger_type")}</th>
+              <th>{t("billing.ledger_change")}</th>
+              <th>{t("billing.ledger_notes")}</th>
             </tr>
           </thead>
           <tbody>

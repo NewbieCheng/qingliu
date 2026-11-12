@@ -176,7 +176,7 @@ function ReportVersions({ cid, data, t }) {
     try {
       await downloadReport(cid, report.id, file);
     } catch (error) {
-      toast(error.message || "Download failed. Please retry later.", "error");
+      toast(error.message || t("api.download_failed"), "error");
     } finally {
       setDownloading("");
     }

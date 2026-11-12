@@ -24,8 +24,7 @@ import {
 import { orderOwnerForSku } from "@/features/billing/lib/sku.js";
 
 export function RechargePage() {
-  const { locale } = useI18n();
-  const copy = (zh, en) => (locale === "en-US" ? en : zh);
+  const { t } = useI18n();
   const { user } = useAuth();
   const space = user?.space || { kind: user?.kind || "personal", id: 0 };
   const [skus, setSkus] = useState([]);
@@ -165,9 +164,7 @@ export function RechargePage() {
       const reused = orderRef.current?.order_no === created.order_no;
       await openOrder(created);
       toast(
-        reused
-          ? "Restored unpaid order; QR code still works"
-          : copy("订单已创建，请扫码支付", "Order created. Scan the QR code to pay."),
+        reused ? t("billing.order_restored") : t("billing.order_created"),
         "info",
       );
       await load(false);
@@ -187,7 +184,7 @@ export function RechargePage() {
     return (
       <main className="account-page">
         <Loading
-          text={copy("正在读取账户信息…", "Loading account information…")}
+          text={t("billing.recharge_loading")}
           error={error}
           onRetry={() => void load()}
         />
@@ -198,8 +195,8 @@ export function RechargePage() {
   return (
     <main className="account-page">
       <PageHeader
-        title={copy("把每一次调用，算清楚。", "Know the cost of every request.")}
-        description="Top up workbench points; AI usage is billed by actual usage. Balance and ledger follow the workbench."
+        title={t("billing.recharge_title")}
+        description={t("billing.recharge_desc")}
       />
       {error && (
         <p className="error" role="alert">

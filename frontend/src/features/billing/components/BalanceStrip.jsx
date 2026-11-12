@@ -9,8 +9,7 @@ import {
 } from "../lib/balance.js";
 
 export function BalanceStrip({ balance }) {
-  const { locale } = useI18n();
-  const copy = (zh, en) => (locale === "en-US" ? en : zh);
+  const { t } = useI18n();
   if (!balance) return null;
   const total = availablePoints(balance);
   const permanent = permanentPoints(balance);
@@ -19,47 +18,45 @@ export function BalanceStrip({ balance }) {
   const hasPeriod = period > 0;
 
   return (
-    <section className="card balance-strip" aria-label={copy("当前积分", "Current points")}>
+    <section className="card balance-strip" aria-label={t("billing.current_points")}>
       <div className="balance-strip-body">
         <div className="balance-strip-main">
-          <span className="balance-strip-label">Available points</span>
+          <span className="balance-strip-label">{t("billing.available_points")}</span>
           <strong className="balance-strip-total">
             {formatNumber(total)}
-            <small>{copy("积分", "points")}</small>
+            <small>{t("billing.points_unit")}</small>
           </strong>
         </div>
 
         <div className="balance-strip-buckets" role="list">
           <div className="balance-strip-bucket" role="listitem">
-            <span className="balance-strip-bucket-label">{copy("永久", "Permanent")}</span>
+            <span className="balance-strip-bucket-label">{t("billing.permanent")}</span>
             <strong className="balance-strip-bucket-value">
               {formatNumber(permanent)}
             </strong>
-            <span className="balance-strip-bucket-meta muted">{copy("不过期", "No expiry")}</span>
+            <span className="balance-strip-bucket-meta muted">{t("billing.no_expiry")}</span>
           </div>
           <div
             className={`balance-strip-bucket${hasPeriod ? " has-period" : ""}`}
             role="listitem"
           >
-            <span className="balance-strip-bucket-label">{copy("临时", "Temporary")}</span>
+            <span className="balance-strip-bucket-label">{t("billing.temporary")}</span>
             <strong className="balance-strip-bucket-value">
               {formatNumber(period)}
             </strong>
             {hasPeriod && expires ? (
               <span className="balance-strip-bucket-meta balance-strip-expire">
-                {copy("至", "Until")} {formatDateTime(expires)}
+                {t("billing.until")} {formatDateTime(expires)}
               </span>
             ) : (
-              <span className="balance-strip-bucket-meta muted">{copy("暂无", "None")}</span>
+              <span className="balance-strip-bucket-meta muted">{t("billing.none")}</span>
             )}
           </div>
         </div>
       </div>
 
       <p className="balance-strip-hint muted">
-        {hasPeriod
-          ? "Unused temporary points expire. Charges use temporary first, then permanent."
-          : "Permanent points do not expire. After a subscription, temporary quota and expiry appear."}
+        {hasPeriod ? t("billing.hint_with_period") : t("billing.hint_no_period")}
       </p>
     </section>
   );

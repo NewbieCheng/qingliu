@@ -1,5 +1,7 @@
 import { api, getCsrf } from "@/shared/api/client.js";
+import { tStandalone } from "@/shared/i18n/core.js";
 import { navigate } from "@/shared/router/index.js";
+import { toast } from "@/shared/ui/toast-api.js";
 
 function caseURL(cid, range) {
   const query = new URLSearchParams(range || {}).toString();
@@ -56,11 +58,12 @@ async function fetchReportFile(cid, reportId, file) {
     headers: { "X-CSRF-Token": getCsrf() },
   });
   if (response.status === 401) {
-    navigate("/login");
-    throw new Error("Session expired. Please sign in again.");
+    toast(tStandalone("auth.session_expired"), "error");
+    navigate("/login", { replace: true });
+    throw new Error(tStandalone("auth.session_expired"));
   }
   if (!response.ok) {
-    let message = "Download failed. Please retry later.";
+    let message = tStandalone("api.download_failed");
     try {
       const data = await response.json();
       if (data?.error) message = data.error;
