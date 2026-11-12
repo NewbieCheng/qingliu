@@ -23,4 +23,4 @@
 
 `POST /api/clients/{cid}/ai-analysis` → 工作台 aidoc → **真实模型** → `GET .../ai-analysis` 看 `result`。
 
-配套：[docs/计划-清流减负与AI赋能总册.md](../docs/计划-清流减负与AI赋能总册.md) §4
+配套：[docs/计划-清流减负与AI赋能总册.md](../docs/计划-清流减负与AI赋能总册.md)（验收摘要）

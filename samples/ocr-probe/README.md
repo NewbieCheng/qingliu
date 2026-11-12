@@ -17,4 +17,4 @@ python scripts/ocr-probe-page-ocr.py
 python scripts/ocr-probe-vision-models.py
 ```
 
-配套计划：`docs/计划-清流减负与AI赋能总册.md` §4.1 E（page_ocr）。
+配套：`docs/计划-清流减负与AI赋能总册.md`（S6 page_ocr 已验收）；实现见 `docs/02-后端开发.md`。
