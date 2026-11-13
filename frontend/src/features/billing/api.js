@@ -1,5 +1,9 @@
 import { api } from "@/shared/api/client.js";
 
+export function getEmbedRechargeUrl() {
+  return api("/api/billing/embed-url");
+}
+
 export function getSkus() {
   return api("/api/billing/skus");
 }

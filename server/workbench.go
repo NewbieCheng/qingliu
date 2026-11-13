@@ -198,7 +198,33 @@ func parseWBSession(data Object) (wbSession, error) {
 			expires = parsed
 		}
 	}
+	// ServiceLoginResult 带嵌套 user；普通 LoginResult/RefreshResult 是扁平的
+	//（顶层 user_id / service_role）。只读 user.* 会在 refresh 路径把
+	// workbench_user_id 写成 0，撞脏行后落库 panic、新 token 丢失（2026-11-12）。
 	user := sub(payload, "user")
+	if user == nil {
+		user = Object{}
+	}
+	if integer(user["user_id"]) == 0 {
+		if id := integer(payload["user_id"]); id > 0 {
+			user["user_id"] = id
+		}
+	}
+	if str(user, "service_role") == "" {
+		if role := str(payload, "service_role"); role != "" {
+			user["service_role"] = role
+		}
+	}
+	if str(user, "email") == "" {
+		if email := str(payload, "email"); email != "" {
+			user["email"] = email
+		}
+	}
+	if str(user, "display_name") == "" {
+		if name := str(payload, "display_name"); name != "" {
+			user["display_name"] = name
+		}
+	}
 	return wbSession{
 		AccessToken: access, RefreshToken: refresh, ExpiresAt: expires,
 		User: user, Space: parseSpaceRef(payload, user),
@@ -301,20 +327,56 @@ func (s *Store) unseal(raw []byte) []byte {
 // 空间的唯一落点（ql_users 上已经没有空间列，见 migrations/005）。
 func (a *App) wbSaveLogin(userID string, session wbSession) spaceRef {
 	user := session.User
-	email := str(user, "email")
-	display := str(user, "display_name")
-	serviceRole := str(user, "service_role")
+	email := strings.TrimSpace(str(user, "email"))
+	display := strings.TrimSpace(str(user, "display_name"))
+	serviceRole := strings.TrimSpace(str(user, "service_role"))
+	wbID := integer(user["user_id"])
+	existing := a.wbAccount(userID)
+	// refresh 可能只带回 token + user_id：缺资料时保留库里已有绑定，
+	// 绝不能把 workbench_user_id 写成 0（会撞脏行 Duplicate entry '0'）。
+	if wbID <= 0 && existing != nil {
+		wbID = integer(existing["workbench_user_id"])
+	}
+	if email == "" && existing != nil {
+		email = str(existing, "email")
+	}
+	if display == "" && existing != nil {
+		display = str(existing, "display_name")
+	}
+	if serviceRole == "" && existing != nil {
+		serviceRole = str(existing, "service_role")
+	}
 	// 权限快照（见 server/permissions.go）：优先用工作台真的返回的权限码，
 	// 没有时按服务角色映射。存下来之后，判定不再依赖「三条字符串」。
 	codes := loginPermissions(serviceRole, strList(user["permissions"]))
-	wbID := integer(user["user_id"])
+	permissionsJSON := js(codes)
+	if (codes == nil || len(codes) == 0) && existing != nil {
+		if raw := strings.TrimSpace(str(existing, "permissions")); raw != "" && raw != "null" {
+			permissionsJSON = raw
+		}
+	}
+	if wbID <= 0 {
+		// 没有可落的绑定 id：只更令牌，避免 INSERT/UPDATE 写出 0。
+		if existing == nil {
+			return session.Space
+		}
+		a.s.exec(`UPDATE ql_workbench_accounts SET access_token=?,refresh_token=?,token_expires=? WHERE user_id=?`,
+			a.s.seal([]byte(session.AccessToken)), a.s.seal([]byte(session.RefreshToken)), session.ExpiresAt.Unix(), userID)
+		return session.Space
+	}
 	a.s.exec(`INSERT INTO ql_workbench_accounts
  (user_id,workbench_user_id,email,display_name,service_role,access_token,refresh_token,token_expires,permissions)
  VALUES(?,?,?,?,?,?,?,?,?)
- ON DUPLICATE KEY UPDATE workbench_user_id=VALUES(workbench_user_id),email=VALUES(email),
- display_name=VALUES(display_name),service_role=VALUES(service_role),access_token=VALUES(access_token),
- refresh_token=VALUES(refresh_token),token_expires=VALUES(token_expires),permissions=VALUES(permissions)`,
-		userID, wbID, email, display, serviceRole, a.s.seal([]byte(session.AccessToken)), a.s.seal([]byte(session.RefreshToken)), session.ExpiresAt.Unix(), js(codes))
+ ON DUPLICATE KEY UPDATE
+ workbench_user_id=IF(VALUES(workbench_user_id)>0, VALUES(workbench_user_id), workbench_user_id),
+ email=IF(VALUES(email)<>'', VALUES(email), email),
+ display_name=IF(VALUES(display_name)<>'', VALUES(display_name), display_name),
+ service_role=IF(VALUES(service_role)<>'', VALUES(service_role), service_role),
+ access_token=VALUES(access_token),
+ refresh_token=VALUES(refresh_token),
+ token_expires=VALUES(token_expires),
+ permissions=IF(VALUES(permissions) IS NULL OR VALUES(permissions) IN ('','null','[]'), permissions, VALUES(permissions))`,
+		userID, wbID, email, display, serviceRole, a.s.seal([]byte(session.AccessToken)), a.s.seal([]byte(session.RefreshToken)), session.ExpiresAt.Unix(), permissionsJSON)
 	return session.Space
 }
 

@@ -95,7 +95,12 @@ export async function api(path, body, options = {}) {
       headers: isFormData(body)
         ? { "X-CSRF-Token": csrfToken, "X-Request-ID": requestId, "X-Locale": readStoredLocale() }
         : hasBody
-          ? { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, "X-Request-ID": requestId }
+          ? {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": csrfToken,
+              "X-Request-ID": requestId,
+              "X-Locale": readStoredLocale(),
+            }
           : { "X-CSRF-Token": csrfToken, "X-Request-ID": requestId, "X-Locale": readStoredLocale() },
       body: hasBody ? (isFormData(body) ? body : JSON.stringify(body)) : undefined,
     });
@@ -123,8 +128,8 @@ export async function api(path, body, options = {}) {
       response.status,
       data.error || tStandalone("api.request_incomplete"),
     );
-    const suffix = responseRequestId && response.status >= 500 ? `（请求 ${responseRequestId.slice(0, 8)}）` : "";
-    throw new ApiError(`${message}${suffix}`, response.status, data, responseRequestId);
+    // 请求号留给 UI「查看更多」，不要拼进主文案（中文界面会露出英文括号噪音）。
+    throw new ApiError(message, response.status, data, response.status >= 500 ? responseRequestId : "");
   }
   return data;
 }

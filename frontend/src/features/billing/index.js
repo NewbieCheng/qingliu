@@ -6,6 +6,7 @@ export { SkuGrid } from "./components/SkuGrid.jsx";
 export {
   createOrder,
   getBalance,
+  getEmbedRechargeUrl,
   getLedgers,
   getOrder,
   getOrders,

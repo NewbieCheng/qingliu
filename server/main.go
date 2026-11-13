@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -436,6 +437,22 @@ func (a *App) mux() http.Handler {
 		space := a.wbSaveLogin(uid, session)
 		a.newSession(q, uid, space)
 		q.json(Object{"ok": true})
+	}))
+	m.HandleFunc("GET /api/billing/embed-url", a.route(func(q *request) {
+		if !a.wb.Ready() {
+			bad(503, "Workbench is not connected")
+		}
+		token, err := a.wbAccessToken(str(q.user, "id"))
+		if err != nil {
+			bad(503, err.Error())
+		}
+		embedURL := a.wb.BaseURL + "/console/embed/recharge?token=" + url.QueryEscape(token) + "&platform=qingliu"
+		if space := q.space(); space.Kind == spaceTeam && space.teamID() > 0 {
+			embedURL += "&owner_type=2&owner_id=" + itoa(space.teamID())
+		} else {
+			embedURL += "&owner_type=1"
+		}
+		q.json(Object{"url": embedURL})
 	}))
 	m.HandleFunc("GET /api/billing/skus", a.route(func(q *request) {
 		if !a.wb.Ready() {

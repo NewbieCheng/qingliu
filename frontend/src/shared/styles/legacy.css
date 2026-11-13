@@ -443,6 +443,11 @@ table td{border-color:#e4e8e1}
 .badge{border-radius:2px;letter-spacing:.04em}
 .eyebrow{color:var(--ql-copper);letter-spacing:.18em}
 .error{color:var(--ql-alert)}
+.request-error-message{margin:0}
+.request-error-more{margin-top:6px;font-size:12px}
+.request-error-more>summary{cursor:pointer;color:var(--ql-muted);list-style:none}
+.request-error-more>summary::-webkit-details-marker{display:none}
+.request-error-more code{font-size:12px}
 .success{color:var(--ql-forest)}
 footer{border-top:1px solid var(--ql-line);color:var(--ql-muted)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

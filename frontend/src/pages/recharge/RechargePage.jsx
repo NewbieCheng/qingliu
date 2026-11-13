@@ -1,70 +1,32 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useI18n } from "@/shared/i18n/index.jsx";
-import QRCode from "qrcode";
 import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { Loading } from "@/shared/ui/Loading.jsx";
+import { RequestErrorAlert } from "@/shared/ui/RequestErrorAlert.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
-import { useAuth } from "@/features/auth/index.js";
 import {
   BalanceStrip,
-  CheckoutPanel,
   LedgerTable,
-  OrdersTable,
-  SkuGrid,
-  createOrder,
   getBalance,
+  getEmbedRechargeUrl,
   getLedgers,
-  getOrder,
-  getOrders,
-  getSkus,
-  isExpired,
-  isResumable,
-  remainingText,
 } from "@/features/billing/index.js";
-import { orderOwnerForSku } from "@/features/billing/lib/sku.js";
 
 export function RechargePage() {
   const { t } = useI18n();
-  const { user } = useAuth();
-  const space = user?.space || { kind: user?.kind || "personal", id: 0 };
-  const [skus, setSkus] = useState([]);
+  const [embedUrl, setEmbedUrl] = useState("");
   const [balance, setBalance] = useState(null);
-  const [orders, setOrders] = useState([]);
   const [ledgers, setLedgers] = useState([]);
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerTotal, setLedgerTotal] = useState(0);
   const LEDGER_PAGE_SIZE = 10;
-  const [order, setOrder] = useState(null);
-  const [qr, setQr] = useState("");
-  const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [clock, setClock] = useState(Date.now());
+  const [errorRequestId, setErrorRequestId] = useState("");
   const [loaded, setLoaded] = useState(false);
-  const orderRef = useRef(null);
 
-  async function openOrder(next, scroll = false) {
-    orderRef.current = next;
-    setOrder(next);
-    if (
-      next?.status === "pending" &&
-      next.code_url &&
-      !next.code_url.startsWith("mock://")
-    ) {
-      try {
-        setQr(await QRCode.toDataURL(next.code_url, { width: 240, margin: 1 }));
-      } catch {
-        setQr("");
-      }
-    } else {
-      setQr("");
-    }
-    if (scroll) {
-      window.setTimeout(() => {
-        document
-          .querySelector(".checkout")
-          ?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 50);
-    }
+  function captureError(requestError) {
+    setError(requestError?.message || "");
+    setErrorRequestId(requestError?.requestId || "");
   }
 
   async function loadLedgers(page) {
@@ -76,7 +38,7 @@ export function RechargePage() {
       setLedgerPage(page);
       return null;
     } catch (requestError) {
-      return requestError.message;
+      return requestError;
     }
   }
 
@@ -84,101 +46,47 @@ export function RechargePage() {
     window.dispatchEvent(new Event("ql:balance-changed"));
   }
 
-  async function load(resume = true) {
+  async function load(withEmbed = true) {
     const failures = [];
-    try {
-      const skuData = await getSkus();
-      setSkus(skuData.items || []);
-    } catch (requestError) {
-      failures.push(requestError.message);
+    if (withEmbed) {
+      try {
+        const res = await getEmbedRechargeUrl();
+        setEmbedUrl(res?.url || "");
+      } catch (requestError) {
+        failures.push(requestError);
+      }
     }
     try {
       setBalance(await getBalance());
     } catch (requestError) {
-      failures.push(requestError.message);
-    }
-    try {
-      const orderData = await getOrders();
-      const nextOrders = orderData.items || [];
-      setOrders(nextOrders);
-      const resumable = nextOrders.find(isResumable);
-      if (resume && !orderRef.current && resumable) await openOrder(resumable);
-    } catch (requestError) {
-      failures.push(requestError.message);
+      failures.push(requestError);
     }
     const ledgerError = await loadLedgers(1);
     if (ledgerError) failures.push(ledgerError);
-    setError(failures[0] || "");
+    if (failures[0]) captureError(failures[0]);
+    else {
+      setError("");
+      setErrorRequestId("");
+    }
     setLoaded(true);
   }
 
   useEffect(() => {
-    void load();
+    void load(true);
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setClock(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (!order || order.status !== "pending" || !order.code_url) return undefined;
-    let stopped = false;
-    const timer = window.setInterval(async () => {
-      if (stopped) return;
-      try {
-        const next = await getOrder(order.order_no);
-        if (stopped) return;
-        if (next.status !== "pending" || isExpired(next)) {
-          await openOrder(next);
-          await load(false);
-          notifyBalanceChanged();
-        } else {
-          orderRef.current = next;
-          setOrder(next);
-        }
-      } catch {
-        // A transient network error is not a payment failure.
+    function onMessage(event) {
+      const data = event?.data;
+      if (data && data.type === "NO996_PAYMENT_SUCCESS") {
+        toast(t("billing.order_paid") || "充值成功，积分已到账", "success");
+        void load(false);
+        notifyBalanceChanged();
       }
-    }, 2500);
-    return () => {
-      stopped = true;
-      window.clearInterval(timer);
-    };
-  }, [order?.order_no, order?.status]);
-
-  async function choose(sku) {
-    const owner = orderOwnerForSku(sku, space);
-    if (!owner.ok) {
-      toast(owner.message, "error");
-      setError(owner.message);
-      return;
     }
-    setBusy(sku.code);
-    setError("");
-    try {
-      const created = await createOrder(sku.code, {
-        ownerType: owner.owner_type,
-        ownerId: owner.owner_id,
-      });
-      const reused = orderRef.current?.order_no === created.order_no;
-      await openOrder(created);
-      toast(
-        reused ? t("billing.order_restored") : t("billing.order_created"),
-        "info",
-      );
-      await load(false);
-      notifyBalanceChanged();
-    } catch (requestError) {
-      toast(requestError.message, "error");
-      setError(requestError.message);
-    } finally {
-      setBusy("");
-    }
-  }
-
-  const currentExpired = isExpired(order);
-  const defaultTab = space?.kind === "team" ? "team" : "personal";
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [t]);
 
   if (!loaded) {
     return (
@@ -186,7 +94,7 @@ export function RechargePage() {
         <Loading
           text={t("billing.recharge_loading")}
           error={error}
-          onRetry={() => void load()}
+          onRetry={() => void load(true)}
         />
       </main>
     );
@@ -198,30 +106,24 @@ export function RechargePage() {
         title={t("billing.recharge_title")}
         description={t("billing.recharge_desc")}
       />
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {error ? (
+        <RequestErrorAlert message={error} requestId={errorRequestId} />
+      ) : null}
       <BalanceStrip balance={balance} />
-      <SkuGrid
-        skus={skus}
-        busy={busy}
-        defaultTab={defaultTab}
-        onChoose={(sku) => void choose(sku)}
-      />
-      <CheckoutPanel
-        order={order}
-        qr={qr}
-        expired={currentExpired}
-        remaining={clock && order ? remainingText(order) : ""}
-        onDismiss={() => {
-          orderRef.current = null;
-          setOrder(null);
-          setQr("");
-        }}
-      />
-      <OrdersTable orders={orders} onResume={(item) => void openOrder(item, true)} />
+      {embedUrl ? (
+        <section className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <iframe
+            src={embedUrl}
+            title={t("billing.recharge_title")}
+            style={{
+              width: "100%",
+              minHeight: "760px",
+              border: "none",
+              display: "block",
+            }}
+          />
+        </section>
+      ) : null}
       <LedgerTable
         ledgers={ledgers}
         page={ledgerPage}

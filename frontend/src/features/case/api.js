@@ -72,8 +72,9 @@ async function fetchReportFile(cid, reportId, file) {
       // 非 JSON 错误体用默认文案
     }
     const requestId = response.headers.get("X-Request-ID");
-    if (requestId && response.status >= 500) message += `（请求 ${requestId.slice(0, 8)}）`;
-    throw new Error(message);
+    const err = new Error(message);
+    if (requestId && response.status >= 500) err.requestId = requestId;
+    throw err;
   }
   return response;
 }
