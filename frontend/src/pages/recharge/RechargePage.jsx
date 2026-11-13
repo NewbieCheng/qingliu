@@ -5,9 +5,7 @@ import { Loading } from "@/shared/ui/Loading.jsx";
 import { RequestErrorAlert } from "@/shared/ui/RequestErrorAlert.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import {
-  BalanceStrip,
   LedgerTable,
-  getBalance,
   getEmbedRechargeUrl,
   getLedgers,
 } from "@/features/billing/index.js";
@@ -15,7 +13,7 @@ import {
 export function RechargePage() {
   const { t } = useI18n();
   const [embedUrl, setEmbedUrl] = useState("");
-  const [balance, setBalance] = useState(null);
+  const [embedHeight, setEmbedHeight] = useState(640);
   const [ledgers, setLedgers] = useState([]);
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerTotal, setLedgerTotal] = useState(0);
@@ -56,11 +54,6 @@ export function RechargePage() {
         failures.push(requestError);
       }
     }
-    try {
-      setBalance(await getBalance());
-    } catch (requestError) {
-      failures.push(requestError);
-    }
     const ledgerError = await loadLedgers(1);
     if (ledgerError) failures.push(ledgerError);
     if (failures[0]) captureError(failures[0]);
@@ -82,6 +75,13 @@ export function RechargePage() {
         toast(t("billing.order_paid") || "充值成功，积分已到账", "success");
         void load(false);
         notifyBalanceChanged();
+      } else if (
+        data &&
+        data.type === "NO996_EMBED_HEIGHT" &&
+        typeof data.height === "number" &&
+        data.height > 200
+      ) {
+        setEmbedHeight(Math.max(480, Math.ceil(data.height) + 16));
       }
     }
     window.addEventListener("message", onMessage);
@@ -109,7 +109,6 @@ export function RechargePage() {
       {error ? (
         <RequestErrorAlert message={error} requestId={errorRequestId} />
       ) : null}
-      <BalanceStrip balance={balance} />
       {embedUrl ? (
         <section className="card" style={{ padding: 0, overflow: "hidden" }}>
           <iframe
@@ -117,7 +116,7 @@ export function RechargePage() {
             title={t("billing.recharge_title")}
             style={{
               width: "100%",
-              minHeight: "760px",
+              height: `${embedHeight}px`,
               border: "none",
               display: "block",
             }}

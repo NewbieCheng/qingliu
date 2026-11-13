@@ -446,7 +446,7 @@ func (a *App) mux() http.Handler {
 		if err != nil {
 			bad(503, err.Error())
 		}
-		embedURL := a.wb.BaseURL + "/console/embed/recharge?token=" + url.QueryEscape(token) + "&platform=qingliu"
+		embedURL := a.wb.BaseURL + "/console/embed/recharge?token=" + url.QueryEscape(token) + "&platform=qingliu&embed=1&hide_header=1&lock_owner=1&brand=qingliu"
 		if space := q.space(); space.Kind == spaceTeam && space.teamID() > 0 {
 			embedURL += "&owner_type=2&owner_id=" + itoa(space.teamID())
 		} else {
