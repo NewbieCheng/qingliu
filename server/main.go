@@ -130,7 +130,7 @@ func (a *App) route(fn func(*request)) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; frame-src 'self' https://worker.bujiaban.top https://worker.no996ai.cn http://127.0.0.1:5188 http://localhost:5188; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'")
 		if a.secure {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 		}
