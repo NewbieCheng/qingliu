@@ -159,12 +159,23 @@ function AIResultActions({ result, disabled }) {
   );
 }
 
+function formatDetailAmount(value) {
+  if (value == null || value === "") return "";
+  if (Array.isArray(value)) {
+    return value
+      .map((part) => String(part ?? "").trim())
+      .filter(Boolean)
+      .join("、");
+  }
+  return String(value).trim();
+}
+
 function AIDetailRow({ row, t }) {
   if (typeof row === "string") {
     return <li className="ai-detail-card">{row}</li>;
   }
   const title = row?.item || row?.source || row?.label || "";
-  const amount = row?.amount ? String(row.amount) : "";
+  const amount = formatDetailAmount(row?.amount);
   const page = formatPageLabel(row?.page);
   const evidence = [row?.locator, row?.evidence, row?.ai_locator]
     .map((part) => String(part || "").trim())
