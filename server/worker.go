@@ -162,6 +162,11 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 				s.jobProgress(jid, "parsing", fmt.Sprintf("正在识别第 %d / %d 页", page, total), parsePercent(page, total))
 			})
 			must(e)
+			if app != nil {
+				app.tryEnhanceScanWithWorkbenchOCR(jobctx, str(user, "id"), p, b, &result, func(msg string) {
+					s.jobProgress(jid, "parsing", msg, 90)
+				})
+			}
 			did := id()
 			must(s.write(filepath.Join(s.root, "uploads", cid, did), b))
 			if e = s.insertParse(cid, did, str(p, "name"), str(p, "sha"), result); e != nil {

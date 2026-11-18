@@ -23,6 +23,7 @@
   - 路由仅在 `main.go` 的 `mux()` 内注册；中间件顺序固定；错误统一 `bad(code, msg)` / `require(cond, msg)`，禁暴露 SQL 堆栈。
   - 权限判定走 `q.can(code)`，客户级 `q.access()`（无权返回 404 免探测），禁写 `role == "admin"`。
   - 数据全部经 `Store` 参数化查询（`?`），严禁拼接 SQL；关键写操作记录 `s.event(...)`；报告签发后为不可变快照。
+  - **统一 OCR 主链路**：扫描件上传与 `page_ocr` AI 任务优先调用工作台单一入口 `POST /v1/ocr`（`wbOCR` / `callOCR`，底层三通道编排与故障降级由工作台透明负责，清流严禁写厂商 `if/else`）；失败时自动回退至 `aidoc` 异步 `page_ocr` 与本地 `tesseract`。走 `POST /v1/ocr` 时 `parseBillingTier` 返回 `workbench-billed`（0 分），禁止重复扣费。
   - **请求里禁止无限期阻塞**：准入按代价分档（`server/pool.go`：read 64 / write 32 / proxy 32 / bulk 2 / render 4，`/health` 与静态资源**不入池**，满档先排队再 503 + `Retry-After`）。任何一档被长期占满，该档接口就会持续 503 而进程仍 active；单飞/互斥 gate 一律 `defer` 收尾（含 panic 路径），等待方一律 `select` + 超时。禁止退回「全站一个池」。案例见 [05 §11](docs/05-部署与运维.md)、[05 §12](docs/05-部署与运维.md)。
   - **空间是会话属性**：`ql_sessions.space_kind/space_id` 为唯一准则，切换走 `POST /api/switch-space`。
 - **数据库与构建**：

@@ -605,6 +605,115 @@ func (a *App) wbUploadDocument(ctx context.Context, userID, path, name string) (
 	return id, nil
 }
 
+// wbOCRResult 是工作台统一三通道 OCR 接口（POST /v1/ocr）的结构化返回。
+type wbOCRResult struct {
+	Text        string `json:"text"`
+	PageCount   int    `json:"page_count"`
+	ChannelUsed string `json:"channel_used"`
+}
+
+// callOCR 用给定的用户 access token 请求工作台 POST /v1/ocr 统一入口。
+func (c wbConfig) callOCR(ctx context.Context, token string, fileBytes []byte, fileName, purpose string) (int, wbOCRResult, string, error) {
+	if strings.TrimSpace(fileName) == "" {
+		fileName = "document.pdf"
+	}
+	if strings.TrimSpace(purpose) == "" {
+		purpose = "text_recognition"
+	}
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", fileName)
+	if err != nil {
+		return 0, wbOCRResult{}, "", err
+	}
+	if _, err := part.Write(fileBytes); err != nil {
+		return 0, wbOCRResult{}, "", err
+	}
+	_ = writer.WriteField("purpose", purpose)
+	if err := writer.Close(); err != nil {
+		return 0, wbOCRResult{}, "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/v1/ocr", &body)
+	if err != nil {
+		return 0, wbOCRResult{}, "", err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := c.Client
+	if client == nil {
+		client = &http.Client{Timeout: 120 * time.Second}
+	} else if client.Timeout > 0 && client.Timeout < 120*time.Second {
+		copyClient := *client
+		copyClient.Timeout = 120 * time.Second
+		client = &copyClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, wbOCRResult{}, "", errors.New("Workbench temporarily unavailable. Please retry later.")
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return resp.StatusCode, wbOCRResult{}, "", err
+	}
+	var objResp Object
+	_ = json.Unmarshal(raw, &objResp)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return resp.StatusCode, wbOCRResult{}, wbMessage(objResp, "工作台 OCR 调用失败"), nil
+	}
+	payload := sub(objResp, "data")
+	if payload == nil {
+		payload = objResp
+	}
+	out := wbOCRResult{
+		Text:        str(payload, "text"),
+		PageCount:   int(integer(payload["page_count"])),
+		ChannelUsed: str(payload, "channel_used"),
+	}
+	return resp.StatusCode, out, "", nil
+}
+
+// wbOCR 调用工作台「万物通」统一三通道 OCR 接口（POST /v1/ocr）。
+// 清流只认这一处单一入口，底层 DeepSeek OCR -> 自建 OCR -> 视觉大模型
+// 的优先级与自动故障切换完全由工作台网关负责。遇 401 时走单飞 refresh 重试。
+func (a *App) wbOCR(ctx context.Context, userID string, fileBytes []byte, fileName, purpose string) (wbOCRResult, error) {
+	if a == nil || !a.wb.Ready() {
+		return wbOCRResult{}, errors.New("Workbench is not connected")
+	}
+	if len(fileBytes) == 0 {
+		return wbOCRResult{}, errors.New("OCR 输入文件内容为空")
+	}
+
+	token, err := a.wbAccessToken(userID)
+	if err != nil {
+		return wbOCRResult{}, err
+	}
+	status, res, msg, err := a.wb.callOCR(ctx, token, fileBytes, fileName, purpose)
+	if err != nil {
+		return wbOCRResult{}, err
+	}
+	if status == http.StatusUnauthorized {
+		refreshed, refreshErr := a.wbRefresh(userID)
+		if refreshErr != nil {
+			return wbOCRResult{}, refreshErr
+		}
+		status, res, msg, err = a.wb.callOCR(ctx, refreshed, fileBytes, fileName, purpose)
+		if err != nil {
+			return wbOCRResult{}, err
+		}
+	}
+	if status < 200 || status >= 300 {
+		return wbOCRResult{}, errors.New(msg)
+	}
+	if strings.TrimSpace(res.Text) == "" {
+		return wbOCRResult{}, errors.New("工作台 OCR 未返回识别文本")
+	}
+	return res, nil
+}
+
 func (a *App) wbRequest(ctx context.Context, userID, method, path string, body any) (int, Object, error) {
 	if !a.wb.Ready() {
 		return 0, nil, errors.New("Workbench is not connected")

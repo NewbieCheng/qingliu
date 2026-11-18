@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -99,8 +100,42 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, pay
 		fail("Workbench is not connected")
 		return
 	}
-	step("uploading", "Uploading original to analysis service")
 	path := filepath.Join(a.s.root, "uploads", cid, docID)
+	task := str(payload, "task")
+	if task == "" {
+		task = "statement_review"
+	}
+
+	// page_ocr 优先走工作台统一三通道接口 POST /v1/ocr（不关心底层是 DeepSeek/自建/VLM）；
+	// 失败或空输出时再自动回退至原有 aidoc 文档上传与异步 page_ocr 管线兜底。
+	if task == "page_ocr" {
+		step("uploading", "Calling unified workbench OCR service (/v1/ocr)")
+		if plain, readErr := a.s.read(path); readErr == nil && len(plain) > 0 {
+			ocrRes, ocrErr := a.wbOCR(ctx, userID, plain, name, "text_recognition")
+			if ocrErr == nil && strings.TrimSpace(ocrRes.Text) != "" {
+				step("summarizing", "Summarizing analysis results")
+				resultObj := Object{
+					"text":         ocrRes.Text,
+					"page_count":   ocrRes.PageCount,
+					"channel_used": ocrRes.ChannelUsed,
+					"method":       "workbench-ocr",
+				}
+				raw, _ := json.Marshal(resultObj)
+				a.s.exec("UPDATE ql_ai_analyses SET status='done',stage='done',progress=100,result=?,completed=NOW(6) WHERE id=?", string(raw), analysisID)
+				if n, wbErr := a.writebackPageOCR(cid, docID, name, resultObj); wbErr != nil {
+					report("running", "OCR 识别已完成（"+ocrRes.ChannelUsed+"），但写回核对失败："+wbErr.Error(), 95)
+				} else if n > 0 {
+					report("summarizing", fmt.Sprintf("统一 OCR 已完成（%s），并写回 %d 笔交易到核对", ocrRes.ChannelUsed, n), 98)
+				}
+				return
+			}
+			if ocrErr != nil {
+				log.Printf("qingliu page_ocr unified /v1/ocr fallback to aidoc pipeline: doc=%s err=%v", docID, ocrErr)
+			}
+		}
+	}
+
+	step("uploading", "Uploading original to analysis service")
 	wbDocID, err := a.wbUploadDocument(ctx, userID, path, name)
 	if err != nil {
 		fail(err.Error())
@@ -108,10 +143,6 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, pay
 	}
 	a.s.exec("UPDATE ql_ai_analyses SET workbench_document_id=? WHERE id=?", wbDocID, analysisID)
 	step("creating", "Creating analysis task")
-	task := str(payload, "task")
-	if task == "" {
-		task = "statement_review"
-	}
 	status, data, err := a.wbRequest(ctx, userID, http.MethodPost, "/api/v1/ai/analyses", Object{
 		"document_id": wbDocID, "task": task,
 	})
@@ -279,4 +310,64 @@ func wbFailure(data Object, err error, fallback string) string {
 		return message
 	}
 	return message + "（" + strings.Join(parts, "；") + "）"
+}
+
+// shouldTryWorkbenchOCR 判断上传解析结果是否应交给工作台统一 POST /v1/ocr 处理。
+func shouldTryWorkbenchOCR(payload Object, result *ParseResult) bool {
+	if result == nil {
+		return false
+	}
+	name := str(payload, "name")
+	if !strings.EqualFold(filepath.Ext(name), ".pdf") {
+		return false
+	}
+	method := str(result.Meta, "method")
+	return yes(payload, "ocr") || method == "needs-vision" || (integer(result.Meta["text_pages"]) == 0 && len(result.Rows) == 0)
+}
+
+// applyWorkbenchOCRResult 把 POST /v1/ocr 识别结果合入 ParseResult，避免清流重复计费。
+func applyWorkbenchOCRResult(result *ParseResult, ocrRes wbOCRResult) {
+	if result == nil || strings.TrimSpace(ocrRes.Text) == "" {
+		return
+	}
+	result.Meta["ocr_text"] = ocrRes.Text
+	result.Meta["channel_used"] = ocrRes.ChannelUsed
+	result.Meta["method"] = "workbench-ocr"
+	if ocrRes.PageCount > 0 && integer(result.Meta["pages"]) == 0 {
+		result.Meta["pages"] = ocrRes.PageCount
+	}
+	preferred := str(result.Meta, "source")
+	if src, rows, perr := parseOCRTranscript(ocrRes.Text, preferred); perr == nil && len(rows) > 0 {
+		result.Rows = rows
+		result.Meta["source"] = src
+		result.Meta["rows"] = len(rows)
+		result.Meta["status"] = "success"
+		result.Meta["issues"] = []string{}
+		return
+	}
+	// 非交易表格式（如征信或纯文本扫描件）：把全文写入 facts 候选供人工核对，状态标 partial。
+	facts := list(result.Meta["facts"])
+	facts = append(facts, Object{
+		"page": 1,
+		"text": ocrRes.Text,
+		"kind": "工作台统一 OCR 提取（" + ocrRes.ChannelUsed + "）",
+	})
+	result.Meta["facts"] = facts
+}
+
+// tryEnhanceScanWithWorkbenchOCR 在 PDF 无可用文字层或开启 OCR 时，优先走工作台
+// 统一接口 POST /v1/ocr，失败则自动保留原本地 tesseract/needs-vision 结果兜底。
+func (a *App) tryEnhanceScanWithWorkbenchOCR(ctx context.Context, userID string, payload Object, fileBytes []byte, result *ParseResult, progress func(string)) {
+	if a == nil || !a.wb.Ready() || !shouldTryWorkbenchOCR(payload, result) {
+		return
+	}
+	if progress != nil {
+		progress("正在调用工作台统一 OCR (POST /v1/ocr)...")
+	}
+	ocrRes, err := a.wbOCR(ctx, userID, fileBytes, str(payload, "name"), "text_recognition")
+	if err != nil {
+		log.Printf("qingliu upload /v1/ocr fallback to local parse: file=%s err=%v", str(payload, "name"), err)
+		return
+	}
+	applyWorkbenchOCRResult(result, ocrRes)
 }

@@ -135,6 +135,9 @@ func (a *App) chargeParse(ctx context.Context, userID, jobID, method string, pag
 func parseBillingTier(result ParseResult) string {
 	method := strings.ToLower(str(result.Meta, "method"))
 	switch {
+	case strings.Contains(method, "workbench-ocr"):
+		// POST /v1/ocr 已由工作台统一网关完成原子计费，清流侧返回 0 防重复扣分。
+		return "workbench-billed"
 	case method == "needs-vision":
 		// 上传阶段只标了需要视觉，本机没跑模型；按本机已完成的最高档计，
 		// 有 OCR 页走 ocr，否则只收文字层（通常 0 或低价）。
