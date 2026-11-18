@@ -474,7 +474,8 @@ footer{border-top:1px solid var(--ql-line);color:var(--ql-muted)}
   --ql-surface:#fbfcf8;--ql-surface-2:#f4f6f0;--ql-ink:#1b2421;
   --ql-forest:#1e4a40;--ql-copper:#9b6a43;--ql-line:#d5dbd2;--ql-muted:#68746d;
 }
-.workspace{min-height:100vh;background:transparent}
+/* 主栏必须随内容增高、由文档滚动；勿把 workspace 做成 100vh 锁死的 flex 行 */
+.workspace{display:block;min-height:100vh;background:transparent;overflow:visible}
 .workspace>aside.rail{
   position:fixed;inset:0 auto 0 0;display:flex;flex-direction:column;box-sizing:border-box;
   width:var(--ql-rail);padding:22px 14px;background:linear-gradient(180deg,#173e36 0%,#122f2a 100%);
@@ -525,7 +526,12 @@ footer{border-top:1px solid var(--ql-line);color:var(--ql-muted)}
 .rail-user-copy span{font-size:10px;color:#9cb9ae}
 .rail-user-action{padding:4px 0!important;font-size:11px!important;color:#b9cec4!important;border:0!important;background:transparent!important}
 .rail-user-action:hover{color:#fff!important}
-.workspace .main{margin-left:var(--ql-rail);width:calc(100% - var(--ql-rail));transition:margin-left .18s ease,width .18s ease;min-height:100vh;display:flex;flex-direction:column}
+.workspace .main{
+  margin-left:var(--ql-rail);width:calc(100% - var(--ql-rail));
+  transition:margin-left .18s ease,width .18s ease;
+  min-height:100vh;display:flex;flex-direction:column;
+  overflow:visible;
+}
 .workspace.rail-collapsed>aside.rail{width:var(--ql-rail-collapsed);padding-left:10px;padding-right:10px}
 .workspace.rail-collapsed .main{margin-left:var(--ql-rail-collapsed);width:calc(100% - var(--ql-rail-collapsed))}
 .rail-collapsed .brand-name{font-size:19px;letter-spacing:.04em}
@@ -557,8 +563,13 @@ footer{border-top:1px solid var(--ql-line);color:var(--ql-muted)}
 .topbar-logout{padding:4px 0!important;font-size:12px!important;color:var(--ql-muted)!important}
 .topbar-collapsed .topbar{height:38px}
 .topbar-collapsed .topbar-note{display:none}
-.page-wrap{width:100%;max-width:var(--ql-content);margin:0 auto;padding:16px 34px 48px;flex:1}
-.page-wrap>main{padding:0;max-width:none;margin:0}
+.page-wrap{
+  width:100%;max-width:var(--ql-content);margin:0 auto;padding:16px 34px 48px;
+  /* 1 0 auto：可增高，不被主栏 flex 压进视口裁切 */
+  flex:1 0 auto;min-width:0;overflow:visible;
+}
+.page-wrap>main{padding:0;max-width:none;margin:0;overflow:visible}
+html,body{min-height:100%;overflow-x:hidden;overflow-y:auto}
 .page-wrap .account-page{max-width:none;padding:0}
 .workspace footer{max-width:var(--ql-content);margin:0 auto;padding:14px 34px 24px;width:100%}
 .card{background:var(--ql-surface);border-color:var(--ql-line);border-radius:2px;padding:26px}
