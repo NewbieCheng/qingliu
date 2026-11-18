@@ -309,7 +309,7 @@
 .accounting-note-tip:focus,.accounting-note-tip:focus-visible{outline:none}
 .coverage-card h2{margin-bottom:6px}
 .coverage-lead{margin:0 0 12px;font-size:12.5px;line-height:1.55}
-/* 统一折叠条：标题左对齐，右侧「展开/收起」，无左侧箭头 SVG */
+/* 统一折叠条：标题左对齐，右侧 Expand/Collapse 文案走 i18n，无左侧箭头 SVG */
 .fold-panel{margin-top:12px;border:1px solid var(--ql-line);border-radius:2px;overflow:hidden;background:#f7faf5}
 .fold-panel.fold-panel--card{margin-top:0}
 .fold-panel-summary{
@@ -331,9 +331,8 @@
 .fold-panel-toggle{
   flex:none;font-size:12px;font-weight:600;color:var(--ql-forest);
   padding:3px 9px;border:1px solid rgba(30,74,64,.28);border-radius:2px;background:#fff;
+  white-space:nowrap;
 }
-.fold-panel-toggle::before{content:"展开"}
-.fold-panel[open]>.fold-panel-summary .fold-panel-toggle::before{content:"收起"}
 .fold-panel-body{padding:10px 12px}
 .fold-panel--card>.fold-panel-summary{padding:12px 16px;font-size:14px}
 .fold-panel--card>.fold-panel-body{padding:14px 16px 16px}

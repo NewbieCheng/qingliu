@@ -709,6 +709,7 @@ export default {
   "case.tasks.eta_upload": "Usually 1–5 minutes",
   "case.tasks.eta_analysis": "Usually 1–3 minutes",
   "case.tasks.eta_report": "Usually about 1 minute",
+  "common.expand": "Expand",
   "common.collapse": "Collapse",
   "common.refresh": "Refresh",
 

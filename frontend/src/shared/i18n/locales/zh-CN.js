@@ -705,6 +705,7 @@ export default {
   "case.tasks.eta_upload": "预计约 1–5 分钟",
   "case.tasks.eta_analysis": "预计约 1–3 分钟",
   "case.tasks.eta_report": "预计约 1 分钟",
+  "common.expand": "展开",
   "common.collapse": "收起",
   "common.refresh": "刷新",
 
