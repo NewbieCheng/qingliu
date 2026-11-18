@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { JOB_STATUS } from "@/shared/lib/constants.js";
+import { formatDateTime } from "@/shared/lib/format.js";
 import { Form } from "@/shared/ui/Form.jsx";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
 import { useI18n } from "@/shared/i18n/index.jsx";
@@ -31,6 +32,7 @@ const ETA_HINT = {
 };
 
 const PAGE_SIZE = 5;
+const MAX_DONE_VISIBLE = 3;
 const DOCK_CACHE_PREFIX = "ql.task-dock:";
 
 function progressOf(job) {
@@ -45,6 +47,47 @@ function isActive(job) {
 
 function isUrgent(job) {
   return isActive(job) || job.status === "failed";
+}
+
+function jobTime(job) {
+  return Date.parse(job.updated || job.created || "") || 0;
+}
+
+/**
+ * 展示层去噪：同 kind + 同 message 的连续失败只保留最新一条；
+ * 已完成任务只保留最近 MAX_DONE_VISIBLE 条，避免旧记录刷屏。
+ */
+function decorateJobs(rawJobs) {
+  const sorted = [...(rawJobs || [])]
+    .filter((job) =>
+      ["queued", "running", "failed", "partial", "done"].includes(job.status),
+    )
+    .sort((a, b) => {
+      const urgentDiff = Number(isUrgent(b)) - Number(isUrgent(a));
+      if (urgentDiff !== 0) return urgentDiff;
+      return jobTime(b) - jobTime(a);
+    });
+
+  const seenFailed = new Set();
+  const kept = [];
+  let doneKept = 0;
+  for (const job of sorted) {
+    if (job.status === "failed") {
+      const key = `${job.kind}|${job.message || ""}`;
+      if (seenFailed.has(key)) continue;
+      seenFailed.add(key);
+      kept.push(job);
+      continue;
+    }
+    if (job.status === "done" || job.status === "partial") {
+      if (doneKept >= MAX_DONE_VISIBLE) continue;
+      doneKept += 1;
+      kept.push(job);
+      continue;
+    }
+    kept.push(job);
+  }
+  return kept;
 }
 
 function ActivityIcon({ size = 16 }) {
@@ -86,6 +129,12 @@ function writeDockCache(cid, next) {
   }
 }
 
+function statusTone(status) {
+  if (status === "failed") return "amber";
+  if (status === "done" || status === "partial") return "default";
+  return "amber";
+}
+
 /**
  * 右侧悬浮任务坞（portal 到 body，避开全局 aside 样式）。
  * 默认收成角标；用户手动展开；列表分页，每页 PAGE_SIZE 条。
@@ -96,15 +145,7 @@ export function TaskList({ data, onRetry, onCancel }) {
   const cid = data?.customer?.id || "";
   const cached = useMemo(() => readDockCache(cid), [cid]);
 
-  const jobs = useMemo(
-    () =>
-      (data.jobs || [])
-        .filter((job) =>
-          ["queued", "running", "failed", "partial", "done"].includes(job.status),
-        )
-        .sort((a, b) => Number(isUrgent(b)) - Number(isUrgent(a))),
-    [data.jobs],
-  );
+  const jobs = useMemo(() => decorateJobs(data.jobs), [data.jobs]);
 
   const activeCount = jobs.filter(isActive).length;
   const failedCount = jobs.filter((job) => job.status === "failed").length;
@@ -192,6 +233,8 @@ export function TaskList({ data, onRetry, onCancel }) {
               const active = isActive(job);
               const done = job.status === "done" || job.status === "partial";
               const percent = progressOf(job);
+              const statusKey = JOB_STATUS[job.status] || "job.failed";
+              const when = job.updated || job.created;
               return (
                 <div
                   className={`task${active ? " is-active" : ""}${done ? " is-done" : ""}${
@@ -203,7 +246,9 @@ export function TaskList({ data, onRetry, onCancel }) {
                     <span className="task-title">
                       {t(KIND_LABEL[job.kind] || "case.tasks.title")} · {job.message}
                     </span>
-                    <StatusBadge>{JOB_STATUS[job.status]}</StatusBadge>
+                    <StatusBadge tone={statusTone(job.status)}>
+                      {t(statusKey)}
+                    </StatusBadge>
                   </div>
                   {(active || job.status === "failed") && (
                     <div
@@ -220,17 +265,25 @@ export function TaskList({ data, onRetry, onCancel }) {
                       />
                     </div>
                   )}
-                  {(active || job.status === "failed") && (
-                    <div className="task-meta">
-                      <span>
-                        {job.status === "queued" && job.queue_position > 1
-                          ? t("case.tasks.queue_position", { count: job.queue_position - 1 })
-                          : t(STAGE_LABEL[job.stage]) || JOB_STATUS[job.status]}
-                        {active ? ` · ${t(ETA_HINT[job.kind] || "case.tasks.eta_short")}` : ""}
-                      </span>
+                  <div className="task-meta">
+                    <span>
+                      {active || job.status === "failed"
+                        ? job.status === "queued" && job.queue_position > 1
+                          ? t("case.tasks.queue_position", {
+                              count: job.queue_position - 1,
+                            })
+                          : t(STAGE_LABEL[job.stage] || statusKey)
+                        : when
+                          ? formatDateTime(when)
+                          : t(statusKey)}
+                      {active
+                        ? ` · ${t(ETA_HINT[job.kind] || "case.tasks.eta_upload")}`
+                        : ""}
+                    </span>
+                    {(active || job.status === "failed") && (
                       <span>{percent}%</span>
-                    </div>
-                  )}
+                    )}
+                  </div>
                   {(active || job.status === "failed") && (
                     <div className="task-actions">
                       {active && (
@@ -240,7 +293,9 @@ export function TaskList({ data, onRetry, onCancel }) {
                           disabled={cancelling === job.id}
                           onClick={() => void cancel(job.id)}
                         >
-                          {cancelling === job.id ? t("case.tasks.cancelling") : t("case.tasks.cancel_job")}
+                          {cancelling === job.id
+                            ? t("case.tasks.cancelling")
+                            : t("case.tasks.cancel_job")}
                         </button>
                       )}
                       {job.status === "failed" &&
@@ -258,7 +313,11 @@ export function TaskList({ data, onRetry, onCancel }) {
           </div>
 
           {pageCount > 1 && (
-            <div className="task-dock-pager" role="navigation" aria-label={t("case.tasks.pagination_aria_label")}>
+            <div
+              className="task-dock-pager"
+              role="navigation"
+              aria-label={t("case.tasks.pagination_aria_label")}
+            >
               <button
                 type="button"
                 className="ghost"

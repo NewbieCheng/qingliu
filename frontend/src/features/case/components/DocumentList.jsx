@@ -13,7 +13,10 @@ export function DocumentList({ data }) {
   return (
     <div className="docs">
       <p className="docs-count">
-        {t("upload.docs_header", { total: data.docs.length, pending: pending > 0 ? t("upload.docs_pending_part", { n: pending }) : "" })}
+        {t("upload.docs_header", {
+          total: data.docs.length,
+          pending: pending > 0 ? t("upload.docs_pending_part", { n: pending }) : "",
+        })}
       </p>
       {data.docs.map((document) => (
         <FoldPanel
@@ -24,12 +27,18 @@ export function DocumentList({ data }) {
             <StatusBadge
               tone={document.meta.status !== "success" ? "amber" : "default"}
             >
-              {DOCUMENT_STATUS[document.meta.status]}
+              {t(DOCUMENT_STATUS[document.meta.status] || "doc.failed")}
             </StatusBadge>
           }
         >
           <p>
-            {t("upload.pages_stat", { source: SOURCES[document.meta.source], pages: document.meta.pages || 0, rows: document.meta.rows || 0, coverage: document.meta.coverage || t("upload.unidentified_coverage") })}
+            {t("upload.pages_stat", {
+              source: t(SOURCES[document.meta.source] || "source.other"),
+              pages: document.meta.pages || 0,
+              rows: document.meta.rows || 0,
+              coverage:
+                document.meta.coverage || t("upload.unidentified_coverage"),
+            })}
           </p>
           {document.meta.issues?.map((issue, index) => (
             <p className="error" key={index}>

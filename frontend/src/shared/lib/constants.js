@@ -1,28 +1,30 @@
+/** 资料来源码 → i18n key（展示时用 t(SOURCES[code])） */
 export const SOURCES = {
-  bank_statement: "Bank statement",
-  wechat_statement: "WeChat wallet",
-  alipay_statement: "Alipay wallet",
-  credit_report: "Credit report",
-  other: "Auto-detect / other",
+  bank_statement: "source.bank_statement",
+  wechat_statement: "source.wechat_statement",
+  alipay_statement: "source.alipay_statement",
+  credit_report: "source.credit_report",
+  other: "source.other",
 };
 
+/** 核对标签 → i18n key */
 export const TRANSACTION_LABELS = {
-  included: "Tentative business (unverified)",
-  excluded: "Excluded",
-  pending: "Needs review",
-  expense: "Expense ledger",
-  invalid: "Parse failed",
-  neutral: "Neutral (no P/L)",
-  duplicate: "Possible duplicate",
+  included: "label.included",
+  excluded: "label.excluded",
+  pending: "label.pending",
+  expense: "label.expense",
+  invalid: "label.invalid",
+  neutral: "label.neutral",
+  duplicate: "label.duplicate",
 };
 
 export const ROLES = {
-  admin: "Admin",
-  sales: "Sales",
-  reviewer: "Reviewer",
+  admin: "role.admin",
+  sales: "role.sales",
+  reviewer: "role.reviewer",
   // 工作台 `enterprise_member_readonly` 等只读档位会落到这里（见 server/permissions.go）。
   // 改造前它们被降级成 sales，界面还写着「业务员」，与实际权限不符。
-  readonly: "Read-only member",
+  readonly: "role.readonly",
 };
 
 /** 团队与权限 / 成员管理：只认工作台投影的 qingliu.admin（role 仅兜底）。 */
@@ -38,16 +40,18 @@ export function isQingliuAdmin(user) {
   return user.role === "admin";
 }
 
+/** 文档识别状态 → i18n key */
 export const DOCUMENT_STATUS = {
-  success: "Recognized",
-  partial: "Partial / needs check",
-  failed: "Incomplete recognition",
+  success: "doc.success",
+  partial: "doc.partial",
+  failed: "doc.failed",
 };
 
+/** 后台任务状态 → i18n key */
 export const JOB_STATUS = {
-  queued: "Queued",
-  running: "Running",
-  done: "Done",
-  partial: "Needs check",
-  failed: "Failed",
+  queued: "job.queued",
+  running: "job.running",
+  done: "job.done",
+  partial: "job.partial",
+  failed: "job.failed",
 };

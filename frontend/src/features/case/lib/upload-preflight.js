@@ -29,8 +29,10 @@ function fail(message) {
  */
 export function preflight(files, { source } = {}) {
   const list = Array.isArray(files) ? files : [];
-  if (!list.length) return fail("Select at least one original file");
-  if (list.length > MAX_FILES) return fail(`每批最多 ${MAX_FILES} 份`);
+  if (!list.length) return fail(tStandalone("upload.select_one_file"));
+  if (list.length > MAX_FILES) {
+    return fail(tStandalone("upload.max_files", { max: MAX_FILES }));
+  }
 
   let total = 0;
   for (const file of list) {
@@ -40,18 +42,22 @@ export function preflight(files, { source } = {}) {
     const ext = extOf(name);
 
     if (ext === ".doc" || ext === ".ppt") {
-      return fail("请另存为 .docx / .pptx");
+      return fail(tStandalone("upload.save_as_modern"));
     }
     if (!OK_EXT.has(ext)) {
-      return fail("Only PDF / CSV / XLSX / Word (docx)");
+      return fail(tStandalone("upload.allowed_types"));
     }
-    if (size <= 0) return fail("文件不能为空");
-    if (size > MAX_EACH) return fail("单份不能超过 30MB");
+    if (size <= 0) return fail(tStandalone("upload.empty_file"));
+    if (size > MAX_EACH) {
+      return fail(tStandalone("upload.max_each_size", { size: 30 }));
+    }
     if ((ext === ".csv" || ext === ".xlsx") && !TABLE_SOURCES.has(source)) {
       return fail(tStandalone("upload.table_source_required"));
     }
   }
 
-  if (total > MAX_TOTAL) return fail("整批不能超过 60MB");
+  if (total > MAX_TOTAL) {
+    return fail(tStandalone("upload.max_batch_size", { size: "60MB" }));
+  }
   return { ok: true };
 }

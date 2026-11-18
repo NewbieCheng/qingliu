@@ -9,7 +9,11 @@ export function CoverageForm({ data, onSave }) {
     <section className="card coverage-card">
       <h2>{t("case.coverage.title")}</h2>
       <p className="muted coverage-lead">
-        {t("case.coverage.current_range", { source: SOURCES[data.source], start: data.start, end: data.end })}
+        {t("case.coverage.current_range", {
+          source: SOURCES[data.source] ? t(SOURCES[data.source]) : data.source,
+          start: data.start,
+          end: data.end,
+        })}
       </p>
       <Form
         onSave={async (form) => {

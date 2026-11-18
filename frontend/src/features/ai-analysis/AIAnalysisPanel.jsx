@@ -63,6 +63,24 @@ function progressValue(item) {
   return Math.max(0, Math.min(100, Number(item?.progress) || 0));
 }
 
+/** 入口卡分态：进行中 > 最近成功 > 最近失败 > 未分析 */
+function pickEntryState(items) {
+  const list = Array.isArray(items) ? items : [];
+  const running = list.find((item) => isActiveStatus(item.status));
+  const latestDone = list.find((item) => item.status === "done");
+  const latestFailed = list.find((item) => item.status === "failed");
+  if (running) {
+    return { mode: "running", current: running, latestDone, latestFailed };
+  }
+  if (latestDone) {
+    return { mode: "done", current: latestDone, latestDone, latestFailed };
+  }
+  if (latestFailed) {
+    return { mode: "failed", current: latestFailed, latestDone: null, latestFailed };
+  }
+  return { mode: "idle", current: null, latestDone: null, latestFailed: null };
+}
+
 async function handleCopyExport(result, action, t) {
   try {
     const text = formatAIExportText(result);
@@ -208,12 +226,18 @@ function AIResultDialog({ open, onClose, result }) {
   );
 }
 
-function AIAnalysisDialog({ cid, docs = [], onClose }) {
+function AIAnalysisDialog({
+  cid,
+  docs = [],
+  onClose,
+  intent = "start",
+  focusAnalysisId = "",
+}) {
   const { t } = useI18n();
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [resultOpen, setResultOpen] = useState(false);
+  const [resultOpen, setResultOpen] = useState(intent === "view");
   const [mode, setMode] = useState("analysis");
   const [documentId, setDocumentId] = useState(docs[0]?.id || "");
   // 积分余额：AI 解析按用量扣积分，余额为 0 时先说清楚要充值，别让用户
@@ -268,6 +292,18 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
     const timer = window.setInterval(load, 2500);
     return () => window.clearInterval(timer);
   }, [items[0]?.id, items[0]?.status, cid]);
+
+  useEffect(() => {
+    if (intent !== "view") return;
+    const focus =
+      (focusAnalysisId &&
+        items.find((item) => String(item.id) === String(focusAnalysisId))) ||
+      items.find((item) => item.status === "done") ||
+      items[0];
+    if (focus?.status === "done" && focus?.result) {
+      setResultOpen(true);
+    }
+  }, [intent, focusAnalysisId, items]);
 
   async function start() {
     if (!documentId) {
@@ -394,8 +430,12 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
                 {docs.map((doc) => (
                   <option key={doc.id} value={doc.id}>
                     {doc.name}
-                    {doc.meta?.pages ? ` · ${doc.meta.pages} pages` : ""}
-                    {doc.meta?.rows ? ` · ${doc.meta.rows} rows` : ""}
+                    {doc.meta?.pages
+                      ? ` · ${t("ai.doc_pages", { n: doc.meta.pages })}`
+                      : ""}
+                    {doc.meta?.rows
+                      ? ` · ${t("ai.doc_rows", { n: doc.meta.rows })}`
+                      : ""}
                   </option>
                 ))}
               </select>
@@ -423,7 +463,7 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
           </div>
           <ModalActions>
             <button type="button" className="ghost" onClick={() => void load()}>
-              {t("common.retry")}
+              {t("topbar.refresh")}
             </button>
             <button
               type="button"
@@ -431,7 +471,11 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
               disabled={!canStart || running}
               onClick={() => void start()}
             >
-              {busy ? t("ai.status_queued") : t("ai.btn_start")}
+              {busy
+                ? t("ai.status_queued")
+                : latest?.status === "done" || intent === "rerun"
+                  ? t("ai.btn_rerun")
+                  : t("ai.btn_start")}
             </button>
           </ModalActions>
           {latest ? (
@@ -450,6 +494,9 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
                   {t(STATUS_KEY[latest.status] || "ai.status_failed")}
                 </StatusBadge>
                 {latest.error ? ` · ${latest.error}` : ""}
+                {focusAnalysisId && String(latest.id) === String(focusAnalysisId)
+                  ? ` · ${t("ai.focused_result")}`
+                  : ""}
               </p>
               {running ? (
                 <>
@@ -495,7 +542,7 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
                   disabled={busy}
                   onClick={() => void writeSuggest()}
                 >
-                  Write suggestions to review
+                  {t("ai.write_suggest")}
                 </button>
               ) : null}
               {latest.status === "done" && displayResult?.text ? (
@@ -545,18 +592,20 @@ function AIAnalysisDialog({ cid, docs = [], onClose }) {
   );
 }
 
-/** 报告页入口：右侧入口按钮 + 弹窗，不再常驻侧栏。 */
+/** 报告页入口：按分析状态展示「查看报告 / 重新分析」，不再永远「开始分析」。 */
 export function AIAnalysisPanel({ cid, docs = [] }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const [latest, setLatest] = useState(null);
+  const [intent, setIntent] = useState("start");
+  const [focusAnalysisId, setFocusAnalysisId] = useState("");
+  const [items, setItems] = useState([]);
 
   async function refresh() {
     try {
       const data = await getAnalyses(cid);
-      setLatest(data.items?.[0] || null);
+      setItems(data.items || []);
     } catch {
-      setLatest(null);
+      setItems([]);
     }
   }
 
@@ -564,36 +613,50 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
     let cancelled = false;
     getAnalyses(cid)
       .then((data) => {
-        if (!cancelled) setLatest(data.items?.[0] || null);
+        if (!cancelled) setItems(data.items || []);
       })
       .catch(() => {
-        if (!cancelled) setLatest(null);
+        if (!cancelled) setItems([]);
       });
     return () => {
       cancelled = true;
     };
   }, [cid, open]);
 
+  const entry = pickEntryState(items);
+  const current = entry.current;
+  const running = entry.mode === "running";
+  const percent = progressValue(current);
+  const eta = t(ETA_HINT_KEY.analysis);
+
   // 入口卡与弹窗、任务坞共用同一进度真相：进行中持续轮询 analyses。
   useEffect(() => {
     if (open) return undefined;
-    if (!latest || !isActiveStatus(latest.status)) return undefined;
+    if (!running) return undefined;
     const timer = window.setInterval(() => {
       void refresh();
     }, 2500);
     return () => window.clearInterval(timer);
-  }, [cid, open, latest?.id, latest?.status]);
+  }, [cid, open, running, current?.id, current?.status]);
 
-  const running = latest && isActiveStatus(latest.status);
-  const failed = latest?.status === "failed";
-  const percent = progressValue(latest);
-  const eta = t(ETA_HINT_KEY.analysis);
+  let statusLine = t("ai.entry_idle");
+  if (entry.mode === "running") {
+    statusLine = `${t("ai.status_running")} ${percent}% · ${eta}`;
+  } else if (entry.mode === "done") {
+    const when = current?.completed || current?.created;
+    statusLine = when
+      ? t("ai.entry_done", { time: formatDateTime(when) })
+      : t("ai.status_done");
+  } else if (entry.mode === "failed") {
+    statusLine = current?.error
+      ? t("ai.entry_failed", { error: current.error })
+      : t("ai.status_failed");
+  }
 
-  let statusLine = t("ai.panel_title");
-  if (running) {
-    statusLine = `${t("ai.status_running")} (${t(STATUS_KEY[latest.status] || "ai.status_running")} ${percent}% · ${eta})`;
-  } else if (failed) {
-    statusLine = `${t("ai.status_failed")}${latest.error ? `: ${latest.error}` : ""}`;
+  function openDialog(nextIntent, analysisId = "") {
+    setIntent(nextIntent);
+    setFocusAnalysisId(analysisId || "");
+    setOpen(true);
   }
 
   return (
@@ -603,14 +666,71 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
           <strong className="ai-entry-title">{t("ai.panel_title")}</strong>
           <p>{statusLine}</p>
         </div>
-        <button type="button" className="primary" onClick={() => setOpen(true)}>
-          {running ? t("ai.status_running") : failed ? t("ai.status_failed") : t("ai.btn_start")}
-        </button>
+        <div className="ai-entry-actions">
+          {entry.mode === "idle" ? (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => openDialog("start")}
+            >
+              {t("ai.btn_start")}
+            </button>
+          ) : null}
+          {entry.mode === "running" ? (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => openDialog("view", current?.id)}
+            >
+              {t("ai.btn_view_progress")}
+            </button>
+          ) : null}
+          {entry.mode === "done" ? (
+            <>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => openDialog("view", entry.latestDone?.id)}
+              >
+                {t("ai.btn_view_report")}
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => openDialog("rerun")}
+              >
+                {t("ai.btn_rerun")}
+              </button>
+            </>
+          ) : null}
+          {entry.mode === "failed" ? (
+            <>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => openDialog("rerun")}
+              >
+                {t("ai.btn_rerun")}
+              </button>
+              {entry.latestDone ? (
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => openDialog("view", entry.latestDone.id)}
+                >
+                  {t("ai.btn_view_report")}
+                </button>
+              ) : null}
+            </>
+          ) : null}
+        </div>
       </div>
       {open ? (
         <AIAnalysisDialog
           cid={cid}
           docs={docs}
+          intent={intent}
+          focusAnalysisId={focusAnalysisId}
           onClose={() => setOpen(false)}
         />
       ) : null}

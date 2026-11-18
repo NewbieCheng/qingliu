@@ -119,10 +119,10 @@ export function TransactionTable({ data, selected, onSelectedChange, onOpenOrigi
                   }
                 >
                   {row.scope_excluded
-                    ? "Out of range"
+                    ? t("summary.scope_excluded")
                     : row.duplicate && !row.review_label
                       ? t("case.review.duplicate_quarantined")
-                      : TRANSACTION_LABELS[row.label]}
+                      : t(TRANSACTION_LABELS[row.label] || "label.pending")}
                 </StatusBadge>
               </td>
               <td>

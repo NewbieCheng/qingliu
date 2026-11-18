@@ -45,12 +45,14 @@ export function RangeForm({
             >
               {choiceCount === 0 ? (
                 <option value={data.source || "other"}>
-                  {SOURCES[data.source] || t("case.review.no_source")}
+                  {SOURCES[data.source]
+                    ? t(SOURCES[data.source])
+                    : t("case.review.no_source")}
                 </option>
               ) : (
                 data.choices.map((value) => (
                   <option key={value} value={value}>
-                    {SOURCES[value] || value}
+                    {SOURCES[value] ? t(SOURCES[value]) : value}
                   </option>
                 ))
               )}

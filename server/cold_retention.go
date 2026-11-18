@@ -16,9 +16,9 @@ func coldDataRetentionDays() int {
 	return envDays("COLD_DATA_RETENTION_DAYS", 30)
 }
 
-// aiAnalysisRetentionDays ql_ai_analyses 终态保留天数，缺省 60（可被 AI_ANALYSIS_RETENTION_DAYS 覆盖）。
+// aiAnalysisRetentionDays ql_ai_analyses 终态保留天数，缺省 30（与任务坞冷数据对齐；可被 AI_ANALYSIS_RETENTION_DAYS 覆盖）。
 func aiAnalysisRetentionDays() int {
-	return envDays("AI_ANALYSIS_RETENTION_DAYS", 60)
+	return envDays("AI_ANALYSIS_RETENTION_DAYS", 30)
 }
 
 // tempCacheRetentionDays DATA_DIR/pending 与 OS 临时切页目录保留天数，缺省 7。

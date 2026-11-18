@@ -212,7 +212,11 @@ function ReportVersions({ cid, data, t }) {
                 : t("case.report.draft_version")}
             </strong>
             <small className="block">
-              {formatDateTime(report.created)} · {SOURCES[report.info.source]} ·{" "}
+              {formatDateTime(report.created)} ·{" "}
+              {SOURCES[report.info.source]
+                ? t(SOURCES[report.info.source])
+                : report.info.source}{" "}
+              ·{" "}
               {report.info.start} – {report.info.end}
               {report.info.revision !== data.customer.revision
                 ? ` · ${t("case.report.data_updated")}`

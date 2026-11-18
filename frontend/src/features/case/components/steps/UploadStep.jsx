@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Form } from "@/shared/ui/Form.jsx";
 import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
 import { SegmentedControl } from "@/shared/ui/SegmentedControl.jsx";
@@ -9,14 +9,17 @@ import { DocumentList } from "../DocumentList.jsx";
 import { runUploadWaterfall } from "../../lib/upload-waterfall.js";
 import { useI18n } from "@/shared/i18n/index.jsx";
 
-const SOURCE_OPTIONS = Object.entries(SOURCES).map(([value, label]) => ({
-  value,
-  label,
-}));
-
 export function UploadStep({ data, onUpload, onCommitParsed, onNext }) {
   const { t } = useI18n();
   const [progress, setProgress] = useState(null);
+  const sourceOptions = useMemo(
+    () =>
+      Object.entries(SOURCES).map(([value, labelKey]) => ({
+        value,
+        label: t(labelKey),
+      })),
+    [t],
+  );
 
   return (
     <section className="card">
@@ -41,7 +44,7 @@ export function UploadStep({ data, onUpload, onCommitParsed, onNext }) {
               toast(t("upload.parse_complete"));
             }
           } catch (requestError) {
-            toast(requestError.message || "Parse failed. Please try again later.", "error");
+            toast(requestError.message || t("upload.parse_failed"), "error");
             throw requestError;
           } finally {
             setProgress(null);
@@ -49,12 +52,12 @@ export function UploadStep({ data, onUpload, onCommitParsed, onNext }) {
         }}
       >
         <div className="field field-compact">
-          <span>Source</span>
+          <span>{t("upload.source_label")}</span>
           <SegmentedControl
             name="source"
-            aria-label="Source"
+            aria-label={t("upload.source_label")}
             defaultValue="other"
-            options={SOURCE_OPTIONS}
+            options={sourceOptions}
           />
         </div>
         <UploadDropzone name="files" disabled={data.busy || Boolean(progress)} />
@@ -66,14 +69,14 @@ export function UploadStep({ data, onUpload, onCommitParsed, onNext }) {
         <div className="form-footer">
           <label className="check">
             <input type="checkbox" name="ocr" value="true" />
-            Try local OCR for scanned credit reports (candidates still need manual check)
+            {t("upload.enable_ocr")}
           </label>
           <div className="actions-end">
             <button type="button" className="ghost" onClick={onNext}>
-              Next: confirm ownership →
+              {t("upload.next_step")}
             </button>
             <button className="primary" disabled={data.busy || Boolean(progress)}>
-              Upload and start recognition
+              {t("upload.btn_start")}
             </button>
           </div>
         </div>

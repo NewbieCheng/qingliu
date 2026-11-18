@@ -220,6 +220,7 @@
 .ai-entry-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0}
 .ai-entry-title{display:block;font-size:14px;font-weight:650;color:var(--ql-ink);margin-bottom:2px}
 .ai-entry-bar p{margin:0;font-size:12.5px;line-height:1.5;color:var(--ql-muted);max-width:56ch}
+.ai-entry-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ai-mode-hint{margin:8px 0 0;font-size:12px;line-height:1.5;color:var(--ql-muted)}
 .ai-dialog-body{display:grid;gap:14px}
 .ai-process{display:grid;gap:6px;padding:10px 12px;border:1px solid var(--ql-line,#d7ddd6);border-radius:8px;background:#fbfaf6}

@@ -111,7 +111,10 @@ export function OriginalEvidenceDialog({ cid, original, onClose }) {
           {original.audits.map((audit, index) => (
             <p key={index}>
               {audit.created} · {audit.operator} ·{" "}
-              {TRANSACTION_LABELS[audit.label] || audit.label}：{audit.reason}
+              {TRANSACTION_LABELS[audit.label]
+                ? t(TRANSACTION_LABELS[audit.label])
+                : audit.label}
+              ：{audit.reason}
             </p>
           ))}
         </div>

@@ -15,7 +15,7 @@ func TestEnvDaysFallback(t *testing.T) {
 		t.Fatalf("cold default = %d", got)
 	}
 	t.Setenv("AI_ANALYSIS_RETENTION_DAYS", "")
-	if got := aiAnalysisRetentionDays(); got != 60 {
+	if got := aiAnalysisRetentionDays(); got != 30 {
 		t.Fatalf("ai default = %d", got)
 	}
 	t.Setenv("TEMP_CACHE_RETENTION_DAYS", "")
