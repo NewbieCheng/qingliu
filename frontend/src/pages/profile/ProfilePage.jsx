@@ -11,8 +11,7 @@ import {
 } from "@/features/profile/index.js";
 
 export function ProfilePage() {
-  const { locale, t } = useI18n();
-  const copy = (zh, en) => (locale === "en-US" ? en : zh);
+  const { t } = useI18n();
   const roleLabel = (role) => {
     if (!role) return "";
     const key = `role.${role}`;
@@ -43,7 +42,7 @@ export function ProfilePage() {
   if (!me) {
     return (
       <main className="account-page">
-        <Loading text={copy("正在读取个人信息…", "Loading profile…")} error={error} onRetry={load} />
+        <Loading text={t("profile.loading")} error={error} onRetry={load} />
       </main>
     );
   }
@@ -52,16 +51,16 @@ export function ProfilePage() {
   const kind = me.kind || me.space?.kind || "personal";
   const scopeText =
     kind === "team"
-      ? me.space_name || copy("团队", "Team")
+      ? me.space_name || t("space.team_short")
       : kind === "platform"
-        ? copy("平台空间目前未在青流接入；这里只显示您创建的资料。", "Platform space is not available in Qingliu yet; only files you created are shown.")
-        : copy("个人空间（仅自己可见）", "Personal space (only visible to you)");
+        ? t("profile.scope_platform")
+        : t("profile.scope_personal");
 
   return (
     <main className="account-page">
       <PageHeader
         title={me.display}
-        description={copy("账号由工作台统一管理；青流保存业务角色与本地工作记录。", "Accounts are managed by the Workbench; Qingliu keeps business roles and local work records.")}
+        description={t("profile.page_desc")}
       />
       {error && (
         <p className="error" role="alert">
@@ -69,27 +68,34 @@ export function ProfilePage() {
         </p>
       )}
 
-      <section className="card account-identity" aria-label={copy("账号信息", "Account information")}>
+      <section
+        className="card account-identity"
+        aria-label={t("profile.identity_aria")}
+      >
         <dl className="account-identity-grid">
           <div className="account-identity-item">
-            <dt>{copy("登录账号", "Login account")}</dt>
+            <dt>{t("profile.login_account")}</dt>
             <dd>{me.email || me.username}</dd>
           </div>
           <div className="account-identity-item">
-            <dt>{copy("显示名", "Display name")}</dt>
+            <dt>{t("profile.display_name")}</dt>
             <dd>{me.display || "—"}</dd>
           </div>
           <div className="account-identity-item">
-            <dt>{copy("服务角色", "Service role")}</dt>
+            <dt>{t("profile.service_role")}</dt>
             <dd>{roleLabel(me.service_role || me.role) || me.role}</dd>
           </div>
           <div className="account-identity-item">
-            <dt>{kind === "team" ? copy("所属团队", "Team") : copy("资料范围", "Data scope")}</dt>
+            <dt>
+              {kind === "team"
+                ? t("profile.team_name")
+                : t("profile.data_scope")}
+            </dt>
             <dd>{scopeText}</dd>
           </div>
           {kind === "team" && me.role_label ? (
             <div className="account-identity-item">
-              <dt>{copy("空间角色", "Space role")}</dt>
+              <dt>{t("profile.space_role")}</dt>
               <dd>{me.role_label}</dd>
             </div>
           ) : null}
@@ -98,8 +104,8 @@ export function ProfilePage() {
 
       <section className="card">
         <SectionTitle
-          title={copy("账号操作", "Account actions")}
-          description={copy("修改密码、充值和退出登录都需要二次确认。", "Password changes, top-ups, and sign-outs use confirmation dialogs.")}
+          title={t("profile.actions_title")}
+          description={t("profile.actions_desc")}
         />
         <div className="account-action-grid">
           <button
@@ -107,24 +113,24 @@ export function ProfilePage() {
             className="account-action"
             onClick={() => setDialog("password")}
           >
-            <strong>{copy("修改密码", "Change password")}</strong>
-            <span>{copy("验证当前密码后设置新密码，成功后需重新登录", "Verify your current password to set a new one. You will need to sign in again after success.")}</span>
+            <strong>{t("profile.change_password")}</strong>
+            <span>{t("profile.change_password_hint")}</span>
           </button>
           <button
             type="button"
             className="account-action"
             onClick={() => setDialog("recharge")}
           >
-            <strong>{copy("去充值", "Top up")}</strong>
-            <span>{copy("查看当前积分额度，前往购买工作台积分", "View your available points and buy Workbench points")}</span>
+            <strong>{t("profile.top_up")}</strong>
+            <span>{t("profile.top_up_hint")}</span>
           </button>
           <button
             type="button"
             className="account-action is-danger"
             onClick={() => setDialog("logout")}
           >
-            <strong>{copy("退出登录", "Sign out")}</strong>
-            <span>{copy("结束当前设备会话，不影响其他已登录设备", "End this device's session without affecting other signed-in devices.")}</span>
+            <strong>{t("auth.sign_out")}</strong>
+            <span>{t("profile.sign_out_hint")}</span>
           </button>
         </div>
       </section>

@@ -12,15 +12,16 @@ export function remainingText(order) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+/** 返回订单状态 i18n key；调用方用 t(...) 展示。 */
 export function orderStatusLabel(order) {
   if (
     order?.status === "closed" &&
     order.expires_at &&
     new Date(order.expires_at).getTime() <= Date.now()
   ) {
-    return "已过期";
+    return "billing.order_status.expired";
   }
-  return ORDER_STATUS[order?.status] || order?.status || "";
+  return ORDER_STATUS[order?.status] || "";
 }
 
 export function isExpired(order) {

@@ -10,23 +10,18 @@ export function TeamTable({
   locked = false,
   onLockedAction,
 }) {
-  const { locale } = useI18n();
-  const copy = (zh, en) => (locale === "en-US" ? en : zh);
+  const { t } = useI18n();
   const roleLabel = (role) => {
-    const labels = {
-      admin: copy("管理员", "Admin"),
-      sales: copy("业务员", "Sales"),
-      reviewer: copy("复核员", "Reviewer"),
-      readonly: copy("只读成员", "Read-only member"),
-    };
-    return labels[role] || role || "—";
+    const key = `role.${role}`;
+    const translated = t(key);
+    return translated === key ? role || "—" : translated;
   };
   if (!users.length) {
     return (
       <p className="muted team-empty">
-          {locked
-            ? copy("个人空间没有可管理的团队成员。", "Personal space has no team members to manage.")
-            : copy("没有其他成员（当前登录账号不会列在列表中）。", "No other members (the signed-in account is not listed).")}
+        {locked
+          ? t("admin.team_empty_locked")
+          : t("admin.team_empty")}
       </p>
     );
   }
@@ -36,17 +31,21 @@ export function TeamTable({
       <table className="admin-team-table">
         <thead>
           <tr>
-            <th>{copy("账号", "Account")}</th>
-            <th>{copy("姓名", "Name")}</th>
-            <th>{copy("角色", "Role")}</th>
-            <th>{copy("状态", "Status")}</th>
-            <th className="col-actions">{copy("操作", "Actions")}</th>
+            <th>{t("admin.col_account")}</th>
+            <th>{t("admin.col_name")}</th>
+            <th>{t("admin.col_role")}</th>
+            <th>{t("admin.col_status")}</th>
+            <th className="col-actions">{t("admin.col_actions")}</th>
           </tr>
         </thead>
         <tbody>
           {users.map((user) => {
-            const label = user.active ? copy("停用", "Disable") : copy("启用", "Enable");
-            const title = user.active ? copy("停用账号", "Disable account") : copy("重新启用", "Re-enable account");
+            const label = user.active
+              ? t("admin.disable")
+              : t("admin.enable");
+            const title = user.active
+              ? t("admin.disable_account")
+              : t("admin.reenable_account");
             const toggleButton = (
               <button
                 type="submit"
@@ -69,7 +68,9 @@ export function TeamTable({
                   <span
                     className={`status-pill${user.active ? " is-on" : " is-off"}`}
                   >
-                    {user.active ? copy("已启用", "Active") : copy("已停用", "Inactive")}
+                    {user.active
+                      ? t("admin.status_active")
+                      : t("admin.status_inactive")}
                   </span>
                 </td>
                 <td className="col-actions">
@@ -79,10 +80,14 @@ export function TeamTable({
                         type="button"
                         className={`btn-chip${user.active ? " is-danger" : " is-ok"}`}
                         disabled
-                        title={copy("个人空间不能启用或停用成员。请开通团队或切换到团队空间。", "Personal space cannot enable or disable members. Open or switch to a team space.")}
+                        title={t("admin.toggle_locked_hint")}
                         onClick={onLockedAction}
                       >
-                        {user.active ? <BanIcon size={14} /> : <PlayIcon size={14} />}
+                        {user.active ? (
+                          <BanIcon size={14} />
+                        ) : (
+                          <PlayIcon size={14} />
+                        )}
                         <span>{label}</span>
                       </button>
                     ) : (
@@ -95,22 +100,24 @@ export function TeamTable({
                         type="button"
                         className="btn-chip is-danger"
                         disabled
-                        title={copy("个人空间不支持删除成员", "Members cannot be removed from personal space")}
+                        title={t("admin.delete_locked_hint")}
                         onClick={onLockedAction}
                       >
                         <TrashIcon size={14} />
-                        <span>{copy("删除", "Delete")}</span>
+                        <span>{t("admin.delete")}</span>
                       </button>
                     ) : (
                       <button
                         type="button"
                         className="btn-chip is-danger"
-                        title={copy("删除：仅解除企业关联，个人账号保留", "Remove: disconnect from this team; keep the personal account")}
-                        aria-label={copy(`删除 ${user.display || user.username}`, `Remove ${user.display || user.username}`)}
+                        title={t("admin.delete_hint")}
+                        aria-label={t("admin.delete_aria", {
+                          name: user.display || user.username,
+                        })}
                         onClick={() => onDelete(user)}
                       >
                         <TrashIcon size={14} />
-                        <span>{copy("删除", "Delete")}</span>
+                        <span>{t("admin.delete")}</span>
                       </button>
                     )}
                   </div>

@@ -226,14 +226,25 @@
 .ai-process{display:grid;gap:6px;padding:10px 12px;border:1px solid var(--ql-line,#d7ddd6);border-radius:8px;background:#fbfaf6}
 .ai-process h3{margin:0;font-size:12px;letter-spacing:.06em;color:var(--ql-muted)}
 .ai-process ol{margin:0;padding-left:18px;display:grid;gap:4px;font-size:12.5px;line-height:1.55;color:var(--ql-ink)}
-.ai-result-actions{display:flex;flex-wrap:wrap;gap:8px}
-.ai-result-actions--top{margin-bottom:10px}
+.ai-result-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center}
+.ai-result-actions--top{margin:0}
+.ai-result-actions--stack{justify-content:flex-end;margin-top:4px}
+.ai-result-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.ai-tab-count{margin-left:6px;opacity:.75;font-variant-numeric:tabular-nums}
+.ai-detail-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.ai-detail-card{border:1px solid var(--ql-line,#d7ddd6);border-radius:8px;padding:10px 12px;background:#fff}
+.ai-detail-card-main{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.ai-detail-card-main strong{font-size:13.5px;color:var(--ql-ink,#1c2a24);line-height:1.45}
+.ai-detail-amount{font-variant-numeric:tabular-nums;font-weight:650;color:var(--ql-forest,#1e4a40);white-space:nowrap}
+.ai-detail-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px}
+.ai-page-pill{display:inline-flex;align-items:center;padding:2px 8px;border:1px solid var(--ql-line,#d7ddd6);border-radius:999px;font-size:11.5px;line-height:1.4;color:var(--ql-muted,#5c6b63);background:#f5f7f4;white-space:nowrap}
+.ai-summary-blocks{display:grid;gap:10px}
+.ai-summary-block{display:grid;gap:6px;padding:10px 12px;border:1px solid var(--ql-line,#d7ddd6);border-radius:8px;background:#fff}
 .ai-process{border:1px solid color-mix(in srgb,var(--ql-line,#d7ddd6) 85%,transparent);border-radius:10px;padding:10px 12px;background:#fbfcfa}
 .ai-process.is-live{border-color:color-mix(in srgb,var(--ql-copper,#9a6b3f) 35%,transparent)}
 .ai-process h3{margin:0 0 6px;font-size:12px;letter-spacing:.06em;color:var(--ql-muted);font-weight:650}
 .ai-process ol{margin:0;padding-left:18px;display:grid;gap:4px;font-size:12.5px;line-height:1.55;color:var(--ql-ink)}
 .ai-process ol li:last-child{font-weight:600}
-.ai-result-actions{display:flex;flex-wrap:wrap;gap:8px}
 /* 计费解析入口的「积分不足」提示条：在模态框里也要能看清，并且带一个直连充值的动作 */
 .billing-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--ql-warning);border-radius:10px;background:var(--ql-surface-2);font-size:13px;line-height:1.5;color:var(--ql-ink)}
 .billing-notice button{flex:0 0 auto}
@@ -413,7 +424,7 @@
 }
 .ai-panel{border-left:3px solid var(--ql-copper)}
 .ai-result{margin-top:14px;display:flex;flex-direction:column;gap:12px}
-.ai-summary{font-family:"Noto Serif SC",serif;font-size:17px;line-height:1.8;margin:0;color:var(--ql-ink)}
+.ai-summary{font-family:"Noto Serif SC",serif;font-size:15px;line-height:1.7;margin:0;color:var(--ql-ink);white-space:pre-wrap}
 .ai-result h3{font-size:13px;letter-spacing:.08em;color:var(--ql-muted);margin:0 0 4px}
 .ai-result ul{margin:0;padding-left:18px;line-height:1.7}
 .ai-result small{color:var(--ql-muted);margin-left:6px}

@@ -18,8 +18,12 @@ describe("billing order helpers", () => {
   });
 
   it("labels closed expired orders as expired", () => {
-    expect(orderStatusLabel({ status: "closed", expires_at: past })).toBe("已过期");
-    expect(orderStatusLabel({ status: "paid" })).toBe("已支付");
+    expect(orderStatusLabel({ status: "closed", expires_at: past })).toBe(
+      "billing.order_status.expired",
+    );
+    expect(orderStatusLabel({ status: "paid" })).toBe(
+      "billing.order_status.paid",
+    );
   });
 
   it("never returns negative remaining time", () => {

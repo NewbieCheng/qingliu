@@ -1,23 +1,23 @@
-export const CASE_STEPS = [
-  ["upload", "Upload files"],
-  ["ownership", "Confirm ownership"],
-  ["review", "核对疑点"],
-  ["report", "查看报告"],
-];
+/** 四步底稿步骤码；展示文案用 t(`step.${key}`) */
+export const CASE_STEPS = ["upload", "ownership", "review", "report"].map(
+  (key) => [key],
+);
 
+/** 核对视图码 → i18n key */
 export const CASE_VIEWS = {
-  issues: "待处理疑点",
-  all: "全部交易",
-  confirmed: "已人工确认",
-  duplicate: "疑似重复",
+  issues: "review.view_issues",
+  all: "review.view_all",
+  confirmed: "review.view_confirmed",
+  duplicate: "review.view_duplicate",
 };
 
+/** 批量核对选项：[value, i18n key] */
 export const REVIEW_OPTIONS = [
-  ["included", "收入：暂计经营"],
-  ["excluded", "收入：明确剔除"],
-  ["pending", "收入：待核实"],
-  ["duplicate", "确认重复"],
-  ["expense", "重复支出：确认独立支出"],
-  ["neutral", "重复其他：确认独立记录"],
-  ["undo", "撤销上一条确认"],
+  ["included", "review.option.included"],
+  ["excluded", "review.option.excluded"],
+  ["pending", "review.option.pending"],
+  ["duplicate", "review.option.duplicate"],
+  ["expense", "review.option.expense"],
+  ["neutral", "review.option.neutral"],
+  ["undo", "review.option.undo"],
 ];

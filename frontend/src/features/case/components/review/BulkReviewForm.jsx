@@ -11,9 +11,9 @@ export function BulkReviewForm({ selectedCount, busy, onSave }) {
       <div className="review-action">
         <strong>{t("review.bulk_selected", { n: selectedCount })}</strong>
         <Select name="label" label={t("review.bulk_handling")} aria-label={t("review.bulk_handling")}>
-          {REVIEW_OPTIONS.map(([value, label]) => (
+          {REVIEW_OPTIONS.map(([value, labelKey]) => (
             <option key={value} value={value}>
-              {label}
+              {t(labelKey)}
             </option>
           ))}
         </Select>

@@ -7,14 +7,17 @@ import { ModalActions } from "@/shared/ui/ModalActions.jsx";
 import { UserPlusIcon } from "@/shared/ui/icons.jsx";
 
 export function CreateMemberDialog({ open, onClose, onCreate }) {
-  const { locale } = useI18n();
-  const copy = (zh, en) => (locale === "en-US" ? en : zh);
+  const { t } = useI18n();
   if (!open) return null;
 
   return (
-    <Modal title="Add account" onClose={onClose} className="modal--sm create-member-dialog">
+    <Modal
+      title={t("admin.create_title")}
+      onClose={onClose}
+      className="modal--sm create-member-dialog"
+    >
       <p className="muted create-member-dialog-lead">
-        {copy("在工作台开通企业成员；个人账号与企业关联同一邮箱，清流角色写在产品权限里。", "Create a team member in the Workbench. Use the same email for their personal and team account; assign their Qingliu role here.")}
+        {t("admin.create_lead")}
       </p>
       <Form
         className="create-member-form"
@@ -26,20 +29,20 @@ export function CreateMemberDialog({ open, onClose, onCreate }) {
         }}
       >
         <div className="grid2">
-          <Field label="Account (email)">
+          <Field label={t("admin.create_account")}>
             <input
               name="username"
               type="email"
               maxLength="60"
               required
-              placeholder="Same accounts as the workbench admin console"
+              placeholder={t("admin.create_account_ph")}
               autoFocus
             />
           </Field>
-          <Field label="Name">
+          <Field label={t("admin.create_name")}>
             <input name="display" maxLength="120" required />
           </Field>
-          <Field label="Initial password (10–72 bytes)">
+          <Field label={t("admin.create_password")}>
             <input
               name="password"
               type="password"
@@ -49,21 +52,21 @@ export function CreateMemberDialog({ open, onClose, onCreate }) {
               required
             />
           </Field>
-          <Field label="Role">
-            <Select name="role" label="Role" defaultValue="sales">
-              <option value="sales">Sales</option>
-              <option value="reviewer">Reviewer</option>
-              <option value="admin">Admin</option>
+          <Field label={t("admin.col_role")}>
+            <Select name="role" label={t("admin.col_role")} defaultValue="sales">
+              <option value="sales">{t("role.sales")}</option>
+              <option value="reviewer">{t("role.reviewer")}</option>
+              <option value="admin">{t("role.admin")}</option>
             </Select>
           </Field>
         </div>
         <ModalActions>
           <button type="button" className="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button type="submit" className="primary btn-with-icon">
             <UserPlusIcon size={15} />
-            <span>{copy("开通成员", "Add member")}</span>
+            <span>{t("admin.create_submit")}</span>
           </button>
         </ModalActions>
       </Form>

@@ -64,7 +64,11 @@ export function SpaceSwitcher({ user, collapsed = false }) {
   const load = useCallback(async () => {
     try {
       const payload = await querySpaces();
-      setItems(payload?.items ?? []);
+      // 清流不支持平台空间：后端切过去会 400，列表里露出只会让人狂点报错。
+      const next = (payload?.items ?? []).filter(
+        (item) => item?.kind !== "platform",
+      );
+      setItems(next);
       setWarn(payload?.warn ?? "");
     } catch (error) {
       setWarn(error.message || t("space.load_failed"));

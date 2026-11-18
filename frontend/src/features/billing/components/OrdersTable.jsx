@@ -5,41 +5,34 @@ import { StatusBadge } from "@/shared/ui/Badge.jsx";
 import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
 import { isExpired, orderStatusLabel, remainingText } from "../lib/order.js";
 
-const ORDER_STATUS_EN = {
-  "待支付": "Pending payment",
-  "已支付": "Paid",
-  "已关闭": "Closed",
-  "已过期": "Expired",
-};
-
 export function OrdersTable({ orders, onResume }) {
-  const { locale } = useI18n();
-  const copy = (zh, en) => (locale === "en-US" ? en : zh);
+  const { t } = useI18n();
   return (
     <section className="card">
       <SectionTitle
-        title={copy("最近订单", "Recent orders")}
-        description={copy("显示当前账号的充值订单；未支付订单可以重新打开二维码。", "Shows this account’s top-up orders; unpaid orders can reopen the QR code.")}
+        title={t("billing.orders_title")}
+        description={t("billing.orders_desc")}
       />
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>{copy("订单号", "Order #")}</th>
-              <th>{copy("套餐", "Package")}</th>
-              <th>{copy("金额", "Amount")}</th>
-              <th>{copy("积分", "Points")}</th>
-              <th>{copy("状态", "Status")}</th>
-              <th>{copy("创建时间", "Created")}</th>
-              <th>{copy("有效期", "Expires")}</th>
-              <th>{copy("操作", "Actions")}</th>
+              <th>{t("billing.col_order_no")}</th>
+              <th>{t("billing.col_sku")}</th>
+              <th>{t("billing.col_amount")}</th>
+              <th>{t("billing.points_unit")}</th>
+              <th>{t("billing.col_status")}</th>
+              <th>{t("billing.col_created")}</th>
+              <th>{t("billing.col_expires")}</th>
+              <th>{t("billing.col_actions")}</th>
             </tr>
           </thead>
           <tbody>
             {orders.map((order) => {
               const expired = order.status === "pending" && isExpired(order);
-              const status = expired ? "已过期" : orderStatusLabel(order);
-              const statusLabel = locale === "en-US" ? ORDER_STATUS_EN[status] || status : status;
+              const statusKey = expired
+                ? "billing.order_status.expired"
+                : orderStatusLabel(order);
               return (
                 <tr key={order.order_no}>
                   <td>{order.order_no}</td>
@@ -50,7 +43,7 @@ export function OrdersTable({ orders, onResume }) {
                   </td>
                   <td>
                     <StatusBadge tone={order.status === "paid" ? "default" : "amber"}>
-                      {statusLabel}
+                      {statusKey ? t(statusKey) : order.status || "—"}
                     </StatusBadge>
                   </td>
                   <td className="muted">{formatDateTime(order.created_at)}</td>
@@ -65,7 +58,7 @@ export function OrdersTable({ orders, onResume }) {
                         className="ghost order-resume"
                         onClick={() => onResume(order)}
                       >
-                        {copy("继续支付", "Continue payment")}
+                        {t("billing.resume_pay")}
                       </button>
                     ) : (
                       <span className="muted">—</span>
@@ -77,7 +70,9 @@ export function OrdersTable({ orders, onResume }) {
           </tbody>
         </table>
       </div>
-      {orders.length === 0 && <p className="empty">{copy("还没有充值订单。", "No top-up orders yet.")}</p>}
+      {orders.length === 0 && (
+        <p className="empty">{t("billing.orders_empty")}</p>
+      )}
     </section>
   );
 }

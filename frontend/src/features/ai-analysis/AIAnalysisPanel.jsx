@@ -24,7 +24,8 @@ import {
   enrichAIResult,
   formatAIExportText,
   formatAISummary,
-  formatLocator,
+  formatPageLabel,
+  splitSummaryBlocks,
 } from "./format-result.js";
 
 const STATUS_KEY = {
@@ -115,6 +116,24 @@ function AIProcessLog({ process }) {
   );
 }
 
+function AISummaryBlocks({ summaryText, trailing = "" }) {
+  const blocks = splitSummaryBlocks(summaryText);
+  if (!blocks.length) return null;
+  return (
+    <div className="ai-summary-blocks">
+      {blocks.map((block, index) => (
+        <div className="ai-summary-block" key={`${block.scope}-${index}`}>
+          {block.scope ? <span className="ai-page-pill">{block.scope}</span> : null}
+          <p className="ai-summary">
+            {block.text}
+            {index === blocks.length - 1 ? trailing : ""}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AIResultActions({ result, disabled }) {
   const { t } = useI18n();
   if (!result || disabled) return null;
@@ -124,19 +143,50 @@ function AIResultActions({ result, disabled }) {
     <div className="ai-result-actions">
       <button
         type="button"
-        className="ghost"
+        className="btn-chip"
         onClick={() => void handleCopyExport(result, "copy", t)}
       >
         {t("common.copy")}
       </button>
       <button
         type="button"
-        className="ghost"
+        className="btn-chip"
         onClick={() => void handleCopyExport(result, "export", t)}
       >
         {t("common.export")}
       </button>
     </div>
+  );
+}
+
+function AIDetailRow({ row, t }) {
+  if (typeof row === "string") {
+    return <li className="ai-detail-card">{row}</li>;
+  }
+  const title = row?.item || row?.source || row?.label || "";
+  const amount = row?.amount ? String(row.amount) : "";
+  const page = formatPageLabel(row?.page);
+  const evidence = [row?.locator, row?.evidence, row?.ai_locator]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .filter((part) => part !== page);
+  return (
+    <li className="ai-detail-card">
+      <div className="ai-detail-card-main">
+        <strong>{title || "—"}</strong>
+        {amount ? <span className="ai-detail-amount">{amount}</span> : null}
+      </div>
+      {(page || evidence.length > 0) && (
+        <div className="ai-detail-meta">
+          {page ? <span className="ai-page-pill">{page}</span> : null}
+          {evidence.length > 0 ? (
+            <span className="muted">
+              {t("case.original.location")}: {evidence.join(" · ")}
+            </span>
+          ) : null}
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -161,55 +211,46 @@ function AIResultDialog({ open, onClose, result }) {
     page * RESULT_PAGE_SIZE,
   );
   return (
-    <Modal title={t("ai.title")} onClose={onClose}>
-      <div className="ai-result-actions ai-result-actions--top">
-        <button
-          type="button"
-          className="ghost"
-          onClick={() => void handleCopyExport(result, "copy", t)}
-        >
-          {t("common.copy")}
-        </button>
-        <button
-          type="button"
-          className="ghost"
-          onClick={() => void handleCopyExport(result, "export", t)}
-        >
-          {t("common.export")}
-        </button>
-      </div>
-      <div className="modal-tabs" role="tablist" aria-label={t("ai.panel_title")}>
-        {tabs.map((item) => (
+    <Modal title={t("ai.title")} onClose={onClose} className="ai-result-dialog">
+      <div className="ai-result-toolbar">
+        <div className="modal-tabs" role="tablist" aria-label={t("ai.panel_title")}>
+          {tabs.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              role="tab"
+              aria-selected={item.key === activeTab.key}
+              className={item.key === activeTab.key ? "is-active" : ""}
+              onClick={() => {
+                setTab(item.key);
+                setPage(1);
+              }}
+            >
+              {item.label}
+              <span className="ai-tab-count">{result[item.key].length}</span>
+            </button>
+          ))}
+        </div>
+        <div className="ai-result-actions ai-result-actions--top">
           <button
-            key={item.key}
             type="button"
-            role="tab"
-            aria-selected={item.key === activeTab.key}
-            className={item.key === activeTab.key ? "is-active" : ""}
-            onClick={() => {
-              setTab(item.key);
-              setPage(1);
-            }}
+            className="btn-chip"
+            onClick={() => void handleCopyExport(result, "copy", t)}
           >
-            {item.label}（{result[item.key].length}）
+            {t("common.copy")}
           </button>
-        ))}
+          <button
+            type="button"
+            className="btn-chip"
+            onClick={() => void handleCopyExport(result, "export", t)}
+          >
+            {t("common.export")}
+          </button>
+        </div>
       </div>
-      <ul>
+      <ul className="ai-detail-list">
         {visible.map((row, index) => (
-          <li key={index}>
-            {typeof row === "string" ? (
-              row
-            ) : (
-              <>
-                {row.item || row.source || row.label || ""}
-                {row.amount ? ` · ${row.amount}` : ""}
-                {formatLocator(row) ? (
-                  <small> {t("case.original.location")}: {formatLocator(row)}</small>
-                ) : null}
-              </>
-            )}
-          </li>
+          <AIDetailRow key={index} row={row} t={t} />
         ))}
       </ul>
       {rows.length > RESULT_PAGE_SIZE && (
@@ -525,45 +566,47 @@ function AIAnalysisDialog({
               ) : null}
               <AIProcessLog process={displayResult?.process} />
               {summaryText ? (
-                <p className="ai-summary" style={{ whiteSpace: "pre-wrap" }}>
-                  {summaryText}
-                  {running && displayResult?.partial ? "…" : ""}
-                </p>
+                <AISummaryBlocks
+                  summaryText={summaryText}
+                  trailing={running && displayResult?.partial ? "…" : ""}
+                />
               ) : latest.status === "done" ? (
                 <p className="muted">{t("ai.status_done")}</p>
               ) : running ? (
                 <p className="muted">{t("ai.status_running")}</p>
               ) : null}
-              <AIResultActions result={displayResult} />
-              {latest.status === "done" ? (
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={busy}
-                  onClick={() => void writeSuggest()}
-                >
-                  {t("ai.write_suggest")}
-                </button>
-              ) : null}
-              {latest.status === "done" && displayResult?.text ? (
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={busy}
-                  onClick={() => void writeOCRRows()}
-                >
-                  {t("ai.write_suggest")}
-                </button>
-              ) : null}
-              {detailCount > 0 ? (
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => setResultOpen(true)}
-                >
-                  {t("ai.title")} ({detailCount}) →
-                </button>
-              ) : null}
+              <div className="ai-result-actions ai-result-actions--stack">
+                <AIResultActions result={displayResult} />
+                {latest.status === "done" ? (
+                  <button
+                    type="button"
+                    className="btn-chip"
+                    disabled={busy}
+                    onClick={() => void writeSuggest()}
+                  >
+                    {t("ai.write_suggest")}
+                  </button>
+                ) : null}
+                {latest.status === "done" && displayResult?.text ? (
+                  <button
+                    type="button"
+                    className="btn-chip"
+                    disabled={busy}
+                    onClick={() => void writeOCRRows()}
+                  >
+                    {t("ai.write_ocr")}
+                  </button>
+                ) : null}
+                {detailCount > 0 ? (
+                  <button
+                    type="button"
+                    className="btn-chip is-ok"
+                    onClick={() => setResultOpen(true)}
+                  >
+                    {t("ai.view_details", { n: detailCount })}
+                  </button>
+                ) : null}
+              </div>
               {displayResult?.disclaimer ? (
                 <p className="muted">{displayResult.disclaimer}</p>
               ) : null}

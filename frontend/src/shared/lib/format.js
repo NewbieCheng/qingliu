@@ -1,3 +1,5 @@
+import { tStandalone } from "@/shared/i18n/core.js";
+
 export function formatCents(value) {
   if (value == null || value === "") return "—";
   const text = String(value);
@@ -45,9 +47,11 @@ export function formatRelativeTime(value, fallback = "—", now = Date.now()) {
   );
   const dayDiff = Math.round((startOfToday - startOfThat) / 86400000);
   const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-  if (dayDiff === 0) return `今天 ${time}`;
-  if (dayDiff === 1) return `昨天 ${time}`;
-  if (dayDiff > 1 && dayDiff < 7) return `${dayDiff} 天前`;
+  if (dayDiff === 0) return tStandalone("time.today", { time });
+  if (dayDiff === 1) return tStandalone("time.yesterday", { time });
+  if (dayDiff > 1 && dayDiff < 7) {
+    return tStandalone("time.days_ago", { n: dayDiff });
+  }
   return formatDate(value, fallback);
 }
 
@@ -58,7 +62,8 @@ export function formatFileSize(bytes) {
 
 // 浏览器安全的随机 ID：优先用 Web Crypto，旧环境退化为时间戳+随机数。
 export function randomId(prefix = "id") {
-  const webCrypto = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
+  const webCrypto =
+    typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
   const random =
     webCrypto && typeof webCrypto.randomUUID === "function"
       ? webCrypto.randomUUID()

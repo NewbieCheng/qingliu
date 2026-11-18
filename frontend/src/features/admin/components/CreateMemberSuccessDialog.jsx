@@ -5,16 +5,11 @@ import { ModalActions } from "@/shared/ui/ModalActions.jsx";
 import { CheckIcon } from "@/shared/ui/icons.jsx";
 
 export function CreateMemberSuccessDialog({ member, onClose }) {
-  const { locale } = useI18n();
-  const copy = (zh, en) => (locale === "en-US" ? en : zh);
+  const { t } = useI18n();
   const roleLabelFor = (role) => {
-    const labels = {
-      admin: copy("管理员", "Admin"),
-      sales: copy("业务员", "Sales"),
-      reviewer: copy("复核员", "Reviewer"),
-      readonly: copy("只读成员", "Read-only member"),
-    };
-    return labels[role] || role || "—";
+    const key = `role.${role}`;
+    const translated = t(key);
+    return translated === key ? role || "—" : translated;
   };
   const doneRef = useRef(null);
 
@@ -28,7 +23,7 @@ export function CreateMemberSuccessDialog({ member, onClose }) {
 
   return (
     <Modal
-      title={copy("成员已创建", "Member created")}
+      title={t("admin.create_success_title")}
       className="modal--sm create-member-success"
       onClose={onClose}
     >
@@ -36,25 +31,30 @@ export function CreateMemberSuccessDialog({ member, onClose }) {
         <span className="create-member-success-mark" aria-hidden="true">
           <CheckIcon size={14} />
         </span>
-        {copy("工作台账号已就绪，可用初始密码登录清流。", "The Workbench account is ready. Use the initial password to sign in to Qingliu.")}
+        {t("admin.create_success_lead")}
       </p>
       <dl className="create-member-success-meta">
         <div>
-          <dt>{copy("账号", "Account")}</dt>
+          <dt>{t("admin.col_account")}</dt>
           <dd>{member.username}</dd>
         </div>
         <div>
-          <dt>{copy("姓名", "Name")}</dt>
+          <dt>{t("admin.col_name")}</dt>
           <dd>{member.display}</dd>
         </div>
         <div>
-          <dt>{copy("角色", "Role")}</dt>
+          <dt>{t("admin.col_role")}</dt>
           <dd>{roleLabel}</dd>
         </div>
       </dl>
       <ModalActions>
-        <button type="button" className="primary" ref={doneRef} onClick={onClose}>
-          {copy("知道了", "Got it")}
+        <button
+          type="button"
+          className="primary"
+          ref={doneRef}
+          onClick={onClose}
+        >
+          {t("admin.got_it")}
         </button>
       </ModalActions>
     </Modal>

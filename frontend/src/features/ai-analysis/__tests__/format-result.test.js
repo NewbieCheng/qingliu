@@ -5,7 +5,9 @@ import {
   formatAISummary,
   formatDetailLine,
   formatLocator,
+  formatPageLabel,
   normalizeProcess,
+  splitSummaryBlocks,
 } from "../format-result.js";
 
 describe("formatAISummary", () => {
@@ -49,9 +51,15 @@ describe("process and export", () => {
   });
 
   it("exports locator / page for anomalies", () => {
+    expect(formatPageLabel("第 1 页")).toBe("第 1 页");
+    expect(formatPageLabel("2-5")).toBe("第 2-5 页");
+    expect(formatPageLabel(3)).toBe("第 3 页");
     expect(
-      formatLocator({ page: 3, evidence: "右上角印章", locator: "row:12" }),
-    ).toBe("第3页 · row:12 · 右上角印章");
+      formatLocator({ page: "第 1 页", evidence: "右上角印章", locator: "row:12" }),
+    ).toBe("第 1 页 · row:12 · 右上角印章");
+    expect(
+      formatLocator({ page: 3, evidence: "第 3 页" }),
+    ).toBe("第 3 页");
     expect(
       formatDetailLine({
         item: "大额提现",
@@ -59,12 +67,18 @@ describe("process and export", () => {
         page: 3,
         evidence: "第 3 页",
       }),
-    ).toContain("第3页");
+    ).toContain("第 3 页");
     const text = formatAIExportText({
       summary: "摘要",
       anomalies: [{ item: "异常转入", page: 2, locator: "bbox:1" }],
     });
-    expect(text).toContain("第2页");
+    expect(text).toContain("第 2 页");
     expect(text).toContain("bbox:1");
+    expect(
+      splitSummaryBlocks("【第 1 页】本段为微信流水\n【第 8-9 页】含转账与提现"),
+    ).toEqual([
+      { scope: "第 1 页", text: "本段为微信流水" },
+      { scope: "第 8-9 页", text: "含转账与提现" },
+    ]);
   });
 });

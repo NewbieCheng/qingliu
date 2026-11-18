@@ -35,7 +35,7 @@ func TestPrivatePDFParity(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			r, e := parseFile(context.Background(), b, "statement.pdf", "other", false, func(int, int) {})
+			r, e := parseFile(context.Background(), b, "statement.pdf", "other", func(int, int) {})
 			if e != nil {
 				t.Fatal(e)
 			}

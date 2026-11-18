@@ -125,6 +125,39 @@ export function downloadText(filename, text) {
   URL.revokeObjectURL(url);
 }
 
+/** 页码展示：避免「第第 1 页页」这类重复包裹。 */
+export function formatPageLabel(page) {
+  const raw = String(page ?? "").trim();
+  if (!raw) return "";
+  if (/^第\s*.+页$/.test(raw)) return raw.replace(/\s+/g, " ");
+  if (/^\d+(?:\s*[-–—~至到]\s*\d+)?$/.test(raw)) {
+    return `第 ${raw.replace(/\s*[-–—~至到]\s*/g, "-")} 页`;
+  }
+  return raw;
+}
+
+/** 摘要拆成可渲染块：scope 用 pill，正文不再塞方括号。 */
+export function splitSummaryBlocks(summary) {
+  const text = String(summary || "").trim();
+  if (!text) return [];
+  return text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const matched = line.match(/^【([^】]+)】\s*([\s\S]*)$/);
+      if (matched) {
+        return { scope: matched[1].trim(), text: matched[2].trim() };
+      }
+      const bracket = line.match(/^\[([^\]]+)\]\s*([\s\S]*)$/);
+      if (bracket) {
+        return { scope: bracket[1].trim(), text: bracket[2].trim() };
+      }
+      return { scope: "", text: line };
+    })
+    .filter((block) => block.text);
+}
+
 /** 明细行展示/导出：优先带定位（页码 / locator / evidence）。 */
 export function formatDetailLine(row) {
   if (typeof row === "string") return `· ${row}`;
@@ -132,17 +165,26 @@ export function formatDetailLine(row) {
   const head = row.item || row.source || row.label || "";
   const amount = row.amount ? ` · ${row.amount}` : "";
   const locator = formatLocator(row);
-  return `· ${head}${amount}${locator ? `（${locator}）` : ""}`.trim();
+  return `· ${head}${amount}${locator ? ` · ${locator}` : ""}`.trim();
 }
 
 export function formatLocator(row) {
   if (!row || typeof row !== "object") return "";
   const parts = [];
-  if (row.page != null && String(row.page).trim() !== "") {
-    parts.push(`第${row.page}页`);
-  }
+  const pageLabel = formatPageLabel(row.page);
+  if (pageLabel) parts.push(pageLabel);
   if (row.locator) parts.push(String(row.locator));
-  if (row.evidence) parts.push(String(row.evidence));
+  if (row.evidence) {
+    const evidence = String(row.evidence).trim();
+    // evidence 若已是页码文案，避免与 pageLabel 重复。
+    if (
+      evidence &&
+      evidence !== pageLabel &&
+      !parts.some((part) => part === evidence)
+    ) {
+      parts.push(evidence);
+    }
+  }
   if (row.ai_locator) parts.push(String(row.ai_locator));
   // 去重保序
   return [...new Set(parts.map((part) => part.trim()).filter(Boolean))].join(" · ");

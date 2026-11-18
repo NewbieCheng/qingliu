@@ -5,24 +5,16 @@ import { StatusBadge } from "@/shared/ui/Badge.jsx";
 import { CheckIcon } from "@/shared/ui/icons.jsx";
 import { orderStatusLabel, remainingMs } from "../lib/order.js";
 
-const ORDER_STATUS_EN = {
-  "待支付": "Pending payment",
-  "已支付": "Paid",
-  "已关闭": "Closed",
-  "已过期": "Expired",
-};
-
 export function CheckoutPanel({ order, qr, expired, remaining, onDismiss }) {
-  const { locale } = useI18n();
-  const copy = (zh, en) => (locale === "en-US" ? en : zh);
+  const { t } = useI18n();
   if (!order) return null;
   const pending = order.status === "pending";
   const paid = order.status === "paid";
   const hasMockCode = !order.code_url || order.code_url.startsWith("mock://");
   const showQr = Boolean(qr && !expired);
   const showDismiss = paid && typeof onDismiss === "function";
-  const status = orderStatusLabel(order);
-  const statusLabel = locale === "en-US" ? ORDER_STATUS_EN[status] || status : status;
+  const statusKey = orderStatusLabel(order);
+  const statusLabel = statusKey ? t(statusKey) : order.status || "";
 
   return (
     <section
@@ -30,11 +22,13 @@ export function CheckoutPanel({ order, qr, expired, remaining, onDismiss }) {
       aria-live={paid ? "polite" : undefined}
     >
       <div className="checkout-main">
-        <p className="eyebrow">{copy("订单", "Order")} {order.order_no}</p>
+        <p className="eyebrow">
+          {t("billing.checkout_order")} {order.order_no}
+        </p>
         <h2>{order.sku_name}</h2>
         <p className="muted">
           {formatCurrencyFen(order.amount_fen)} ·{" "}
-          {formatNumber(order.points, "0")} {copy("积分", "points")}
+          {formatNumber(order.points, "0")} {t("billing.points_unit")}
           {order.bonus_points ? ` + ${order.bonus_points}` : ""}
         </p>
         <StatusBadge tone={paid ? "default" : "amber"}>
@@ -42,44 +36,43 @@ export function CheckoutPanel({ order, qr, expired, remaining, onDismiss }) {
         </StatusBadge>
         {pending && !expired && (
           <p className="checkout-expiry">
-            {copy("二维码有效期至", "QR code valid until")} {formatDateTime(order.expires_at)} · {copy("剩余", "Remaining")}{" "}
+            {t("billing.qr_valid_until")} {formatDateTime(order.expires_at)} ·{" "}
+            {t("billing.remaining")}{" "}
             <strong>{remaining}</strong>
             {remainingMs(order) <= 5 * 60 * 1000 && (
-              <span className="checkout-expiry-warning">{copy(" 即将过期", " Expiring soon")}</span>
+              <span className="checkout-expiry-warning">
+                {t("billing.expiring_soon")}
+              </span>
             )}
           </p>
         )}
         {pending && !expired && !hasMockCode && (
-          <p className="muted">
-            {copy("请使用微信扫码支付。刷新页面不会丢失订单，可回到「最近订单」继续支付。", "Scan with WeChat to pay. Refreshing will not lose the order; return to Recent orders to continue payment.")}
-          </p>
+          <p className="muted">{t("billing.pay_wechat_hint")}</p>
         )}
         {pending && !expired && hasMockCode && (
-          <p className="muted">
-            {copy("当前为人工/测试通道。请把订单号发给管理员确认到账。", "This is a manual/test payment channel. Send the order number to an administrator to confirm receipt.")}
-          </p>
+          <p className="muted">{t("billing.pay_manual_hint")}</p>
         )}
-        {expired && (
-          <p className="error">
-            {copy("二维码已过期，订单已关闭。请重新选择套餐下单。", "The QR code has expired and the order is closed. Select a package to place a new order.")}
-          </p>
-        )}
+        {expired && <p className="error">{t("billing.qr_expired")}</p>}
         {paid && (
           <p className="checkout-result-lead">
             <span className="checkout-result-mark" aria-hidden="true">
               <CheckIcon size={14} />
             </span>
-            {copy("积分已到账，余额已刷新。", "Points received. The balance has been refreshed.")}
+            {t("billing.points_received")}
           </p>
         )}
         {order.status === "closed" && !expired && (
-          <p className="muted">{copy("订单已关闭，请重新选择套餐下单。", "The order is closed. Select a package to place a new order.")}</p>
+          <p className="muted">{t("billing.order_closed")}</p>
         )}
       </div>
       {(showQr || showDismiss) && (
         <div className="checkout-aside">
           {showQr && (
-            <img className="checkout-qr" src={qr} alt={copy("微信支付二维码", "WeChat Pay QR code")} />
+            <img
+              className="checkout-qr"
+              src={qr}
+              alt={t("billing.wechat_qr_alt")}
+            />
           )}
           {showDismiss && (
             <button
@@ -87,7 +80,7 @@ export function CheckoutPanel({ order, qr, expired, remaining, onDismiss }) {
               className="primary checkout-done"
               onClick={onDismiss}
             >
-              {copy("完成", "Done")}
+              {t("billing.checkout_done")}
             </button>
           )}
         </div>

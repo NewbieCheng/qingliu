@@ -724,7 +724,7 @@ func (a *App) mux() http.Handler {
 				path := filepath.Join(s.root, "pending", jid)
 				must(s.write(path, b))
 				paths = append(paths, path)
-				payloads = append(payloads, Object{"id": jid, "name": name, "sha": sha, "source": source, "ocr": q.r.FormValue("ocr") == "true"})
+				payloads = append(payloads, Object{"id": jid, "name": name, "sha": sha, "source": source})
 			}
 			tx, e := s.db.Begin()
 			must(e)

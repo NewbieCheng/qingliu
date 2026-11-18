@@ -5,19 +5,20 @@ import { Modal } from "@/shared/ui/Modal.jsx";
 import { ModalActions } from "@/shared/ui/ModalActions.jsx";
 
 export function DeleteMemberDialog({ member, onClose, onConfirm }) {
-  const { locale, t } = useI18n();
-  const copy = (zh, en) => (locale === "en-US" ? en : zh);
+  const { t } = useI18n();
   if (!member) return null;
+  const name = member.display || member.username;
 
   return (
     <Modal
-      title="Remove member"
+      title={t("admin.delete_title")}
       onClose={onClose}
       className="modal--sm delete-member-dialog"
     >
       <p className="delete-member-dialog-lead">
-        {copy("将解除", "Remove")} <strong>{member.display || member.username}</strong>
-        {copy(`（${member.username}）`, `(${member.username})`)}{copy("与当前企业的关联。工作台个人账号保留，可继续登录个人空间或其他企业。", " is no longer part of this team. Their Workbench personal account remains active and can still access personal space or other teams.")}
+        {t("admin.delete_lead_before")} <strong>{name}</strong>
+        {t("admin.delete_lead_account", { username: member.username })}
+        {t("admin.delete_lead_after")}
       </p>
       <Form
         success=""
@@ -26,7 +27,7 @@ export function DeleteMemberDialog({ member, onClose, onConfirm }) {
           onClose();
         }}
       >
-        <Field label="Enter your password to confirm">
+        <Field label={t("admin.delete_password")}>
           <input
             name="password"
             type="password"
@@ -34,7 +35,7 @@ export function DeleteMemberDialog({ member, onClose, onConfirm }) {
             required
             minLength="1"
             maxLength="72"
-            placeholder="Current admin password"
+            placeholder={t("admin.delete_password_ph")}
             autoFocus
           />
         </Field>
@@ -43,7 +44,7 @@ export function DeleteMemberDialog({ member, onClose, onConfirm }) {
             {t("common.cancel")}
           </button>
           <button type="submit" className="primary is-danger-action">
-            {copy("确认删除", "Confirm removal")}
+            {t("admin.delete_confirm")}
           </button>
         </ModalActions>
       </Form>

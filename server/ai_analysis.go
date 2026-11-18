@@ -312,7 +312,11 @@ func wbFailure(data Object, err error, fallback string) string {
 	return message + "（" + strings.Join(parts, "；") + "）"
 }
 
-// shouldTryWorkbenchOCR 判断上传解析结果是否应交给工作台统一 POST /v1/ocr 处理。
+// shouldTryWorkbenchOCR 判断是否升级到工作台统一 POST /v1/ocr。
+// 清流只调这一口；底层用哪个模型/通道由工作台网关编排，这里不选模型。
+//
+// 触发：① 无文字层（needs-vision）；② 有字但版式匹配 0 行（流水类）。
+// 征信只收 facts，不因无交易行误触发。不再认前端勾选。
 func shouldTryWorkbenchOCR(payload Object, result *ParseResult) bool {
 	if result == nil {
 		return false
@@ -322,10 +326,31 @@ func shouldTryWorkbenchOCR(payload Object, result *ParseResult) bool {
 		return false
 	}
 	method := str(result.Meta, "method")
-	return yes(payload, "ocr") || method == "needs-vision" || (integer(result.Meta["text_pages"]) == 0 && len(result.Rows) == 0)
+	if method == "needs-vision" {
+		return true
+	}
+	source := str(result.Meta, "source")
+	if source == "" {
+		source = str(payload, "source")
+	}
+	if source == "credit_report" {
+		return false
+	}
+	if len(result.Rows) > 0 {
+		return false
+	}
+	// 文字层或本机 OCR 已抽出内容，但标准行匹配失败 → 直接交给 /v1/ocr。
+	if integer(result.Meta["text_pages"]) > 0 || integer(result.Meta["ocr_pages"]) > 0 {
+		return true
+	}
+	if strings.TrimSpace(str(result.Meta, "extract_text")) != "" {
+		return true
+	}
+	return false
 }
 
-// applyWorkbenchOCRResult 把 POST /v1/ocr 识别结果合入 ParseResult，避免清流重复计费。
+// applyWorkbenchOCRResult 把 POST /v1/ocr 识别结果合入 ParseResult。
+// 能 parseOCRTranscript 则直接入库；不能则留下 ocr_text，交后续结构化补救。
 func applyWorkbenchOCRResult(result *ParseResult, ocrRes wbOCRResult) {
 	if result == nil || strings.TrimSpace(ocrRes.Text) == "" {
 		return
@@ -345,7 +370,7 @@ func applyWorkbenchOCRResult(result *ParseResult, ocrRes wbOCRResult) {
 		result.Meta["issues"] = []string{}
 		return
 	}
-	// 非交易表格式（如征信或纯文本扫描件）：把全文写入 facts 候选供人工核对，状态标 partial。
+	// 正文在，但套不上标准表：先记 facts，保持 partial，等结构化补救。
 	facts := list(result.Meta["facts"])
 	facts = append(facts, Object{
 		"page": 1,
@@ -353,10 +378,15 @@ func applyWorkbenchOCRResult(result *ParseResult, ocrRes wbOCRResult) {
 		"kind": "工作台统一 OCR 提取（" + ocrRes.ChannelUsed + "）",
 	})
 	result.Meta["facts"] = facts
+	result.Meta["status"] = "partial"
+	result.Meta["issues"] = appendStrings(result.Meta["issues"], "OCR 已返回正文，但未对齐标准交易行")
 }
 
-// tryEnhanceScanWithWorkbenchOCR 在 PDF 无可用文字层或开启 OCR 时，优先走工作台
-// 统一接口 POST /v1/ocr，失败则自动保留原本地 tesseract/needs-vision 结果兜底。
+// tryEnhanceScanWithWorkbenchOCR：
+//   1) POST /v1/ocr（通道由工作台选）
+//   2) 能解析 → 入库
+//   3) 不能 → 模型结构化补救
+//   4) 仍不行 → 保持 partial
 func (a *App) tryEnhanceScanWithWorkbenchOCR(ctx context.Context, userID string, payload Object, fileBytes []byte, result *ParseResult, progress func(string)) {
 	if a == nil || !a.wb.Ready() || !shouldTryWorkbenchOCR(payload, result) {
 		return
@@ -367,7 +397,16 @@ func (a *App) tryEnhanceScanWithWorkbenchOCR(ctx context.Context, userID string,
 	ocrRes, err := a.wbOCR(ctx, userID, fileBytes, str(payload, "name"), "text_recognition")
 	if err != nil {
 		log.Printf("qingliu upload /v1/ocr fallback to local parse: file=%s err=%v", str(payload, "name"), err)
+		// OCR 调用失败时，若本地已有抽出正文，仍可尝试结构化补救。
+		a.tryStructureRescueAfterOCR(ctx, userID, payload, result, progress)
 		return
 	}
 	applyWorkbenchOCRResult(result, ocrRes)
+	if len(result.Rows) > 0 {
+		return
+	}
+	a.tryStructureRescueAfterOCR(ctx, userID, payload, result, progress)
+	if len(result.Rows) == 0 && str(result.Meta, "status") == "" {
+		result.Meta["status"] = "partial"
+	}
 }

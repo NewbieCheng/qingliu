@@ -158,11 +158,12 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 		}
 		known := s.one("SELECT id FROM ql_documents WHERE customer_id=? AND sha=?", cid, p["sha"])
 		if known == nil {
-			result, e := parseFile(jobctx, b, str(p, "name"), str(p, "source"), yes(p, "ocr"), func(page, total int) {
+			result, e := parseFile(jobctx, b, str(p, "name"), str(p, "source"), func(page, total int) {
 				s.jobProgress(jid, "parsing", fmt.Sprintf("正在识别第 %d / %d 页", page, total), parsePercent(page, total))
 			})
 			must(e)
 			if app != nil {
+				// 文字层/本机 OCR 不够时，只调工作台 POST /v1/ocr（模型路由由工作台负责）。
 				app.tryEnhanceScanWithWorkbenchOCR(jobctx, str(user, "id"), p, b, &result, func(msg string) {
 					s.jobProgress(jid, "parsing", msg, 90)
 				})

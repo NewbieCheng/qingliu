@@ -24,16 +24,8 @@ import {
   queryAuditEvents,
 } from "@/app/queries/index.js";
 
-function teamLockedHint(copy) {
-  return copy(
-    "个人空间不支持团队成员管理。请开通团队套餐或切换到团队空间。",
-    "Personal space does not support team members. Open a Team plan or switch to a team space before managing members.",
-  );
-}
-
 export function AdminPage() {
-  const { locale } = useI18n();
-  const copy = (zh, en) => (locale === "en-US" ? en : zh);
+  const { t } = useI18n();
   const { user } = useAuth();
   const spaceKind = user?.kind || user?.space?.kind || "personal";
   const teamManaged = spaceKind === "team";
@@ -106,59 +98,59 @@ export function AdminPage() {
   }
 
   function refuseTeamAction() {
-    toast(teamLockedHint(copy), "error");
+    toast(t("admin.team_locked_hint"), "error");
   }
 
   return (
     <main>
       <PageHeader
-        title={copy("明确分工，保留每次核对。", "Clear responsibilities, traceable reviews.")}
+        title={t("admin.page_title")}
         description={
           teamManaged
-            ? copy("成员账号由工作台管理。业务员和复核员只能查看获授权的客户；管理员可以管理全部客户。", "Member accounts follow the Workbench. Sales and reviewers only see granted customers; admins manage all customers.")
-            : copy("个人空间只能查看自己的活动记录。团队成员管理需要先进入团队空间。", "Personal space shows your own activity. Team member management requires a team space.")
+            ? t("admin.page_desc_team")
+            : t("admin.page_desc_personal")
         }
       />
       {error && <p className="error">{error}</p>}
       <section className={`card${!teamManaged ? " is-team-locked" : ""}`}>
         {!teamManaged ? (
           <p className="team-locked-banner" role="status">
-            {teamLockedHint(copy)}
-            <span>{copy("左侧空间切换里可开启锁定的团队，或切到已有团队空间。", "Enable a locked team or switch to an existing team space using the space switcher on the left.")}</span>
+            {t("admin.team_locked_hint")}
+            <span>{t("admin.team_locked_switch_hint")}</span>
           </p>
         ) : null}
         {canManageMembers ? (
           <>
             <div className="toolbar admin-section-toolbar">
-              <h2>{copy("团队成员", "Team members")}</h2>
+              <h2>{t("admin.team_members")}</h2>
               <div className="admin-section-toolbar-actions">
                 <button
                   type="button"
                   className="btn-chip"
-                  title={copy("刷新成员", "Refresh members")}
-                  aria-label={copy("刷新成员", "Refresh members")}
+                  title={t("admin.refresh_members")}
+                  aria-label={t("admin.refresh_members")}
                   onClick={() => {
                     invalidateAdmin();
                     void loadUsers(true);
                   }}
                 >
                   <RefreshIcon size={14} />
-                  <span>{copy("刷新", "Refresh")}</span>
+                  <span>{t("common.refresh")}</span>
                 </button>
                 <button
                   type="button"
                   className="btn-chip is-primary-action"
-                  title={copy("开通工作台成员", "Add Workbench member")}
-                  aria-label={copy("添加成员", "Add account")}
+                  title={t("admin.add_member_title")}
+                  aria-label={t("admin.add_member")}
                   onClick={() => setCreateOpen(true)}
                 >
                   <UserPlusIcon size={14} />
-                  <span>{copy("添加成员", "Add account")}</span>
+                  <span>{t("admin.add_member")}</span>
                 </button>
               </div>
             </div>
             {!users && !error && (
-              <Loading compact text={copy("正在读取团队成员…", "Loading team members…")} />
+              <Loading compact text={t("admin.loading_members")} />
             )}
             {users && (
               <TeamTable
@@ -167,7 +159,7 @@ export function AdminPage() {
                 onLockedAction={refuseTeamAction}
                 onToggle={async (userId) => {
                   if (userId === user?.id) {
-                    toast(copy("不能停用当前登录账号", "Cannot disable the current account"), "error");
+                    toast(t("admin.cannot_disable_self"), "error");
                     return;
                   }
                   await toggleMember(userId);
@@ -176,7 +168,7 @@ export function AdminPage() {
                 }}
                 onDelete={(member) => {
                   if (member.id === user?.id) {
-                    toast(copy("不能删除当前登录账号", "Cannot delete the current account"), "error");
+                    toast(t("admin.cannot_delete_self"), "error");
                     return;
                   }
                   setDeletingMember(member);
@@ -204,7 +196,7 @@ export function AdminPage() {
               onClose={() => setDeletingMember(null)}
               onConfirm={async (password) => {
                 await deleteMember(deletingMember.id, password);
-                toast(copy("已移出企业，个人账号仍保留", "Member removed from the team. Their personal account remains active."));
+                toast(t("admin.member_removed"));
                 invalidateAdmin();
                 await Promise.all([loadUsers(true), loadAudit(true)]);
               }}
@@ -212,11 +204,11 @@ export function AdminPage() {
           </>
         ) : (
           <div className="toolbar admin-section-toolbar">
-            <h2>{copy("团队成员", "Team members")}</h2>
+            <h2>{t("admin.team_members")}</h2>
             <p className="muted" style={{ margin: 0 }}>
               {teamManaged
-                ? copy("仅管理员可管理团队成员。", "Only admins can manage team members.")
-                : teamLockedHint(copy)}
+                ? t("admin.admin_only_members")
+                : t("admin.team_locked_hint")}
             </p>
           </div>
         )}
@@ -239,7 +231,9 @@ export function AdminPage() {
           refreshing={refreshing}
         />
         {auditError && <p className="error">{auditError}</p>}
-        {!audit && !auditError && <Loading compact text={copy("正在读取操作记录…", "Loading activity…")} />}
+        {!audit && !auditError && (
+          <Loading compact text={t("admin.loading_audit")} />
+        )}
         {audit && <AuditLogTable events={audit.events} />}
         {audit && (
           <Pagination
@@ -248,7 +242,10 @@ export function AdminPage() {
             canNext={page * (audit.page_size || pageSize) < (audit.count || 0)}
             onPrevious={() => setPage(page - 1)}
             onNext={() => setPage(page + 1)}
-            label={copy(`第 ${page} 页 · 每页 ${audit.page_size || pageSize} 条`, `Page ${page} · ${audit.page_size || pageSize} per page`)}
+            label={t("admin.page_label", {
+              page,
+              size: audit.page_size || pageSize,
+            })}
           />
         )}
       </section>

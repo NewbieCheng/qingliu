@@ -194,7 +194,7 @@ if ($docs.Count -lt 1) {
   foreach ($d in $docs) {
     $scopes[$d.id] = @{
       holder       = "合成持有人"
-      relationship = "本人"
+      relationship = "Self"
       include      = $true
     }
   }

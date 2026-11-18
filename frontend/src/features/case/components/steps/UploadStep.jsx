@@ -67,12 +67,8 @@ export function UploadStep({ data, onUpload, onCommitParsed, onNext }) {
           </p>
         ) : null}
         <div className="form-footer">
-          <label className="check">
-            <input type="checkbox" name="ocr" value="true" />
-            {t("upload.enable_ocr")}
-          </label>
           <div className="actions-end">
-            <button type="button" className="ghost" onClick={onNext}>
+            <button type="button" className="btn-chip" onClick={onNext}>
               {t("upload.next_step")}
             </button>
             <button className="primary" disabled={data.busy || Boolean(progress)}>

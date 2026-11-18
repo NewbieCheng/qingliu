@@ -23,7 +23,7 @@ func TestVerifyRealStatements(t *testing.T) {
 		source = "other"
 	}
 	ctx := context.Background()
-	result, parseErr := parseFile(ctx, raw, path, source, false, func(page, total int) {
+	result, parseErr := parseFile(ctx, raw, path, source, func(page, total int) {
 		if page == 1 || page == total || page%20 == 0 {
 			t.Logf("progress %d/%d (%d%%)", page, total, parsePercent(page, total))
 		}

@@ -87,7 +87,7 @@ func command(ctx context.Context, name string, args ...string) ([]byte, error) {
 	}
 	return out.Bytes(), nil
 }
-func parseFile(ctx context.Context, b []byte, name, source string, ocr bool, progress func(int, int)) (ParseResult, error) {
+func parseFile(ctx context.Context, b []byte, name, source string, progress func(int, int)) (ParseResult, error) {
 	result := ParseResult{Object{"source": source, "status": "success", "issues": []string{}, "facts": []Object{}, "pages": 0, "subject_name": "", "coverage": "", "method": "standard-import"}, []Object{}}
 	ext := strings.ToLower(filepath.Ext(name))
 	if ext != ".pdf" {
@@ -247,6 +247,7 @@ func parseFile(ctx context.Context, b []byte, name, source string, ocr bool, pro
 		textPages := 0
 		ocrPages := 0
 		visionPages := 0
+		var extractBuilder strings.Builder
 		var walletLayout []Anchor
 		for i, p := range doc.Pages {
 			if e = ctx.Err(); e != nil {
@@ -255,8 +256,8 @@ func parseFile(ctx context.Context, b []byte, name, source string, ocr bool, pro
 			progress(i+1, count)
 			words := p.words()
 			if len(words) == 0 {
-				// 优先级链：文字层取不到 → 自动降级到本机 tesseract（免费）。
-				// 视觉模型（收费）不在这里自动调用，由用户在界面上确认后才走。
+				// 优先级链：文字层取不到 → 自动降级到本机 tesseract（按 ocr 档计价）。
+				// 工作台计费 OCR（POST /v1/ocr）不在这里自动调用，由上传链路后段升级。
 				if txt, ok := localOCRPage(ctx, file, dir, i+1); ok {
 					ocrPages++
 					facts = append(facts, Object{"page": i + 1, "text": txt, "kind": "OCR候选，需对照原页人工核对"})
@@ -264,13 +265,20 @@ func parseFile(ctx context.Context, b []byte, name, source string, ocr bool, pro
 					continue
 				}
 				visionPages++
-				issues = append(issues, fmt.Sprintf("第%d页无文字层且本机 OCR 未识别出内容，建议使用「文档视觉识别」", i+1))
+				issues = append(issues, fmt.Sprintf("第%d页无文字层且本机 OCR 未识别出内容，将尝试工作台 OCR", i+1))
 				continue
 			}
 			textPages++
+			pageText := strings.Join(pageLines(words), "\n")
+			if pageText != "" {
+				extractBuilder.WriteString("【第")
+				extractBuilder.WriteString(fmt.Sprint(i + 1))
+				extractBuilder.WriteString("页】\n")
+				extractBuilder.WriteString(pageText)
+				extractBuilder.WriteByte('\n')
+			}
 			if source == "credit_report" {
-				lines := pageLines(words)
-				for _, line := range lines {
+				for _, line := range pageLines(words) {
 					if contains(normalize(line), "报告日期", "报告时间", "未结清", "贷款余额", "逾期", "查询", "呆账", "代偿", "账户数") {
 						facts = append(facts, Object{"page": i + 1, "text": line, "kind": "原文候选事实/待人工确认"})
 					}
@@ -291,6 +299,9 @@ func parseFile(ctx context.Context, b []byte, name, source string, ocr bool, pro
 		// 解析路径与页数决定计费档位：text=纯提取，ocr=本机识别，vision=需模型兜底。
 		result.Meta["ocr_pages"] = ocrPages
 		result.Meta["vision_pages"] = visionPages
+		if extract := strings.TrimSpace(extractBuilder.String()); extract != "" {
+			result.Meta["extract_text"] = truncateRunes(extract, structureRescueMaxInputRunes)
+		}
 		switch {
 		case textPages > 0 && ocrPages == 0:
 			result.Meta["method"] = "text-layer"

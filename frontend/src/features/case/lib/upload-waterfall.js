@@ -29,7 +29,6 @@ export async function runUploadWaterfall({
 }) {
   const files = form.getAll("files").filter((item) => item instanceof File);
   const source = String(form.get("source") || "");
-  const ocr = form.get("ocr");
   const baseBatch = String(form.get("batch") || "").trim();
 
   const gate = preflight(files, { source });
@@ -106,7 +105,6 @@ export async function runUploadWaterfall({
     const next = new FormData();
     next.set("source", source);
     if (baseBatch) next.set("batch", baseBatch);
-    if (ocr) next.set("ocr", String(ocr));
     for (const file of serverFiles) {
       next.append("files", file);
     }

@@ -78,7 +78,7 @@ func TestSourcesNeverAddTogether(t *testing.T) {
 }
 func TestCSVAndXLSX(t *testing.T) {
 	csv := []byte("date,direction,amount,counterparty,memo\n2026-01-01,收入,100.01,买家,货款\n2026-01-02,支出,5.05,商户,消费\n")
-	r, e := parseFile(context.Background(), csv, "test.csv", "bank_statement", false, func(int, int) {})
+	r, e := parseFile(context.Background(), csv, "test.csv", "bank_statement", func(int, int) {})
 	if e != nil || len(r.Rows) != 2 || integer(r.Rows[0]["income"]) != 10001 || integer(r.Rows[1]["expense"]) != 505 {
 		t.Fatalf("%v %v", r, e)
 	}
@@ -148,7 +148,7 @@ func TestXLSXActualImport(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := parseFile(context.Background(), b.Bytes(), "synthetic.xlsx", "bank_statement", false, func(int, int) {})
+	r, e := parseFile(context.Background(), b.Bytes(), "synthetic.xlsx", "bank_statement", func(int, int) {})
 	if e != nil || len(r.Rows) != 1 || integer(r.Rows[0]["income"]) != 10001 {
 		t.Fatalf("xlsx: %v %v", r, e)
 	}

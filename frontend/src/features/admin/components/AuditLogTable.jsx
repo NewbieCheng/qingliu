@@ -32,17 +32,16 @@ function AuditDetailCell({ event }) {
 }
 
 export function AuditLogTable({ events }) {
-  const { locale } = useI18n();
-  const copy = (zh, en) => (locale === "en-US" ? en : zh);
+  const { t } = useI18n();
   return (
     <div className="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Time</th>
-            <th>{copy("成员", "Member")}</th>
-            <th>Actions</th>
-            <th>{copy("客户 / 详情", "Customer / details")}</th>
+            <th>{t("admin.audit_col_time")}</th>
+            <th>{t("admin.audit_col_member")}</th>
+            <th>{t("admin.audit_col_action")}</th>
+            <th>{t("admin.audit_col_detail")}</th>
           </tr>
         </thead>
         <tbody>
@@ -60,7 +59,9 @@ export function AuditLogTable({ events }) {
           ))}
         </tbody>
       </table>
-      {events.length === 0 && <p className="empty">{copy("当前筛选没有操作记录。", "No activity matches the current filters.")}</p>}
+      {events.length === 0 && (
+        <p className="empty">{t("admin.audit_empty")}</p>
+      )}
     </div>
   );
 }
