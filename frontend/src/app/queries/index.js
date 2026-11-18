@@ -1,6 +1,7 @@
 import { cacheQuery, dropCache } from "@/shared/api/cache.js";
 import { listClients } from "@/features/clients/api.js";
 import { getAdminOverview, listAuditEvents } from "@/features/admin/api.js";
+import { getAnalyses } from "@/features/ai-analysis/api.js";
 import { getBalance } from "@/features/billing/api.js";
 import { getCase } from "@/features/case/api.js";
 import { getProfile, listSpaces } from "@/features/profile/api.js";
@@ -13,6 +14,8 @@ const TTL = {
   audit: 15_000,
   // 底稿页短去重：翻页/筛选连点不重复打；busy 轮询与写后走 force
   case: 8_000,
+  // 终态分析结果：开关弹窗不重复打；进行中轮询走 force
+  analyses: 30_000,
 };
 
 export function queryClients({ query, page, force = false }) {
@@ -82,6 +85,21 @@ export function invalidateClients() {
 
 export function invalidateCase(cid) {
   dropCache(cid ? `case:${cid}:` : "case:");
+}
+
+/**
+ * AI 分析列表：内存短 TTL。权威在服务端；写后 / 进行中轮询必须 force。
+ */
+export function queryAnalyses(cid, { force = false } = {}) {
+  return cacheQuery(() => getAnalyses(cid), {
+    key: `ai-analysis:${cid}`,
+    ttlMs: TTL.analyses,
+    force,
+  });
+}
+
+export function invalidateAnalyses(cid) {
+  dropCache(cid ? `ai-analysis:${cid}` : "ai-analysis:");
 }
 
 export function invalidateAdmin() {

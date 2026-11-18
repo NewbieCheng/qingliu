@@ -30,6 +30,24 @@ describe("api cache", () => {
     expect(origin).toHaveBeenCalledTimes(2);
   });
 
+  it("coalesces concurrent requests for the same key", async () => {
+    let resolveOrigin;
+    const origin = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveOrigin = resolve;
+        }),
+    );
+    const first = cacheQuery(origin, { key: "x", ttlMs: 1000 });
+    const second = cacheQuery(origin, { key: "x", ttlMs: 1000 });
+    expect(origin).toHaveBeenCalledTimes(1);
+    resolveOrigin({ ok: true });
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { ok: true },
+      { ok: true },
+    ]);
+  });
+
   it("expires entries after the TTL", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));

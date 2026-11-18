@@ -4,27 +4,29 @@ import { formatDateTime } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { ModalActions } from "@/shared/ui/ModalActions.jsx";
-import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { SegmentedControl } from "@/shared/ui/SegmentedControl.jsx";
 import { FoldPanel } from "@/shared/ui/FoldPanel.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { navigate } from "@/shared/router/index.js";
-import { queryBalance } from "@/app/queries/index.js";
+import {
+  invalidateAnalyses,
+  queryAnalyses,
+  queryBalance,
+} from "@/app/queries/index.js";
 import { availablePoints } from "@/features/billing/index.js";
 import { isInsufficientPointsError } from "@/shared/lib/billing.js";
 import {
   applyAISuggest,
   applyAIWriteback,
-  getAnalyses,
   startAnalysis,
 } from "./api.js";
+import { AIReportDialog } from "./AIReportDialog.jsx";
 import {
   copyText,
   downloadText,
   enrichAIResult,
   formatAIExportText,
   formatAISummary,
-  formatPageLabel,
   splitSummaryBlocks,
 } from "./format-result.js";
 
@@ -40,8 +42,6 @@ const ETA_HINT_KEY = {
   analysis: "job.eta.ai_analysis",
   page_ocr: "job.eta.upload",
 };
-
-const RESULT_PAGE_SIZE = 10;
 
 const AI_MODES = [
   {
@@ -159,141 +159,20 @@ function AIResultActions({ result, disabled }) {
   );
 }
 
-function formatDetailAmount(value) {
-  if (value == null || value === "") return "";
-  if (Array.isArray(value)) {
-    return value
-      .map((part) => String(part ?? "").trim())
-      .filter(Boolean)
-      .join("、");
-  }
-  return String(value).trim();
-}
-
-function AIDetailRow({ row, t }) {
-  if (typeof row === "string") {
-    return <li className="ai-detail-card">{row}</li>;
-  }
-  const title = row?.item || row?.source || row?.label || "";
-  const amount = formatDetailAmount(row?.amount);
-  const page = formatPageLabel(row?.page);
-  const evidence = [row?.locator, row?.evidence, row?.ai_locator]
-    .map((part) => String(part || "").trim())
-    .filter(Boolean)
-    .filter((part) => part !== page);
-  return (
-    <li className="ai-detail-card">
-      <div className="ai-detail-card-main">
-        <strong>{title || "—"}</strong>
-        {amount ? <span className="ai-detail-amount">{amount}</span> : null}
-      </div>
-      {(page || evidence.length > 0) && (
-        <div className="ai-detail-meta">
-          {page ? <span className="ai-page-pill">{page}</span> : null}
-          {evidence.length > 0 ? (
-            <span className="muted">
-              {t("case.original.location")}: {evidence.join(" · ")}
-            </span>
-          ) : null}
-        </div>
-      )}
-    </li>
-  );
-}
-
-function AIResultDialog({ open, onClose, result }) {
-  const { t } = useI18n();
-  const tabs = [
-    { key: "income_structure", label: t("ai.mode_analysis") },
-    { key: "anomalies", label: t("case.review.title") },
-    { key: "questions", label: t("ai.write_suggest") },
-  ].filter((tab) => (result?.[tab.key] || []).length > 0);
-  const [tab, setTab] = useState(tabs[0]?.key || "");
-  const [page, setPage] = useState(1);
-  useEffect(() => {
-    setTab(tabs[0]?.key || "");
-    setPage(1);
-  }, [open]);
-  if (!open || !result || tabs.length === 0) return null;
-  const activeTab = tabs.find((item) => item.key === tab) || tabs[0];
-  const rows = result[activeTab.key] || [];
-  const visible = rows.slice(
-    (page - 1) * RESULT_PAGE_SIZE,
-    page * RESULT_PAGE_SIZE,
-  );
-  return (
-    <Modal title={t("ai.title")} onClose={onClose} className="ai-result-dialog">
-      <div className="ai-result-toolbar">
-        <div className="modal-tabs" role="tablist" aria-label={t("ai.panel_title")}>
-          {tabs.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              role="tab"
-              aria-selected={item.key === activeTab.key}
-              className={item.key === activeTab.key ? "is-active" : ""}
-              onClick={() => {
-                setTab(item.key);
-                setPage(1);
-              }}
-            >
-              {item.label}
-              <span className="ai-tab-count">{result[item.key].length}</span>
-            </button>
-          ))}
-        </div>
-        <div className="ai-result-actions ai-result-actions--top">
-          <button
-            type="button"
-            className="btn-chip"
-            onClick={() => void handleCopyExport(result, "copy", t)}
-          >
-            {t("common.copy")}
-          </button>
-          <button
-            type="button"
-            className="btn-chip"
-            onClick={() => void handleCopyExport(result, "export", t)}
-          >
-            {t("common.export")}
-          </button>
-        </div>
-      </div>
-      <ul className="ai-detail-list">
-        {visible.map((row, index) => (
-          <AIDetailRow key={index} row={row} t={t} />
-        ))}
-      </ul>
-      {rows.length > RESULT_PAGE_SIZE && (
-        <Pagination
-          page={page}
-          onPrevious={() => setPage((value) => value - 1)}
-          onNext={() => setPage((value) => value + 1)}
-          canPrevious={page > 1}
-          canNext={page * RESULT_PAGE_SIZE < rows.length}
-          label={`${t("common.page", { page })} · ${rows.length}`}
-        />
-      )}
-    </Modal>
-  );
-}
-
 function AIAnalysisDialog({
   cid,
   docs = [],
   onClose,
   intent = "start",
   focusAnalysisId = "",
+  onViewReport,
 }) {
   const { t } = useI18n();
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [resultOpen, setResultOpen] = useState(intent === "view");
   const [mode, setMode] = useState("analysis");
   const [documentId, setDocumentId] = useState(docs[0]?.id || "");
-  // 积分余额：AI 解析按用量扣积分，余额为 0 时先说清楚要充值，别让用户
-  // 点了「开始分析」才吃一个 402。null = 还没读到（不阻塞按钮）。
   const [points, setPoints] = useState(null);
 
   useEffect(() => {
@@ -322,9 +201,9 @@ function AIAnalysisDialog({
 
   const needRecharge = points !== null && Number(points) <= 0;
 
-  async function load() {
+  async function load({ force = false } = {}) {
     try {
-      const data = await getAnalyses(cid);
+      const data = await queryAnalyses(cid, { force });
       setItems(data.items || []);
       setError("");
     } catch (requestError) {
@@ -336,26 +215,16 @@ function AIAnalysisDialog({
     void load();
   }, [cid]);
 
-  useEffect(() => {
-    const latest = items[0];
-    if (!latest || !isActiveStatus(latest.status)) {
-      return undefined;
-    }
-    const timer = window.setInterval(load, 2500);
-    return () => window.clearInterval(timer);
-  }, [items[0]?.id, items[0]?.status, cid]);
+  const latest = items[0];
+  const running = latest && isActiveStatus(latest.status);
 
   useEffect(() => {
-    if (intent !== "view") return;
-    const focus =
-      (focusAnalysisId &&
-        items.find((item) => String(item.id) === String(focusAnalysisId))) ||
-      items.find((item) => item.status === "done") ||
-      items[0];
-    if (focus?.status === "done" && focus?.result) {
-      setResultOpen(true);
-    }
-  }, [intent, focusAnalysisId, items]);
+    if (!running) return undefined;
+    const timer = window.setInterval(() => {
+      void load({ force: true });
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [running, latest?.id, latest?.status, cid]);
 
   async function start() {
     if (!documentId) {
@@ -375,10 +244,10 @@ function AIAnalysisDialog({
         mode === "page_ocr" ? t("ai.start_ocr") : t("ai.start_analysis"),
         "info",
       );
-      await load();
+      invalidateAnalyses(cid);
+      await load({ force: true });
     } catch (requestError) {
       setError(requestError.message);
-      // 402 = 积分不足：把余额归零并让「前往充值」条露出来，比只弹 toast 有用。
       if (isInsufficientPointsError(requestError)) setPoints(0);
       toast(requestError.message, "error");
     } finally {
@@ -393,9 +262,7 @@ function AIAnalysisDialog({
       const data = await applyAISuggest(cid, latest.id);
       const n = Number(data?.applied) || 0;
       toast(
-        n > 0
-          ? t("ai.write_suggest")
-          : t("ai.pick_doc"),
+        n > 0 ? t("ai.write_suggest") : t("ai.pick_doc"),
         n > 0 ? "success" : "info",
       );
     } catch (requestError) {
@@ -426,9 +293,6 @@ function AIAnalysisDialog({
 
   const selectedDoc = docs.find((doc) => String(doc.id) === String(documentId));
   const canStart = Boolean(documentId) && !busy && !needRecharge;
-
-  const latest = items[0];
-  const running = latest && isActiveStatus(latest.status);
   const percent = progressValue(latest);
   const displayResult = latest?.result ? enrichAIResult(latest.result) : null;
   const detailCount =
@@ -438,225 +302,232 @@ function AIAnalysisDialog({
   const summaryText = displayResult
     ? formatAISummary(displayResult) || displayResult.summary || ""
     : "";
-  const modeHint = t(AI_MODES.find((item) => item.value === mode)?.hintKey || AI_MODES[0].hintKey);
+  const modeHint = t(
+    AI_MODES.find((item) => item.value === mode)?.hintKey || AI_MODES[0].hintKey,
+  );
   const eta = t(ETA_HINT_KEY[mode] || ETA_HINT_KEY.analysis);
 
+  const focusItem =
+    (focusAnalysisId &&
+      items.find((item) => String(item.id) === String(focusAnalysisId))) ||
+    items.find((item) => item.status === "done") ||
+    latest;
+
   return (
-    <>
-      <Modal title={t("ai.title")} onClose={onClose} className="modal--sm">
-        <div className="ai-dialog-body">
-          <p className="muted" style={{ margin: 0 }}>
-            {t("ai.panel_title")}
+    <Modal title={t("ai.title")} onClose={onClose} className="modal--sm">
+      <div className="ai-dialog-body">
+        <p className="muted" style={{ margin: 0 }}>
+          {t("ai.panel_title")}
+        </p>
+        {error ? (
+          <p className="error" role="alert">
+            {error}
           </p>
-          {error ? (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          ) : null}
-          {needRecharge ? (
-            <div className="billing-notice" role="status">
-              <span>
-                {t("ai.recharge_prompt_body")}
-              </span>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => {
-                  onClose();
-                  navigate("/recharge");
-                }}
-              >
-                {t("ai.go_recharge")}
-              </button>
-            </div>
-          ) : null}
-          <label className="field">
-            <span>{t("ai.pick_doc")}</span>
-            {docs.length ? (
-              <select
-                value={documentId}
-                onChange={(event) => setDocumentId(event.target.value)}
-                disabled={busy || running}
-                aria-label={t("ai.pick_doc")}
-              >
-                {docs.map((doc) => (
-                  <option key={doc.id} value={doc.id}>
-                    {doc.name}
-                    {doc.meta?.pages
-                      ? ` · ${t("ai.doc_pages", { n: doc.meta.pages })}`
-                      : ""}
-                    {doc.meta?.rows
-                      ? ` · ${t("ai.doc_rows", { n: doc.meta.rows })}`
-                      : ""}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <p className="muted" style={{ margin: 0 }}>
-                {t("ai.need_upload")}
-              </p>
-            )}
-            {selectedDoc ? (
-              <p className="ai-mode-hint">
-                {t("ai.mode_analysis_hint")}
-              </p>
-            ) : null}
-          </label>
-          <div>
-            <SegmentedControl
-              aria-label={t("ai.panel_title")}
-              value={mode}
-              onChange={setMode}
-              options={AI_MODES.map((item) => ({ ...item, label: t(item.labelKey) }))}
-            />
-            <p className="ai-mode-hint">
-              {modeHint} · {eta}
-            </p>
-          </div>
-          <ModalActions>
-            <button type="button" className="ghost" onClick={() => void load()}>
-              {t("topbar.refresh")}
-            </button>
+        ) : null}
+        {needRecharge ? (
+          <div className="billing-notice" role="status">
+            <span>{t("ai.recharge_prompt_body")}</span>
             <button
               type="button"
-              className="primary"
-              disabled={!canStart || running}
-              onClick={() => void start()}
+              className="ghost"
+              onClick={() => {
+                onClose();
+                navigate("/recharge");
+              }}
             >
-              {busy
-                ? t("ai.status_queued")
-                : latest?.status === "done" || intent === "rerun"
-                  ? t("ai.btn_rerun")
-                  : t("ai.btn_start")}
+              {t("ai.go_recharge")}
             </button>
-          </ModalActions>
-          {latest ? (
-            <div className="ai-result">
-              <p className="muted">
-                {t("ai.title")}:
-                <StatusBadge
-                  tone={
-                    latest.status === "done"
-                      ? "default"
-                      : latest.status === "failed"
-                        ? "amber"
-                        : "amber"
-                  }
+          </div>
+        ) : null}
+        <label className="field">
+          <span>{t("ai.pick_doc")}</span>
+          {docs.length ? (
+            <select
+              value={documentId}
+              onChange={(event) => setDocumentId(event.target.value)}
+              disabled={busy || running}
+              aria-label={t("ai.pick_doc")}
+            >
+              {docs.map((doc) => (
+                <option key={doc.id} value={doc.id}>
+                  {doc.name}
+                  {doc.meta?.pages
+                    ? ` · ${t("ai.doc_pages", { n: doc.meta.pages })}`
+                    : ""}
+                  {doc.meta?.rows
+                    ? ` · ${t("ai.doc_rows", { n: doc.meta.rows })}`
+                    : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <p className="muted" style={{ margin: 0 }}>
+              {t("ai.need_upload")}
+            </p>
+          )}
+          {selectedDoc ? (
+            <p className="ai-mode-hint">{t("ai.mode_analysis_hint")}</p>
+          ) : null}
+        </label>
+        <div>
+          <SegmentedControl
+            aria-label={t("ai.panel_title")}
+            value={mode}
+            onChange={setMode}
+            options={AI_MODES.map((item) => ({
+              ...item,
+              label: t(item.labelKey),
+            }))}
+          />
+          <p className="ai-mode-hint">
+            {modeHint} · {eta}
+          </p>
+        </div>
+        <ModalActions className="actions-end">
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => void load({ force: true })}
+          >
+            {t("topbar.refresh")}
+          </button>
+          <button
+            type="button"
+            className="primary"
+            disabled={!canStart || running}
+            onClick={() => void start()}
+          >
+            {busy
+              ? t("ai.status_queued")
+              : latest?.status === "done" || intent === "rerun"
+                ? t("ai.btn_rerun")
+                : t("ai.btn_start")}
+          </button>
+        </ModalActions>
+        {latest ? (
+          <div className="ai-result">
+            <p className="muted">
+              {t("ai.title")}:
+              <StatusBadge
+                tone={
+                  latest.status === "done"
+                    ? "default"
+                    : latest.status === "failed"
+                      ? "amber"
+                      : "amber"
+                }
+              >
+                {t(STATUS_KEY[latest.status] || "ai.status_failed")}
+              </StatusBadge>
+              {latest.error ? ` · ${latest.error}` : ""}
+              {focusAnalysisId && String(latest.id) === String(focusAnalysisId)
+                ? ` · ${t("ai.focused_result")}`
+                : ""}
+            </p>
+            {running ? (
+              <>
+                <div
+                  className="task-progress"
+                  role="progressbar"
+                  aria-valuenow={percent}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={t("ai.panel_title")}
                 >
-                  {t(STATUS_KEY[latest.status] || "ai.status_failed")}
-                </StatusBadge>
-                {latest.error ? ` · ${latest.error}` : ""}
-                {focusAnalysisId && String(latest.id) === String(focusAnalysisId)
-                  ? ` · ${t("ai.focused_result")}`
-                  : ""}
-              </p>
-              {running ? (
-                <>
                   <div
-                    className="task-progress"
-                    role="progressbar"
-                    aria-valuenow={percent}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label={t("ai.panel_title")}
-                  >
-                    <div
-                      className="task-progress-bar"
-                      style={{ width: `${percent}%` }}
-                    />
-                  </div>
-                  <p className="task-meta">
-                    <span>
-                      {latest.stage === "running" ? t("ai.status_running") : t(STATUS_KEY[latest.status] || "ai.status_running")}
-                      {" · "}
-                      {eta}
-                    </span>
-                    <span>{percent}%</span>
-                  </p>
-                </>
+                    className="task-progress-bar"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+                <p className="task-meta">
+                  <span>
+                    {latest.stage === "running"
+                      ? t("ai.status_running")
+                      : t(STATUS_KEY[latest.status] || "ai.status_running")}
+                    {" · "}
+                    {eta}
+                  </span>
+                  <span>{percent}%</span>
+                </p>
+              </>
+            ) : null}
+            <AIProcessLog process={displayResult?.process} />
+            {summaryText ? (
+              <AISummaryBlocks
+                summaryText={summaryText}
+                trailing={running && displayResult?.partial ? "…" : ""}
+              />
+            ) : latest.status === "done" ? (
+              <p className="muted">{t("ai.status_done")}</p>
+            ) : running ? (
+              <p className="muted">{t("ai.status_running")}</p>
+            ) : null}
+            <div className="ai-result-actions ai-result-actions--stack">
+              <AIResultActions result={displayResult} />
+              {latest.status === "done" ? (
+                <button
+                  type="button"
+                  className="btn-chip"
+                  disabled={busy}
+                  onClick={() => void writeSuggest()}
+                >
+                  {t("ai.write_suggest")}
+                </button>
               ) : null}
-              <AIProcessLog process={displayResult?.process} />
-              {summaryText ? (
-                <AISummaryBlocks
-                  summaryText={summaryText}
-                  trailing={running && displayResult?.partial ? "…" : ""}
-                />
-              ) : latest.status === "done" ? (
-                <p className="muted">{t("ai.status_done")}</p>
-              ) : running ? (
-                <p className="muted">{t("ai.status_running")}</p>
+              {latest.status === "done" && displayResult?.text ? (
+                <button
+                  type="button"
+                  className="btn-chip"
+                  disabled={busy}
+                  onClick={() => void writeOCRRows()}
+                >
+                  {t("ai.write_ocr")}
+                </button>
               ) : null}
-              <div className="ai-result-actions ai-result-actions--stack">
-                <AIResultActions result={displayResult} />
-                {latest.status === "done" ? (
-                  <button
-                    type="button"
-                    className="btn-chip"
-                    disabled={busy}
-                    onClick={() => void writeSuggest()}
-                  >
-                    {t("ai.write_suggest")}
-                  </button>
-                ) : null}
-                {latest.status === "done" && displayResult?.text ? (
-                  <button
-                    type="button"
-                    className="btn-chip"
-                    disabled={busy}
-                    onClick={() => void writeOCRRows()}
-                  >
-                    {t("ai.write_ocr")}
-                  </button>
-                ) : null}
-                {detailCount > 0 ? (
-                  <button
-                    type="button"
-                    className="btn-chip is-ok"
-                    onClick={() => setResultOpen(true)}
-                  >
-                    {t("ai.view_details", { n: detailCount })}
-                  </button>
-                ) : null}
-              </div>
-              {displayResult?.disclaimer ? (
-                <p className="muted">{displayResult.disclaimer}</p>
+              {detailCount > 0 ? (
+                <button
+                  type="button"
+                  className="btn-chip is-ok"
+                  onClick={() => onViewReport?.(focusItem || latest)}
+                >
+                  {t("ai.view_details", { n: detailCount })}
+                </button>
               ) : null}
             </div>
-          ) : null}
-          {items.length > 1 ? (
-            <FoldPanel title={`${t("ai.panel_title")} (${items.length})`}>
-              <ul>
-                {items.slice(1).map((item) => (
-                  <li key={item.id}>
-                    {formatDateTime(item.created)} ·{" "}
-                    {t(STATUS_KEY[item.status] || "ai.status_failed")}
-                  </li>
-                ))}
-              </ul>
-            </FoldPanel>
-          ) : null}
-        </div>
-      </Modal>
-      <AIResultDialog
-        open={resultOpen && detailCount > 0}
-        onClose={() => setResultOpen(false)}
-        result={displayResult}
-      />
-    </>
+            {displayResult?.disclaimer ? (
+              <p className="muted">{displayResult.disclaimer}</p>
+            ) : null}
+          </div>
+        ) : null}
+        {items.length > 1 ? (
+          <FoldPanel title={`${t("ai.panel_title")} (${items.length})`}>
+            <ul>
+              {items.slice(1).map((item) => (
+                <li key={item.id}>
+                  {formatDateTime(item.created)} ·{" "}
+                  {t(STATUS_KEY[item.status] || "ai.status_failed")}
+                </li>
+              ))}
+            </ul>
+          </FoldPanel>
+        ) : null}
+      </div>
+    </Modal>
   );
 }
 
 /** 报告页入口：按分析状态展示「查看报告 / 重新分析」，不再永远「开始分析」。 */
 export function AIAnalysisPanel({ cid, docs = [] }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
   const [intent, setIntent] = useState("start");
   const [focusAnalysisId, setFocusAnalysisId] = useState("");
   const [items, setItems] = useState([]);
+  const [reportAnalysis, setReportAnalysis] = useState(null);
 
-  async function refresh() {
+  async function refresh({ force = false } = {}) {
     try {
-      const data = await getAnalyses(cid);
+      const data = await queryAnalyses(cid, { force });
       setItems(data.items || []);
     } catch {
       setItems([]);
@@ -665,7 +536,7 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
 
   useEffect(() => {
     let cancelled = false;
-    getAnalyses(cid)
+    queryAnalyses(cid)
       .then((data) => {
         if (!cancelled) setItems(data.items || []);
       })
@@ -675,7 +546,7 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
     return () => {
       cancelled = true;
     };
-  }, [cid, open]);
+  }, [cid]);
 
   const entry = pickEntryState(items);
   const current = entry.current;
@@ -683,15 +554,15 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
   const percent = progressValue(current);
   const eta = t(ETA_HINT_KEY.analysis);
 
-  // 入口卡与弹窗、任务坞共用同一进度真相：进行中持续轮询 analyses。
+  // 弹窗打开时由 Dialog 负责 force 轮询；入口卡仅在关闭且进行中时轮询。
   useEffect(() => {
-    if (open) return undefined;
+    if (setupOpen) return undefined;
     if (!running) return undefined;
     const timer = window.setInterval(() => {
-      void refresh();
+      void refresh({ force: true });
     }, 2500);
     return () => window.clearInterval(timer);
-  }, [cid, open, running, current?.id, current?.status]);
+  }, [cid, setupOpen, running, current?.id, current?.status]);
 
   let statusLine = t("ai.entry_idle");
   if (entry.mode === "running") {
@@ -707,11 +578,23 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
       : t("ai.status_failed");
   }
 
-  function openDialog(nextIntent, analysisId = "") {
+  function openSetup(nextIntent, analysisId = "") {
     setIntent(nextIntent);
     setFocusAnalysisId(analysisId || "");
-    setOpen(true);
+    setSetupOpen(true);
   }
+
+  function openReport(analysis) {
+    if (!analysis?.result) {
+      openSetup("view", analysis?.id);
+      return;
+    }
+    setReportAnalysis(analysis);
+  }
+
+  const reportResult = reportAnalysis?.result
+    ? enrichAIResult(reportAnalysis.result)
+    : null;
 
   return (
     <>
@@ -725,7 +608,7 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
             <button
               type="button"
               className="primary"
-              onClick={() => openDialog("start")}
+              onClick={() => openSetup("start")}
             >
               {t("ai.btn_start")}
             </button>
@@ -734,7 +617,7 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
             <button
               type="button"
               className="primary"
-              onClick={() => openDialog("view", current?.id)}
+              onClick={() => openSetup("view", current?.id)}
             >
               {t("ai.btn_view_progress")}
             </button>
@@ -744,14 +627,14 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
               <button
                 type="button"
                 className="primary"
-                onClick={() => openDialog("view", entry.latestDone?.id)}
+                onClick={() => openReport(entry.latestDone)}
               >
                 {t("ai.btn_view_report")}
               </button>
               <button
                 type="button"
                 className="ghost"
-                onClick={() => openDialog("rerun")}
+                onClick={() => openSetup("rerun")}
               >
                 {t("ai.btn_rerun")}
               </button>
@@ -762,7 +645,7 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
               <button
                 type="button"
                 className="primary"
-                onClick={() => openDialog("rerun")}
+                onClick={() => openSetup("rerun")}
               >
                 {t("ai.btn_rerun")}
               </button>
@@ -770,7 +653,7 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
                 <button
                   type="button"
                   className="ghost"
-                  onClick={() => openDialog("view", entry.latestDone.id)}
+                  onClick={() => openReport(entry.latestDone)}
                 >
                   {t("ai.btn_view_report")}
                 </button>
@@ -779,15 +662,28 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
           ) : null}
         </div>
       </div>
-      {open ? (
+      {setupOpen ? (
         <AIAnalysisDialog
           cid={cid}
           docs={docs}
           intent={intent}
           focusAnalysisId={focusAnalysisId}
-          onClose={() => setOpen(false)}
+          onClose={() => {
+            setSetupOpen(false);
+            void refresh();
+          }}
+          onViewReport={(analysis) => {
+            openReport(analysis);
+          }}
         />
       ) : null}
+      <AIReportDialog
+        open={Boolean(reportAnalysis && reportResult)}
+        analysis={reportAnalysis}
+        onClose={() => setReportAnalysis(null)}
+        onCopy={() => void handleCopyExport(reportResult, "copy", t)}
+        onExport={() => void handleCopyExport(reportResult, "export", t)}
+      />
     </>
   );
 }

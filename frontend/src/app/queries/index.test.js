@@ -4,17 +4,27 @@ const mocks = vi.hoisted(() => ({
   listClients: vi.fn(),
   listAuditEvents: vi.fn(),
   getAdminOverview: vi.fn(),
+  getAnalyses: vi.fn(),
   getBalance: vi.fn(),
   getCase: vi.fn(),
   getProfile: vi.fn(),
 }));
-const { listClients, listAuditEvents, getAdminOverview, getBalance, getCase, getProfile } = mocks;
+const {
+  listClients,
+  listAuditEvents,
+  getAdminOverview,
+  getAnalyses,
+  getBalance,
+  getCase,
+  getProfile,
+} = mocks;
 
 vi.mock("@/features/clients/api.js", () => ({ listClients: mocks.listClients }));
 vi.mock("@/features/admin/api.js", () => ({
   getAdminOverview: mocks.getAdminOverview,
   listAuditEvents: mocks.listAuditEvents,
 }));
+vi.mock("@/features/ai-analysis/api.js", () => ({ getAnalyses: mocks.getAnalyses }));
 vi.mock("@/features/billing/api.js", () => ({ getBalance: mocks.getBalance }));
 vi.mock("@/features/case/api.js", () => ({ getCase: mocks.getCase }));
 vi.mock("@/features/profile/api.js", () => ({ getProfile: mocks.getProfile }));
@@ -22,10 +32,12 @@ vi.mock("@/features/profile/api.js", () => ({ getProfile: mocks.getProfile }));
 import { clearApiCache } from "@/shared/api/cache.js";
 import {
   invalidateAdmin,
+  invalidateAnalyses,
   invalidateBalance,
   invalidateCase,
   invalidateClients,
   queryAdminOverview,
+  queryAnalyses,
   queryAuditEvents,
   queryBalance,
   queryCase,
@@ -101,5 +113,15 @@ describe("query cache policy", () => {
     invalidateCase("c1");
     await queryCase("c1", { range: "", view: "issues", query: "", page: 1 });
     expect(getCase).toHaveBeenCalledTimes(2);
+  });
+
+  it("deduplicates analyses and invalidates by customer", async () => {
+    getAnalyses.mockResolvedValue({ items: [] });
+    await queryAnalyses("c1");
+    await queryAnalyses("c1");
+    expect(getAnalyses).toHaveBeenCalledTimes(1);
+    invalidateAnalyses("c1");
+    await queryAnalyses("c1");
+    expect(getAnalyses).toHaveBeenCalledTimes(2);
   });
 });
