@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
@@ -19,6 +20,14 @@ import (
 	"sync"
 	"syscall"
 	"time"
+)
+
+const (
+	maxUploadBatchFiles   = 10
+	maxUploadFileBytes    = 30 << 20
+	maxUploadImageBytes   = 20 << 20
+	maxUploadBatchBytes   = 60 << 20
+	maxUploadRequestBytes = 64 << 20
 )
 
 type apiError struct {
@@ -668,12 +677,13 @@ func (a *App) mux() http.Handler {
 	a.registerUploadParsed(m)
 	m.HandleFunc("POST /api/clients/{cid}/upload", a.route(func(q *request) {
 		q.edit(func(cid string) {
+			q.r.Body = http.MaxBytesReader(q.w, q.r.Body, maxUploadRequestBytes)
 			if e := q.r.ParseMultipartForm(2 << 20); e != nil {
 				bad(400, "Upload failed; batch must be under 64MB")
 			}
 			defer q.r.MultipartForm.RemoveAll()
 			files := q.r.MultipartForm.File["files"]
-			require(len(files) >= 1 && len(files) <= 10, "每批请选择1至10份文件")
+			require(len(files) >= 1 && len(files) <= maxUploadBatchFiles, "每批请选择1至10份文件")
 			source := q.r.FormValue("source")
 			require(validSource(source), "无效来源")
 			// 解析按档计费：余额不足就别收文件，避免用户等一轮才发现扣不了费。
@@ -692,8 +702,44 @@ func (a *App) mux() http.Handler {
 					return
 				}
 			}
-			payloads := []Object{}
-			paths := []string{}
+			type stagedUpload struct {
+				id     string
+				name   string
+				sha    string
+				source string
+				bytes  []byte
+			}
+			staged := make([]stagedUpload, 0, len(files))
+			seen := map[string]bool{}
+			var totalBytes int64
+			for _, f := range files {
+				name := filepath.Base(strings.ReplaceAll(f.Filename, "\\", "/"))
+				b, err := readAndValidateUploadFile(name, f.Size, func(limit int64) ([]byte, error) {
+					stream, e := f.Open()
+					if e != nil {
+						return nil, e
+					}
+					defer stream.Close()
+					return io.ReadAll(io.LimitReader(stream, limit+1))
+				})
+				if err != nil {
+					bad(400, err.Error())
+				}
+				totalBytes += int64(len(b))
+				require(totalBytes <= maxUploadBatchBytes, "整批文件总大小不能超过 60MB")
+				sha := hash(b)
+				require(!seen[sha] && s.one("SELECT id FROM ql_documents WHERE customer_id=? AND sha=?", cid, sha) == nil, fmt.Sprintf("重复文件：客户或本批次已上传 %s", name))
+				seen[sha] = true
+				staged = append(staged, stagedUpload{
+					id:     id(),
+					name:   name,
+					sha:    sha,
+					source: source,
+					bytes:  b,
+				})
+			}
+			payloads := make([]Object, 0, len(staged))
+			paths := make([]string, 0, len(staged))
 			committed := false
 			defer func() {
 				if !committed {
@@ -702,29 +748,11 @@ func (a *App) mux() http.Handler {
 					}
 				}
 			}()
-			seen := map[string]bool{}
-			for _, f := range files {
-				require(f.Size > 0 && f.Size <= 30<<20, "Each file must be 1 byte–30MB")
-				name := filepath.Base(strings.ReplaceAll(f.Filename, "\\", "/"))
-				ext := strings.ToLower(filepath.Ext(name))
-				require((ext == ".pdf" || ext == ".csv" || ext == ".xlsx") && len([]rune(name)) <= 240, "仅支持PDF、CSV、XLSX文件")
-				stream, e := f.Open()
-				must(e)
-				b, e := io.ReadAll(io.LimitReader(stream, (30<<20)+1))
-				stream.Close()
-				must(e)
-				require(len(b) <= 30<<20, "File exceeds 30MB")
-				if ext == ".pdf" {
-					require(bytesPrefixPDF(b), "文件内容不是PDF")
-				}
-				sha := hash(b)
-				require(!seen[sha] && s.one("SELECT id FROM ql_documents WHERE customer_id=? AND sha=?", cid, sha) == nil, "重复文件：客户或本批次已上传此内容")
-				seen[sha] = true
-				jid := id()
-				path := filepath.Join(s.root, "pending", jid)
-				must(s.write(path, b))
+			for _, item := range staged {
+				path := filepath.Join(s.root, "pending", item.id)
+				must(s.write(path, item.bytes))
 				paths = append(paths, path)
-				payloads = append(payloads, Object{"id": jid, "name": name, "sha": sha, "source": source})
+				payloads = append(payloads, Object{"id": item.id, "name": item.name, "sha": item.sha, "source": item.source})
 			}
 			tx, e := s.db.Begin()
 			must(e)
@@ -864,11 +892,21 @@ func (a *App) mux() http.Handler {
 		cid := q.access()
 		did := q.r.PathValue("did")
 		d := s.one("SELECT name,sha,payload FROM ql_documents WHERE customer_id=? AND id=?", cid, did)
-		if d == nil || strings.ToLower(filepath.Ext(str(d, "name"))) != ".pdf" {
-			bad(404, "Original PDF not found")
+		if d == nil {
+			bad(404, "Original preview not found")
+		}
+		ext := strings.ToLower(filepath.Ext(str(d, "name")))
+		isPDF := ext == ".pdf"
+		isImg := isImageExt(ext)
+		if !isPDF && !isImg {
+			bad(404, "Original preview not found")
+		}
+		totalPages := int(integer(obj(str(d, "payload"))["pages"]))
+		if isImg && totalPages < 1 {
+			totalPages = 1
 		}
 		page, e := strconv.Atoi(q.r.PathValue("page"))
-		if e != nil || page < 1 || page > int(integer(obj(str(d, "payload"))["pages"])) {
+		if e != nil || page < 1 || page > totalPages {
 			bad(404, "Invalid page number")
 		}
 		etag := `"` + str(d, "sha") + ":" + fmt.Sprint(page) + `"`
@@ -881,6 +919,13 @@ func (a *App) mux() http.Handler {
 		}
 		b, e := s.read(filepath.Join(s.root, "uploads", cid, did))
 		must(e)
+		if isImg {
+			q.event(cid, "view_original_page", did+":1")
+			q.w.Header().Set("Content-Type", imageContentType(ext))
+			_, e = q.w.Write(b)
+			must(e)
+			return
+		}
 		ctx, cancel := context.WithTimeout(q.r.Context(), 30*time.Second)
 		defer cancel()
 		png, e := pdfPage(ctx, b, page)
@@ -1185,6 +1230,39 @@ func bytesPrefixPDF(b []byte) bool {
 		b = b[:1024]
 	}
 	return strings.Contains(string(b), "%PDF-")
+}
+
+func readAndValidateUploadFile(name string, declaredSize int64, read func(limit int64) ([]byte, error)) ([]byte, error) {
+	ext := strings.ToLower(filepath.Ext(name))
+	if !supportedUploadExt(ext) || len([]rune(name)) > 240 {
+		return nil, fmt.Errorf("不支持的文件类型（%s），仅支持 PDF、CSV、XLSX、DOCX 及图片(PNG/JPG/WEBP)", name)
+	}
+	perFileLimit := int64(maxUploadFileBytes)
+	limitMsg := fmt.Sprintf("文件 %s 须为 1 字节至 30MB", name)
+	if isImageExt(ext) {
+		perFileLimit = int64(maxUploadImageBytes)
+		limitMsg = fmt.Sprintf("图片 %s 须为 1 字节至 20MB", name)
+	}
+	if declaredSize <= 0 || declaredSize > perFileLimit {
+		return nil, errors.New(limitMsg)
+	}
+	b, err := read(perFileLimit)
+	if err != nil {
+		return nil, err
+	}
+	if len(b) == 0 || int64(len(b)) > perFileLimit {
+		return nil, errors.New(limitMsg)
+	}
+	if ext == ".pdf" && !bytesPrefixPDF(b) {
+		return nil, fmt.Errorf("文件内容不是PDF（%s）", name)
+	}
+	if ext == ".docx" && (len(b) < 4 || !bytes.HasPrefix(b, []byte("PK"))) {
+		return nil, fmt.Errorf("文件内容不是有效的Word(docx)（%s）", name)
+	}
+	if isImageExt(ext) && !validImageBytes(ext, b) {
+		return nil, fmt.Errorf("图片内容无效或与扩展名不匹配（%s）", name)
+	}
+	return b, nil
 }
 func ipHost(s string) string {
 	if i := strings.LastIndex(s, ":"); i >= 0 {

@@ -75,4 +75,39 @@ describe("runUploadWaterfall", () => {
       }),
     ).rejects.toThrow(/银行卡|微信|支付宝/);
   });
+
+  it("routes mixed batch: csv via client-parse, pdf and image via uploadOriginal", async () => {
+    const uploadOriginal = vi.fn(async () => ({ ok: true }));
+    const commitParsed = vi.fn(async () => ({ ok: true }));
+    const form = new FormData();
+    form.set("source", "bank_statement");
+    form.set("batch", "b-mix");
+    form.append("files", csvFile("bank.csv", bankCsv));
+    form.append(
+      "files",
+      new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], "scan.pdf", {
+        type: "application/pdf",
+      }),
+    );
+    form.append(
+      "files",
+      new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "shot.png", {
+        type: "image/png",
+      }),
+    );
+
+    const result = await runUploadWaterfall({
+      form,
+      uploadOriginal,
+      commitParsed,
+      environment: modernEnv,
+    });
+
+    expect(result.parsedCount).toBe(1);
+    expect(result.boostedCount).toBe(2);
+    expect(commitParsed).toHaveBeenCalledOnce();
+    expect(uploadOriginal).toHaveBeenCalledOnce();
+    const sent = uploadOriginal.mock.calls[0][0].getAll("files");
+    expect(sent.map((item) => item.name)).toEqual(["scan.pdf", "shot.png"]);
+  });
 });

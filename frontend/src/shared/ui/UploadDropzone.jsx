@@ -5,10 +5,23 @@ import { useI18n } from "@/shared/i18n/index.jsx";
 
 const MAX_FILES = 10;
 const MAX_EACH = 30 * 1024 * 1024;
+const MAX_IMAGE = 20 * 1024 * 1024;
 // Nginx 的 64MB 是整个 multipart 请求体上限，boundary 与文件头会额外占几 KB；
 // 前端按 60MB 收口，避免“正好 64MB 却被 413 拒绝”。
 const MAX_TOTAL = 60 * 1024 * 1024;
 const MAX_TOTAL_LABEL = "60MB";
+const ACCEPTED_EXT = new Set([".pdf", ".csv", ".xlsx", ".docx", ".png", ".jpg", ".jpeg", ".webp"]);
+const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+
+function fileExtLower(name) {
+  const lower = String(name || "").toLowerCase();
+  const index = lower.lastIndexOf(".");
+  return index < 0 ? "" : lower.slice(index);
+}
+
+function isImageFile(file) {
+  return Boolean(file?.type?.startsWith("image/")) || IMAGE_EXT.has(fileExtLower(file?.name));
+}
 
 function fileExtension(name) {
   const index = String(name || "").lastIndexOf(".");
@@ -69,7 +82,7 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
   const previewUrls = useMemo(
     () =>
       files.map((file) =>
-        file.type?.startsWith("image/") ? URL.createObjectURL(file) : "",
+        isImageFile(file) ? URL.createObjectURL(file) : "",
       ),
     [files],
   );
@@ -82,8 +95,8 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
     };
   }, [previewUrls]);
 
-  function ensureBatch() {
-    if (batchInputRef.current?.value) return;
+  function ensureBatch(forceNew = false) {
+    if (!forceNew && batchInputRef.current?.value) return;
     const batch = randomId("b");
     if (batchInputRef.current) batchInputRef.current.value = batch;
   }
@@ -92,6 +105,15 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
     const total = next.reduce((sum, file) => sum + file.size, 0);
     if (next.length > MAX_FILES) {
       setError(t("upload.max_files", { max: MAX_FILES }));
+      return;
+    }
+    const invalidType = next.find((file) => !ACCEPTED_EXT.has(fileExtLower(file.name)));
+    if (invalidType) {
+      setError(t("upload.allowed_types"));
+      return;
+    }
+    if (next.some((file) => IMAGE_EXT.has(fileExtLower(file.name)) && file.size > MAX_IMAGE)) {
+      setError(t("upload.max_image_size", { size: 20 }));
       return;
     }
     if (next.some((file) => file.size > MAX_EACH)) {
@@ -104,8 +126,8 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
     }
     setError("");
     setFiles(next);
-    // 批次幂等键：同一次选择在重试时复用，服务端据此回放原任务，不重复建单。
-    ensureBatch();
+    // 列表发生变动时刷新批次键；同批未改动原样重试才复用同一键，避免增删文件误命中旧缓存。
+    ensureBatch(true);
     if (inputRef.current) {
       const transfer = new DataTransfer();
       next.forEach((file) => transfer.items.add(file));
@@ -141,7 +163,7 @@ export function UploadDropzone({ name = "files", disabled = false, onFiles }) {
           inputRef.current = node;
           if (node && !batchInputRef.current?.value) ensureBatch();
         }}
-        accept=".pdf,.csv,.xlsx"
+        accept=".pdf,.csv,.xlsx,.docx,.png,.jpg,.jpeg,.webp"
         multiple
         required
         disabled={disabled}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/csv"
@@ -8,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/xuri/excelize/v2"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +18,235 @@ import (
 	"strings"
 	"time"
 )
+
+const maxDocxUnzipBytes = 32 << 20
+
+func isImageExt(ext string) bool {
+	switch strings.ToLower(strings.TrimSpace(ext)) {
+	case ".png", ".jpg", ".jpeg", ".webp":
+		return true
+	default:
+		return false
+	}
+}
+
+func imageContentType(ext string) string {
+	switch strings.ToLower(strings.TrimSpace(ext)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".webp":
+		return "image/webp"
+	default:
+		return "image/png"
+	}
+}
+
+func validImageBytes(ext string, b []byte) bool {
+	if len(b) < 12 {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(ext)) {
+	case ".png":
+		return bytes.HasPrefix(b, []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'})
+	case ".jpg", ".jpeg":
+		return b[0] == 0xff && b[1] == 0xd8 && b[2] == 0xff
+	case ".webp":
+		return string(b[:4]) == "RIFF" && string(b[8:12]) == "WEBP"
+	default:
+		return false
+	}
+}
+
+func supportedUploadExt(ext string) bool {
+	switch strings.ToLower(strings.TrimSpace(ext)) {
+	case ".pdf", ".csv", ".xlsx", ".docx":
+		return true
+	default:
+		return isImageExt(ext)
+	}
+}
+
+// inferTableSource 在混传默认选 other 时，按表头、首几行及可选正文特征推断表格流水来源。
+func inferTableSource(records [][]string, extraText ...string) string {
+	if len(records) == 0 {
+		return ""
+	}
+	var sample strings.Builder
+	for _, t := range extraText {
+		if strings.TrimSpace(t) != "" {
+			sample.WriteString(t)
+			sample.WriteByte(' ')
+		}
+	}
+	limit := len(records)
+	if limit > 6 {
+		limit = 6
+	}
+	for i := 0; i < limit; i++ {
+		sample.WriteString(strings.Join(records[i], " "))
+		sample.WriteByte(' ')
+	}
+	n := normalize(sample.String())
+	switch {
+	case contains(n, "微信支付", "微信账单", "零钱通") || (contains(n, "交易单号") && contains(n, "商户单号") && contains(n, "支付方式")):
+		return "wechat_statement"
+	case contains(n, "支付宝") || (contains(n, "交易订单号") && contains(n, "商家订单号") && contains(n, "收/付款方式")):
+		return "alipay_statement"
+	}
+	header := normalize(strings.Join(records[0], " "))
+	hasDate := contains(header, "交易日期", "日期", "记账日期", "交易时间", "date")
+	hasAmount := contains(header, "收入金额", "支出金额", "贷方发生额", "借方发生额", "金额", "交易金额", "amount", "income", "expense")
+	if hasDate && hasAmount {
+		return "bank_statement"
+	}
+	return ""
+}
+
+func parseDocxContent(b []byte) (bestTable [][]string, rawText string, err error) {
+	if len(b) < 4 || !bytes.HasPrefix(b, []byte("PK")) {
+		return nil, "", errors.New("Word文档格式无效")
+	}
+	zr, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+	if err != nil {
+		return nil, "", errors.New("无法读取Word(docx)压缩包")
+	}
+	var docFile *zip.File
+	for _, f := range zr.File {
+		if f.Name == "word/document.xml" {
+			docFile = f
+			break
+		}
+	}
+	if docFile == nil {
+		return nil, "", errors.New("Word文档缺少正文内容")
+	}
+	if docFile.UncompressedSize64 > maxDocxUnzipBytes {
+		return nil, "", errors.New("Word文档解压内容过大")
+	}
+	rc, err := docFile.Open()
+	if err != nil {
+		return nil, "", err
+	}
+	defer rc.Close()
+	xmlBytes, err := io.ReadAll(io.LimitReader(rc, maxDocxUnzipBytes+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(xmlBytes) > maxDocxUnzipBytes {
+		return nil, "", errors.New("Word文档解压内容过大")
+	}
+
+	dec := xml.NewDecoder(bytes.NewReader(xmlBytes))
+	var (
+		tables    [][][]string
+		curTable  [][]string
+		curRow    []string
+		curCell   strings.Builder
+		curPara   strings.Builder
+		paras     []string
+		inTable   bool
+		inRow     bool
+		inCell    bool
+		inPara    bool
+		inText    bool
+		bestScore int
+	)
+	for {
+		tok, tokErr := dec.Token()
+		if tokErr == io.EOF {
+			break
+		}
+		if tokErr != nil {
+			return nil, "", errors.New("Word文档XML解析失败")
+		}
+		switch el := tok.(type) {
+		case xml.StartElement:
+			switch el.Name.Local {
+			case "tbl":
+				if !inTable {
+					inTable = true
+					curTable = nil
+				}
+			case "tr":
+				if inTable {
+					inRow = true
+					curRow = nil
+				}
+			case "tc":
+				if inRow {
+					inCell = true
+					curCell.Reset()
+				}
+			case "p":
+				inPara = true
+				curPara.Reset()
+			case "t":
+				if inPara || inCell {
+					inText = true
+				}
+			case "tab":
+				if inCell && curCell.Len() > 0 {
+					curCell.WriteByte(' ')
+				} else if inPara && curPara.Len() > 0 {
+					curPara.WriteByte(' ')
+				}
+			}
+		case xml.CharData:
+			if inText {
+				s := string(el)
+				if inCell {
+					curCell.WriteString(s)
+				}
+				if inPara {
+					curPara.WriteString(s)
+				}
+			}
+		case xml.EndElement:
+			switch el.Name.Local {
+			case "t":
+				inText = false
+			case "p":
+				inPara = false
+				if inCell && curCell.Len() > 0 {
+					curCell.WriteByte(' ')
+				}
+				if line := strings.TrimSpace(curPara.String()); line != "" {
+					paras = append(paras, line)
+				}
+			case "tc":
+				if inCell {
+					curRow = append(curRow, strings.TrimSpace(curCell.String()))
+					inCell = false
+				}
+			case "tr":
+				if inRow {
+					if len(curRow) > 0 {
+						curTable = append(curTable, curRow)
+					}
+					inRow = false
+				}
+			case "tbl":
+				if inTable {
+					if len(curTable) > 0 {
+						tables = append(tables, curTable)
+					}
+					inTable = false
+				}
+			}
+		}
+	}
+	for _, tbl := range tables {
+		score := 0
+		for _, r := range tbl {
+			score += len(r)
+		}
+		if score > bestScore {
+			bestScore = score
+			bestTable = tbl
+		}
+	}
+	return bestTable, strings.Join(paras, "\n"), nil
+}
 
 type ParseResult struct {
 	Meta Object
@@ -90,11 +321,19 @@ func command(ctx context.Context, name string, args ...string) ([]byte, error) {
 func parseFile(ctx context.Context, b []byte, name, source string, progress func(int, int)) (ParseResult, error) {
 	result := ParseResult{Object{"source": source, "status": "success", "issues": []string{}, "facts": []Object{}, "pages": 0, "subject_name": "", "coverage": "", "method": "standard-import"}, []Object{}}
 	ext := strings.ToLower(filepath.Ext(name))
-	if ext != ".pdf" {
-		if source != "bank_statement" && source != "wechat_statement" && source != "alipay_statement" {
-			return result, errors.New("标准表格请选择银行卡、微信或支付宝来源")
+	if isImageExt(ext) {
+		if !validImageBytes(ext, b) {
+			return result, errors.New("图片内容无效或与扩展名不匹配")
 		}
+		result.Meta["pages"] = 1
+		result.Meta["method"] = "needs-vision"
+		result.Meta["status"] = "partial"
+		result.Meta["issues"] = []string{"图片已上传，等待 OCR 识别"}
+		return result, nil
+	}
+	if ext != ".pdf" {
 		var records [][]string
+		var docxText string
 		if ext == ".csv" {
 			r := csv.NewReader(strings.NewReader(strings.TrimPrefix(string(b), "\ufeff")))
 			r.FieldsPerRecord = -1
@@ -117,8 +356,15 @@ func parseFile(ctx context.Context, b []byte, name, source string, progress func
 			if e != nil {
 				return result, e
 			}
+		} else if ext == ".docx" {
+			tbl, rawText, e := parseDocxContent(b)
+			if e != nil {
+				return result, e
+			}
+			records = tbl
+			docxText = strings.TrimSpace(rawText)
 		} else {
-			return result, errors.New("仅支持PDF、CSV、XLSX")
+			return result, errors.New("仅支持PDF、CSV、XLSX、DOCX及图片(PNG/JPG/WEBP)")
 		}
 		if len(records) > 100001 {
 			return result, errors.New("单文件最多10万行，请拆分")
@@ -126,8 +372,34 @@ func parseFile(ctx context.Context, b []byte, name, source string, progress func
 		if len(records) > 0 && len(records[0]) > 0 && strings.Contains(records[0][0], "原始流水") {
 			records = records[1:]
 		}
+		if ext == ".docx" && len(records) < 2 {
+			if docxText == "" {
+				return result, errors.New("Word文档没有可识别的表格或文字")
+			}
+			result.Meta["extract_text"] = docxText
+			result.Meta["status"] = "partial"
+			result.Meta["issues"] = []string{"Word文档未包含可直接导入的标准流水表，已提取正文等待结构化整理"}
+			return result, nil
+		}
 		if len(records) < 2 {
 			return result, errors.New("表格没有交易记录")
+		}
+		if source != "bank_statement" && source != "wechat_statement" && source != "alipay_statement" {
+			if source == "other" {
+				if inferred := inferTableSource(records, docxText); inferred != "" {
+					source = inferred
+					result.Meta["source"] = source
+				} else if ext == ".docx" && docxText != "" {
+					result.Meta["extract_text"] = docxText
+					result.Meta["status"] = "partial"
+					result.Meta["issues"] = []string{"Word文档表格未指定来源，已提取正文等待结构化整理"}
+					return result, nil
+				} else {
+					return result, errors.New("标准表格请选择银行卡、微信或支付宝来源")
+				}
+			} else {
+				return result, errors.New("标准表格请选择银行卡、微信或支付宝来源")
+			}
 		}
 		for i, r := range records[1:] {
 			raw := Object{}
@@ -143,6 +415,11 @@ func parseFile(ctx context.Context, b []byte, name, source string, progress func
 			if nonempty {
 				result.Rows = append(result.Rows, standard(raw, source, 0, fmt.Sprintf("row:%d", i+2)))
 			}
+		}
+		if ext == ".docx" && len(result.Rows) == 0 && docxText != "" {
+			result.Meta["extract_text"] = docxText
+			result.Meta["status"] = "partial"
+			result.Meta["issues"] = []string{"Word文档表格未对齐标准行，已提取正文等待结构化整理"}
 		}
 	} else {
 		dir, e := os.MkdirTemp("", "qingliu-parse-")

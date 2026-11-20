@@ -315,23 +315,27 @@ func wbFailure(data Object, err error, fallback string) string {
 // shouldTryWorkbenchOCR 判断是否升级到工作台统一 POST /v1/ocr。
 // 清流只调这一口；底层用哪个模型/通道由工作台网关编排，这里不选模型。
 //
-// 触发：① 无文字层（needs-vision）；② 有字但版式匹配 0 行（流水类）。
-// 征信只收 facts，不因无交易行误触发。不再认前端勾选。
+// 触发：① 图片上传直接走 /v1/ocr；② 无文字层（needs-vision）；③ 有字但版式匹配 0 行（流水类）。
+// PDF 征信只收 facts，不因无交易行误触发；图片征信放行 OCR 提取原文入 facts。不再认前端勾选。
 func shouldTryWorkbenchOCR(payload Object, result *ParseResult) bool {
 	if result == nil {
 		return false
 	}
-	name := str(payload, "name")
-	if !strings.EqualFold(filepath.Ext(name), ".pdf") {
+	ext := strings.ToLower(filepath.Ext(str(payload, "name")))
+	isImg := isImageExt(ext)
+	if ext != ".pdf" && !isImg {
 		return false
-	}
-	method := str(result.Meta, "method")
-	if method == "needs-vision" {
-		return true
 	}
 	source := str(result.Meta, "source")
 	if source == "" {
 		source = str(payload, "source")
+	}
+	if isImg {
+		return true
+	}
+	method := str(result.Meta, "method")
+	if method == "needs-vision" {
+		return true
 	}
 	if source == "credit_report" {
 		return false
@@ -350,7 +354,7 @@ func shouldTryWorkbenchOCR(payload Object, result *ParseResult) bool {
 }
 
 // applyWorkbenchOCRResult 把 POST /v1/ocr 识别结果合入 ParseResult。
-// 能 parseOCRTranscript 则直接入库；不能则留下 ocr_text，交后续结构化补救。
+// 征信类只收 facts；流水类能 parseOCRTranscript 则直接入库，不能则留下 ocr_text 交后续结构化补救。
 func applyWorkbenchOCRResult(result *ParseResult, ocrRes wbOCRResult) {
 	if result == nil || strings.TrimSpace(ocrRes.Text) == "" {
 		return
@@ -362,6 +366,18 @@ func applyWorkbenchOCRResult(result *ParseResult, ocrRes wbOCRResult) {
 		result.Meta["pages"] = ocrRes.PageCount
 	}
 	preferred := str(result.Meta, "source")
+	if preferred == "credit_report" {
+		facts := list(result.Meta["facts"])
+		facts = append(facts, Object{
+			"page": 1,
+			"text": ocrRes.Text,
+			"kind": "工作台统一 OCR 提取（" + ocrRes.ChannelUsed + "）",
+		})
+		result.Meta["facts"] = facts
+		result.Meta["status"] = "success"
+		result.Meta["issues"] = []string{}
+		return
+	}
 	if src, rows, perr := parseOCRTranscript(ocrRes.Text, preferred); perr == nil && len(rows) > 0 {
 		result.Rows = rows
 		result.Meta["source"] = src
@@ -369,6 +385,9 @@ func applyWorkbenchOCRResult(result *ParseResult, ocrRes wbOCRResult) {
 		result.Meta["status"] = "success"
 		result.Meta["issues"] = []string{}
 		return
+	}
+	if detected := detectOCRSource(ocrRes.Text, preferred); detected != "" && detected != "other" {
+		result.Meta["source"] = detected
 	}
 	// 正文在，但套不上标准表：先记 facts，保持 partial，等结构化补救。
 	facts := list(result.Meta["facts"])
@@ -383,30 +402,32 @@ func applyWorkbenchOCRResult(result *ParseResult, ocrRes wbOCRResult) {
 }
 
 // tryEnhanceScanWithWorkbenchOCR：
-//   1) POST /v1/ocr（通道由工作台选）
+//   1) 图片/扫描 PDF → POST /v1/ocr（通道由工作台选）
 //   2) 能解析 → 入库
-//   3) 不能 → 模型结构化补救
+//   3) 不能（或 Word 提取正文无标准表）→ 模型结构化补救
 //   4) 仍不行 → 保持 partial
 func (a *App) tryEnhanceScanWithWorkbenchOCR(ctx context.Context, userID string, payload Object, fileBytes []byte, result *ParseResult, progress func(string)) {
-	if a == nil || !a.wb.Ready() || !shouldTryWorkbenchOCR(payload, result) {
+	if a == nil || !a.wb.Ready() {
 		return
 	}
-	if progress != nil {
-		progress("正在调用工作台统一 OCR (POST /v1/ocr)...")
+	if shouldTryWorkbenchOCR(payload, result) {
+		if progress != nil {
+			progress("正在调用工作台统一 OCR (POST /v1/ocr)...")
+		}
+		ocrRes, err := a.wbOCR(ctx, userID, fileBytes, str(payload, "name"), "text_recognition")
+		if err != nil {
+			log.Printf("qingliu upload /v1/ocr fallback to local parse: file=%s err=%v", str(payload, "name"), err)
+			// OCR 调用失败时，若本地已有抽出正文，仍可尝试结构化补救。
+			a.tryStructureRescueAfterOCR(ctx, userID, payload, result, progress)
+			return
+		}
+		applyWorkbenchOCRResult(result, ocrRes)
 	}
-	ocrRes, err := a.wbOCR(ctx, userID, fileBytes, str(payload, "name"), "text_recognition")
-	if err != nil {
-		log.Printf("qingliu upload /v1/ocr fallback to local parse: file=%s err=%v", str(payload, "name"), err)
-		// OCR 调用失败时，若本地已有抽出正文，仍可尝试结构化补救。
-		a.tryStructureRescueAfterOCR(ctx, userID, payload, result, progress)
-		return
-	}
-	applyWorkbenchOCRResult(result, ocrRes)
-	if len(result.Rows) > 0 {
+	if result != nil && len(result.Rows) > 0 {
 		return
 	}
 	a.tryStructureRescueAfterOCR(ctx, userID, payload, result, progress)
-	if len(result.Rows) == 0 && str(result.Meta, "status") == "" {
+	if result != nil && len(result.Rows) == 0 && str(result.Meta, "status") == "" {
 		result.Meta["status"] = "partial"
 	}
 }

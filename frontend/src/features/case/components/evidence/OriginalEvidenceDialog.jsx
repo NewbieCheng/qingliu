@@ -11,14 +11,17 @@ import { useI18n } from "@/shared/i18n/index.jsx";
 export function OriginalEvidenceDialog({ cid, original, onClose }) {
   const { t } = useI18n();
   const row = original.row;
-  const isPdf = row.filename.toLowerCase().endsWith(".pdf");
+  const lowerName = String(row.filename || "").toLowerCase();
+  const canPreviewOriginal =
+    lowerName.endsWith(".pdf") ||
+    /\.(png|jpe?g|webp)$/.test(lowerName);
   const total = Math.max(Number(original.pages) || row.page || 1, 1);
-  const [page, setPage] = useState(Math.min(row.page || 1, total));
+  const [page, setPage] = useState(Math.max(1, Math.min(row.page || 1, total)));
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewError, setPreviewError] = useState("");
 
   useEffect(() => {
-    if (!isPdf) return undefined;
+    if (!canPreviewOriginal) return undefined;
     let cancelled = false;
     let objectUrl = "";
     setPreviewError("");
@@ -52,7 +55,7 @@ export function OriginalEvidenceDialog({ cid, original, onClose }) {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [cid, isPdf, original.sha, page, row.document_id, t, total]);
+  }, [cid, canPreviewOriginal, original.sha, page, row.document_id, t, total]);
 
   return (
     <Modal
@@ -60,7 +63,7 @@ export function OriginalEvidenceDialog({ cid, original, onClose }) {
       onClose={onClose}
     >
       <div className="original">
-        {isPdf && (
+        {canPreviewOriginal && (
           <>
             {previewError ? (
               <p className="error" role="alert">

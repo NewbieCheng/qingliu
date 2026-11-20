@@ -2,13 +2,15 @@ import { tStandalone } from "@/shared/i18n/core.js";
 
 /** 上传业务预检：坏文件当场拒绝，不请求、不扣费。 */
 
-const OK_EXT = new Set([".pdf", ".csv", ".xlsx", ".docx"]);
+const OK_EXT = new Set([".pdf", ".csv", ".xlsx", ".docx", ".png", ".jpg", ".jpeg", ".webp"]);
+const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 const TABLE_SOURCES = new Set([
   "bank_statement",
   "wechat_statement",
   "alipay_statement",
 ]);
 const MAX_EACH = 30 * 1024 * 1024;
+const MAX_IMAGE = 20 * 1024 * 1024;
 const MAX_TOTAL = 60 * 1024 * 1024;
 const MAX_FILES = 10;
 
@@ -48,6 +50,9 @@ export function preflight(files, { source } = {}) {
       return fail(tStandalone("upload.allowed_types"));
     }
     if (size <= 0) return fail(tStandalone("upload.empty_file"));
+    if (IMAGE_EXT.has(ext) && size > MAX_IMAGE) {
+      return fail(tStandalone("upload.max_image_size", { size: 20 }));
+    }
     if (size > MAX_EACH) {
       return fail(tStandalone("upload.max_each_size", { size: 30 }));
     }

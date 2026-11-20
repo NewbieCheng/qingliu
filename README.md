@@ -8,7 +8,7 @@
 
 - 前端：React 19 + Vite，静态构建后由 Go 同源提供
 - 后端：Go 标准库 HTTP 单进程，MySQL 8，进程内单执行器
-- 文件：Poppler/MuPDF 文字层；扫描件经工作台 `/v1/ocr`，能解析则入库，不能再模型结构化补救，仍不行才 partial；报告 PDF/Excel/HTML 由 Go 生成
+- 文件：支持 PDF / CSV / XLSX / DOCX / 图片（PNG / JPG / JPEG / WEBP）混传；Poppler/MuPDF 文字层与标准表格解析，图片与扫描件经工作台 `/v1/ocr`，能解析则入库，不能再模型结构化补救，仍不行才 partial；报告 PDF/Excel/HTML 由 Go 生成
 - 身份与计费：工作台 service login + 工作台计费代理；本地密码仅作应急兜底
 
 ## 快速开始

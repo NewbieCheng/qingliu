@@ -60,6 +60,7 @@ func (a *App) registerUploadParsed(m *http.ServeMux) {
 	s := a.s
 	m.HandleFunc("POST /api/clients/{cid}/upload-parsed", a.route(func(q *request) {
 		q.edit(func(cid string) {
+			q.r.Body = http.MaxBytesReader(q.w, q.r.Body, maxUploadRequestBytes)
 			if e := q.r.ParseMultipartForm(2 << 20); e != nil {
 				bad(400, "Upload failed; batch must be under 64MB")
 			}

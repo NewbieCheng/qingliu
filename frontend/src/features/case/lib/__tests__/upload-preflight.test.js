@@ -43,4 +43,40 @@ describe("upload-preflight", () => {
       true,
     );
   });
+
+  it("accepts mixed batch of pdf, images, docx, and csv within 60MB", () => {
+    expect(
+      preflight(
+        [
+          file("bank.csv", 1024),
+          file("scan.pdf", 25 * 1024 * 1024),
+          file("shot1.png", 15 * 1024 * 1024),
+          file("shot2.webp", 10 * 1024 * 1024),
+          file("table.docx", 5 * 1024 * 1024),
+        ],
+        { source: "bank_statement" },
+      ).ok,
+    ).toBe(true);
+  });
+
+  it("rejects single image over 20MB", () => {
+    const result = preflight([file("huge.jpg", 20 * 1024 * 1024 + 1)], {
+      source: "other",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/20/);
+  });
+
+  it("rejects mixed batch exceeding 60MB total", () => {
+    const result = preflight(
+      [
+        file("a.pdf", 25 * 1024 * 1024),
+        file("b.pdf", 25 * 1024 * 1024),
+        file("c.png", 15 * 1024 * 1024),
+      ],
+      { source: "other" },
+    );
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/60MB/);
+  });
 });
