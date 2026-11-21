@@ -24,8 +24,17 @@ export function WorkspaceShell({
   spaceSwitcher = null,
   children,
 }) {
-  const { t } = useI18n();
-  const [railCollapsed, setRailCollapsed] = useStoredFlag(RAIL_KEY);
+  const { t } = useI18n();  const [railCollapsed, setRailCollapsed] = useStoredFlag(RAIL_KEY);
+
+  // 打开原件对照时自动收起侧栏，给内容让出宽度；关闭后不自动展开，
+  // 因为用户可能正想继续用收起态。只做"收起"这一个方向，不来回拨。
+  React.useEffect(() => {
+    function onAutoCollapse() {
+      setRailCollapsed(true);
+    }
+    window.addEventListener("ql:rail-autocollapse", onAutoCollapse);
+    return () => window.removeEventListener("ql:rail-autocollapse", onAutoCollapse);
+  }, [setRailCollapsed]);
   const [topbarCollapsed, setTopbarCollapsed] = useStoredFlag(TOPBAR_KEY);
   const [narrow, setNarrow] = useState(() =>
     typeof window !== "undefined"

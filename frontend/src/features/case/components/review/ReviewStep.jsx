@@ -1,4 +1,5 @@
 import React from "react";
+import { PlusIcon } from "@/shared/ui/icons.jsx";
 import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { FoldPanel } from "@/shared/ui/FoldPanel.jsx";
 import { AccountingSummary } from "../AccountingSummary.jsx";
@@ -36,6 +37,8 @@ export function ReviewStep({
   onRefresh,
 }) {
   const { t } = useI18n();
+  // 「新增条目」放在折叠条标题行里，和「收起」并排，不再单独占一行。
+  const [addOpen, setAddOpen] = React.useState(false);
   const highAI = highConfidenceSuggested(data.rows);
   const adoptedAI = adoptedAIRows(data.rows);
   function changeView(value) {
@@ -67,12 +70,27 @@ export function ReviewStep({
           <em className="fold-panel-badge">{t("case.tx_stat", { n: data.row_count })}</em>
         }
         defaultOpen
+        actions={
+          <button
+            type="button"
+            className={addOpen ? "btn-outline btn-compact" : "btn-outline btn-compact"}
+            onClick={() => setAddOpen((v) => !v)}
+          >
+            {addOpen ? t("common.cancel") : (
+              <>
+                <PlusIcon size={13} />{t("review.add_row")}
+              </>
+            )}
+          </button>
+        }
       >
         <TransactionTable
           data={{ ...data, cid }}
           selected={selected}
           onSelectedChange={onSelectedChange}
           onChanged={onRefresh}
+          addOpen={addOpen}
+          onAddOpenChange={setAddOpen}
         />
         {!data.rows.length && (
           <p className="empty">

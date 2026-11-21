@@ -4,7 +4,7 @@ import { Select } from "@/shared/ui/FormRow.jsx";
 import { SearchInput } from "@/shared/ui/SearchInput.jsx";
 import { SOURCES } from "@/shared/lib/constants.js";
 import { useI18n } from "@/shared/i18n/index.jsx";
-import { ChevronDownIcon } from "@/shared/ui/icons.jsx";
+import { ChevronDownIcon, FunnelIcon } from "@/shared/ui/icons.jsx";
 
 /**
  * 核对页单行工具条：左侧改测算范围（需点「应用范围」）；
@@ -24,6 +24,9 @@ export function RangeForm({
   // 测算范围收进二级浮层：三个字段 + 应用按钮挤在工具条里会把右侧
   // 的状态/搜索挤到第二行，还容易被误认为"改了就生效"。
   const [rangeOpen, setRangeOpen] = useState(false);
+  // 整条筛选默认收起成一个按钮：核对页首先是「看数据」，筛选是次要动作，
+  // 常驻一整行会把统计和表格往下推。
+  const [barOpen, setBarOpen] = useState(false);
 
   useEffect(() => {
     setDraft(query || "");
@@ -48,7 +51,24 @@ export function RangeForm({
   }, [rangeOpen]);
 
   return (
-    <div className="card review-filter">
+        <div className={`card review-filter${barOpen ? " is-open" : ""}`}>
+      <button
+        type="button"
+        className="review-filter-toggle"
+        aria-expanded={barOpen}
+        onClick={() => setBarOpen((v) => !v)}
+      >
+        <FunnelIcon size={13} />
+        <span>筛选</span>
+        <span className="review-filter-summary">
+          {data.start} → {data.end}
+          {" · "}
+          {t(`review.view_${view}`)}
+          {query ? ` · "${query}"` : ""}
+        </span>
+        <ChevronDownIcon size={13} className="review-filter-caret" />
+      </button>
+      {barOpen ? (
       <div className="review-filter-row">
         <div className="range-pop-wrap" ref={rangeWrapRef}>
           <button
@@ -183,6 +203,7 @@ export function RangeForm({
           </label>
         </div>
       </div>
+      ) : null}
     </div>
   );
 }

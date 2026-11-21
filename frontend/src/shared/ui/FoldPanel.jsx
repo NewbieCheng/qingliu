@@ -15,6 +15,10 @@ export function FoldPanel({
   children,
   className = "",
   defaultOpen = false,
+  // 折叠条右侧的自定义动作（例如「新增条目」）。
+  // 放在标题行里而不是在内容顶部新起一行：能省一行高度，
+  // 而且这些动作本来就属于这个区块，跟着标题走才对。
+  actions = null,
 }) {
   const { t } = useI18n();
   const ref = useRef(null);
@@ -36,6 +40,16 @@ export function FoldPanel({
           {title}
           {badge}
         </span>
+        {actions ? (
+          <span
+            className="fold-panel-actions"
+            onClick={(e) => e.preventDefault()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            {actions}
+          </span>
+        ) : null}
         <span className="fold-panel-toggle" aria-hidden="true">
           {open ? t("common.collapse") : t("common.expand")}
         </span>

@@ -3,7 +3,7 @@ import { TRANSACTION_LABELS } from "@/shared/lib/constants.js";
 import { formatCents } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
-import { TrashIcon, PlusIcon, EyeIcon } from "@/shared/ui/icons.jsx";
+import { TrashIcon, EyeIcon } from "@/shared/ui/icons.jsx";
 import { aiStatusLabel } from "../../lib/ai-adopt.js";
 import { useI18n } from "@/shared/i18n/index.jsx";
 import { addTransaction, deleteTransaction } from "../../api.js";
@@ -26,15 +26,18 @@ function CounterpartyCell({ row }) {
   return <strong className="block">{t("review.original_not_provided")}</strong>;
 }
 
-export function TransactionTable({ data, selected, onSelectedChange, onChanged }) {
+export function TransactionTable({ data, selected, onSelectedChange, onChanged, addOpen, onAddOpenChange }) {
   const { t } = useI18n();
   const selectable = selectableRows(data.rows);
   const allSelected =
     selected.length > 0 && selected.length === selectable.length;
   // 待确认删除的行：删交易会影响核对口径，必须二次确认。
   const [pendingDelete, setPendingDelete] = useState(null);
-  // 手工新增表单。
-  const [adding, setAdding] = useState(false);
+  // 手工新增表单。展开状态由父级折叠条控制（按钮在标题行里），
+  // 这样表单不会在内容顶部再占一行。
+  const [addingLocal, setAddingLocal] = useState(false);
+  const adding = addOpen === undefined ? addingLocal : addOpen;
+  const setAdding = onAddOpenChange || setAddingLocal;
   const [draft, setDraft] = useState({
     date: "",
     direction: "income",
@@ -90,16 +93,6 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
 
   return (
     <div className="tx-block">
-      <div className="tx-actions">
-        <button
-          type="button"
-          className="btn-outline"
-          onClick={() => setAdding((v) => !v)}
-        >
-          {adding ? t("common.cancel") : <><PlusIcon size={14} />{t("review.add_row")}</>}
-        </button>
-      </div>
-
       {adding ? (
         <form className="tx-add-form" onSubmit={submitAdd}>
           <input

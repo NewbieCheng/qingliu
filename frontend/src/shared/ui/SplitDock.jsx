@@ -67,6 +67,9 @@ export function SplitDock({
     const root = document.documentElement;
     root.style.setProperty("--dock-inset", `${width}px`);
     root.classList.add("has-dock-pane");
+    // 对照一开就自动收起左侧导航：宽度本来就紧张，别忘了这是"看原件"，
+    // 导航这时候没有用。用事件而不是直接改 DOM，收起状态仍归 WorkspaceShell 管。
+    window.dispatchEvent(new CustomEvent("ql:rail-autocollapse"));
     return () => {
       root.style.setProperty("--dock-inset", "0px");
       root.classList.remove("has-dock-pane");

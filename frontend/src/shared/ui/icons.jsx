@@ -314,3 +314,22 @@ export function WalletIcon({ size = 15 }) {
     </Svg>
   );
 }
+/** 筛选漏斗：筛选入口的通用符号，比文字「筛选」更快被认出来。 */
+export function FunnelIcon({ size = 16, ...rest }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...rest}
+    >
+      <path d="M3 5h18l-7 8v6l-4 2v-8L3 5z" />
+    </svg>
+  );
+}
