@@ -92,3 +92,10 @@
   justify-content: flex-end;
   gap: 10px;
 }
+
+/* 表单里的辅助说明（例如"填完直接回车即可创建"） */
+.form-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}

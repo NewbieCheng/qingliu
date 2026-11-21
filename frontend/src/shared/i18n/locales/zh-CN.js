@@ -618,6 +618,8 @@ export default {
   "clients.optional_placeholder": "选填",
   "clients.authorization_label": "我已确认有权处理该客户资料",
   "clients.create_record": "创建客户档案",
+  "clients.create_success": "客户档案已创建",
+  "clients.quick_create_hint": "填好客户代号后直接按回车即可创建；企业名称可以留空。",
 
   "case.coverage.title": "确认流水覆盖范围",
   "case.coverage.current_range": "当前范围：{{source}}，{{start}} 至 {{end}}",

@@ -622,6 +622,8 @@ export default {
   "clients.optional_placeholder": "Optional",
   "clients.authorization_label": "I confirm that I am authorized to process this customer's information",
   "clients.create_record": "Create customer record",
+  "clients.create_success": "Customer record created",
+  "clients.quick_create_hint": "Type the customer code and press Enter to create; company name is optional.",
 
   "case.coverage.title": "Confirm statement coverage",
   "case.coverage.current_range": "Current scope: {{source}}, {{start}} to {{end}}",

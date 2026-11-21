@@ -157,6 +157,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
             <th>{t("review.col_expense")}</th>
             <th>{t("review.col_memo")}</th>
             <th>{t("review.col_status")}</th>
+            <th className="tx-col-actions">{t("clients.col_actions")}</th>
           </tr>
         </thead>
         <tbody>
