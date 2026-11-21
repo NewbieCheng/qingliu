@@ -6,7 +6,7 @@ import { useI18n } from "@/shared/i18n/index.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { EyeIcon, RefreshIcon } from "@/shared/ui/icons.jsx";
 import { reparseDocument } from "../api.js";
-import { DocumentTextDialog } from "./evidence/DocumentTextDialog.jsx";
+import { PdfPreviewPane } from "./evidence/PdfPreviewPane.jsx";
 
 function caseIdFromPath() {
   const m = window.location.pathname.match(/\/clients\/([^/?]+)/);
@@ -20,6 +20,7 @@ export function DocumentList({ data, onReparsed }) {
   const [busy, setBusy] = useState("");
   // 正在查看正文的文档（null 表示不显示）。
   const [viewing, setViewing] = useState(null);
+  const [viewingMode, setViewingMode] = useState("float");
   if (!data.docs.length) return null;
   const pending = data.docs.filter(
     (document) => document.meta.status !== "success",
@@ -119,8 +120,11 @@ export function DocumentList({ data, onReparsed }) {
                 {fact.text}
               </p>
             ))}
-            {needsAttention && !explain?.actions?.length ? (
-              <div className="doc-actions">
+            {/* 操作按钮统一放在一行、靠右；不因为挤压而换行。
+                「查看原件」直接用同一套 PDF 原件浮窗（带行定位），
+                不再另做一套文本渲染。 */}
+            <div className="doc-actions">
+              {needsAttention && !explain?.actions?.length ? (
                 <button
                   type="button"
                   className="btn-outline-warning"
@@ -129,10 +133,7 @@ export function DocumentList({ data, onReparsed }) {
                 >
                   <RefreshIcon size={14} />{busy === document.id ? "识别中…" : "重新识别"}
                 </button>
-              </div>
-            ) : null}
-            {/* 查看原件正文：按页铺开已提取文字，不渲染 PDF */}
-            <div className="doc-actions">
+              ) : null}
               <button
                 type="button"
                 className="btn-outline"
@@ -145,10 +146,14 @@ export function DocumentList({ data, onReparsed }) {
         );
       })}
       {viewing ? (
-        <DocumentTextDialog
+        <PdfPreviewPane
           cid={caseIdFromPath()}
           doc={viewing}
+          row={null}
+          totalPages={viewing.meta?.pages}
           onClose={() => setViewing(null)}
+          mode={viewingMode}
+          onModeChange={setViewingMode}
         />
       ) : null}
     </div>

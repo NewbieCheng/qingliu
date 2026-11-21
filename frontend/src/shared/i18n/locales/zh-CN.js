@@ -81,7 +81,7 @@ export default {
   "source.credit_report": "个人征信",
   "source.tax_form": "税务表单",
   "doc.reparse_queued": "已提交重新识别",
-  "doc_text.open": "查看原件正文",
+  "doc_text.open": "查看原件",
   "doc_text.title": "原件正文 · {{name}}",
   "doc_text.loading": "正在提取正文…",
   "doc_text.load_failed": "正文提取失败",

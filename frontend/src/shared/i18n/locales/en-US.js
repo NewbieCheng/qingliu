@@ -82,7 +82,7 @@ export default {
   "source.credit_report": "Credit report",
   "source.tax_form": "Tax form",
   "doc.reparse_queued": "Reparse queued",
-  "doc_text.open": "View original text",
+  "doc_text.open": "View original",
   "doc_text.title": "Original text · {{name}}",
   "doc_text.loading": "Extracting text…",
   "doc_text.load_failed": "Failed to extract text",
