@@ -40,7 +40,10 @@ export function PdfPreviewPane({
   const [src, setSrc] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // 缩放：0.5 ~ 3 倍。默认 1 表示"适应宽度"，用户放大后靠滚动查看细节。
+  const [zoom, setZoom] = useState(1);
   const boxRef = useRef(null);
+  const viewportRef = useRef(null);
 
   const total = Math.max(Number(totalPages) || 1, 1);
   const bbox = row?.bbox;
@@ -81,6 +84,34 @@ export function PdfPreviewPane({
           <span className="pdf-pane-doc" title={doc?.name}>{doc?.name}</span>
         </div>
         <div className="pdf-pane-nav">
+          <div className="pdf-zoom" role="group" aria-label={t("pdf.zoom_aria")}>
+            <button
+              type="button"
+              className="btn-outline btn-compact"
+              disabled={zoom <= 0.5}
+              title={t("pdf.zoom_out")}
+              onClick={() => setZoom((z) => Math.max(0.5, Math.round((z - 0.25) * 100) / 100))}
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="pdf-zoom-value"
+              title={t("pdf.zoom_reset")}
+              onClick={() => setZoom(1)}
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              type="button"
+              className="btn-outline btn-compact"
+              disabled={zoom >= 3}
+              title={t("pdf.zoom_in")}
+              onClick={() => setZoom((z) => Math.min(3, Math.round((z + 0.25) * 100) / 100))}
+            >
+              +
+            </button>
+          </div>
           <button
             type="button"
             className="btn-outline btn-compact"
@@ -104,11 +135,14 @@ export function PdfPreviewPane({
         </div>
       </header>
 
-      <div className="pdf-pane-viewport">
+      <div className="pdf-pane-viewport" ref={viewportRef}>
         {error ? <p className="error">{error}</p> : null}
         {loading && !src ? <p className="muted">{t("pdf.loading")}</p> : null}
         {src ? (
-          <div className="pdf-page-wrap">
+          <div
+            className="pdf-page-wrap"
+            style={{ width: `${Math.round(zoom * 100)}%` }}
+          >
             <img className="pdf-page-img" src={src} alt={`${doc?.name} 第 ${page} 页`} />
             {showBox ? (
               <div

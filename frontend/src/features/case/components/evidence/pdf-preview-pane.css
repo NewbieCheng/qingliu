@@ -79,8 +79,9 @@
 
 .pdf-page-img {
   display: block;
-  max-width: 100%;
+  width: 100%;
   height: auto;
+  max-width: none;
 }
 
 .pdf-row-box {
@@ -117,4 +118,32 @@
 /* 表格行被选中时给个淡底，与原件高亮呼应 */
 .pd-row.is-peeking > .pd-row-head {
   background: #fdf6ea;
+}
+
+/* 缩放控件 */
+.pdf-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 4px;
+}
+.pdf-zoom-value {
+  min-width: 46px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12px;
+  color: #55504b;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.pdf-zoom-value:hover { background: #f2f1ef; }
+
+/* 放大后靠滚动查看，视口本身不撑破布局 */
+.pdf-pane-viewport { overflow: auto; }
+.pdf-page-wrap {
+  flex: 0 0 auto;
+  /* 缩放由内联 width 控制，这里只保证不溢出视口宽度基准 */
+  width: 100%;
 }

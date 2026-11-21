@@ -505,9 +505,9 @@ export function ParseDetailDialog({
                     <span className="muted">
                       点任意一行：展开字段对照，同时在右侧原件上框出这一行
                     </span>
-                  </div>
+                    </div>
 
-                  <div className="pd-rows">
+                    <div className="pd-rows">
                     {shown.slice(0, 300).map((row) => {
                       const open = expanded === row.id;
                       const fields = open ? rawFields(row) : [];

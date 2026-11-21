@@ -116,20 +116,30 @@ func sortStrings(s []string) {
 }
 
 // loadAdapter 查已学习的适配器。命中即把 hits+1（用于统计哪些格式最常靠 AI 补）。
+//
+// 注意：表可能尚未创建（老库首次跑新版本），此时必须安静地返回 nil，
+// 绝不能让查询异常冒泡到解析主流程——否则整份文件会解析失败。
 func (s *Store) loadAdapter(signature string) *AdapterMapping {
 	if signature == "" {
 		return nil
 	}
-	row := s.one("SELECT mapping_json FROM ql_parser_adapters WHERE signature=?", signature)
+	row := s.queryOptional("SELECT mapping_json FROM ql_parser_adapters WHERE signature=?", signature)
 	if row == nil {
 		return nil
 	}
 	var m AdapterMapping
 	if e := json.Unmarshal([]byte(str(row, "mapping_json")), &m); e != nil {
+		log.Printf("loadAdapter: 适配器内容损坏 signature=%q err=%v", signature, e)
 		return nil
 	}
-	s.exec("UPDATE ql_parser_adapters SET hits=hits+1, updated=? WHERE signature=?", time.Now(), signature)
+	s.execQuiet("UPDATE ql_parser_adapters SET hits=hits+1, updated=? WHERE signature=?", time.Now(), signature)
 	return &m
+}
+
+// ensureAdapterTable 启动时建表。缺表时解析会退化为"没有学习过的格式"，
+// 功能可用但不会复用，所以启动就建好。
+func (s *Store) ensureAdapterTable() {
+	s.execQuiet(adapterTable)
 }
 
 // saveAdapter 持久化一条 AI 生成的适配器（同签名覆盖）。

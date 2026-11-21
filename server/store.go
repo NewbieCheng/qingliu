@@ -94,12 +94,52 @@ func openStore() (*Store, error) {
 	st := &Store{db: db, root: root, vault: aead}
 	// 供 parser 在解析阶段查已学习的格式适配器。
 	globalStore = st
+	// 可选表启动即建好：缺表时解析会退化为"每次都靠 AI"，不报错但很浪费。
+	st.ensureAdapterTable()
 	return st, nil
 }
 func (s *Store) exec(q string, args ...any) {
 	if _, e := s.db.Exec(q, args...); e != nil {
 		panic(e)
 	}
+}
+
+// execQuiet 与 exec 相同但不 panic：用于"失败也不该影响主流程"的旁路写
+// （统计计数、可选表建表）。
+func (s *Store) execQuiet(q string, args ...any) {
+	_, _ = s.db.Exec(q, args...)
+}
+
+// queryOptional 查询但把错误当"没有结果"：用于可选表（例如尚未创建的格式适配器表）。
+// 正常业务查询继续用 query 的 panic 语义，避免掩盖真正的 SQL 错误。
+func (s *Store) queryOptional(q string, args ...any) Object {
+	rows, e := s.db.Query(q, args...)
+	if e != nil {
+		return nil
+	}
+	defer rows.Close()
+	cols, e := rows.Columns()
+	if e != nil || !rows.Next() {
+		return nil
+	}
+	vals := make([]any, len(cols))
+	ptrs := make([]any, len(cols))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
+	if e := rows.Scan(ptrs...); e != nil {
+		return nil
+	}
+	out := Object{}
+	for i, c := range cols {
+		switch v := vals[i].(type) {
+		case []byte:
+			out[c] = string(v)
+		default:
+			out[c] = v
+		}
+	}
+	return out
 }
 func (s *Store) query(q string, args ...any) []Object {
 	rows, e := s.db.Query(q, args...)
