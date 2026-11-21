@@ -14,10 +14,18 @@ function localProxy() {
   };
 }
 
+// 构建版本号：每次 build 变化，前端用它决定是否作废旧缓存。
+const buildID = String(Date.now());
+
 export default defineConfig({
   // 与 jsconfig `jsx: react-jsx`、eslint `react-in-jsx-scope: off` 对齐。
   // 无 plugin-react 时 esbuild 默认经典转换，漏写 `import React` 会在运行时报
   // "React is not defined"（充值页 SkuGrid 已踩过）。
+  // 注入构建版本，供 IndexedDB 缓存的版本清理使用
+  define: {
+    __BUILD_ID__: JSON.stringify(buildID),
+  },
+
   esbuild: {
     jsx: "automatic",
   },

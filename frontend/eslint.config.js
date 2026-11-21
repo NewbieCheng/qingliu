@@ -4,7 +4,21 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import react from "eslint-plugin-react";
 
 export default [
-  { ignores: ["dist", "node_modules"] },
+  // test/ 跑在 Node 下（node --test），用 Node 全局；不套浏览器的 globals 规则。
+  { ignores: ["dist", "node_modules", "test/**"] },
+  {
+    files: ["test/**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: {
+        globalThis: "readonly",
+        queueMicrotask: "readonly",
+        setTimeout: "readonly",
+        console: "readonly",
+      },
+    },
+  },
   js.configs.recommended,
   {
     files: ["src/**/*.{js,jsx}", "vite.config.js", "vitest.config.js", "scripts/**/*.mjs"],

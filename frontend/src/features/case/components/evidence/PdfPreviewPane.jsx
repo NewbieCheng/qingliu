@@ -2,31 +2,25 @@ import React, { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/shared/i18n/index.jsx";
 import { FloatingPane } from "@/shared/ui/FloatingPane.jsx";
 import { originalPageURL } from "../../api.js";
+import { loadPageURL } from "@/shared/cache/pageCache.js";
 import "./pdf-preview-pane.css";
 
-// 原件 PDF 对照面板。
-//
-// 两种形态，用户可随时切换：
-//   float（默认）—— 独立浮窗，标题栏拖动可移到任何位置，右下角可缩放。
-//                   适合"一边翻表格一边瞄原件"，也不会把表格挤窄。
-//   dock        —— 并排核对：左侧识别信息、右侧原件固定一栏。
-//                   适合逐行核对，两边都不动。
+// 原件 PDF 对照面板（右侧可拖拽浮窗）。
 //
 // 为什么不渲染 PDF：服务端已把每页渲染成图并带缓存，直接显示图片更快，
 // 也不用引入 pdf.js 的体积。行定位靠解析时记录的归一化 bbox 叠加高亮框。
-
-const pageCache = new Map();
-
-async function loadPage(cid, did, page, sha, signal) {
-  const key = `${sha}:${page}`;
-  if (pageCache.has(key)) return pageCache.get(key);
-  const url = originalPageURL(cid, did, page);
-  const res = await fetch(url, { credentials: "include", signal });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const blob = await res.blob();
-  const objURL = URL.createObjectURL(blob);
-  pageCache.set(key, objURL);
-  return objURL;
+//
+// 页图走三级缓存（内存 → IndexedDB → 服务器）：同一页第二次打开不再请求，
+// 刷新页面后依然命中，只有真正没缓存过才打服务器。
+function loadPage(cid, did, page, sha, signal) {
+  return loadPageURL({
+    cid,
+    did,
+    page,
+    sha,
+    buildURL: originalPageURL,
+    signal,
+  });
 }
 
 function Viewer({ cid, doc, row, totalPages, onClose }) {

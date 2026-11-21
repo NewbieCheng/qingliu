@@ -2,18 +2,42 @@ import { api, getCsrf } from "@/shared/api/client.js";
 import { tStandalone } from "@/shared/i18n/core.js";
 import { navigate } from "@/shared/router/index.js";
 import { toast } from "@/shared/ui/toast-api.js";
+import { cacheQuery, dropCache } from "@/shared/api/cache.js";
+import { TTL, PERSIST, KEY, docPrefix, textPrefix, casePrefix } from "@/shared/cache/policy.js";
+
+// 写操作之后必须主动失效：只靠 TTL 会让用户"改完看不到变化"，
+// 那是比多请求一次严重得多的体验问题。
+function invalidateCase(cid) {
+  dropCache(casePrefix(cid));
+}
+function invalidateDoc(cid, did) {
+  if (did) {
+    dropCache(`rows:${cid}:${did}`);
+    dropCache(`text:${cid}:${did}`);
+  }
+  dropCache(docPrefix(cid));
+  dropCache(textPrefix(cid));
+}
 
 function caseURL(cid, range) {
   const query = new URLSearchParams(range || {}).toString();
   return `/api/clients/${cid}${query ? `?${query}` : ""}`;
 }
 
-export function getCase(cid, { range, view, query, page, signal }) {
+// 核对页主数据：TTL 短（用户会改数据），且每次写操作后主动失效。
+// force=true 用于「刷新」按钮，跳过缓存直接回源。
+export function getCase(cid, { range, view, query, page, signal, force } = {}) {
   const url = new URL(caseURL(cid, range), window.location.origin);
   url.searchParams.set("view", view);
   url.searchParams.set("q", query);
   url.searchParams.set("page", String(page));
-  return api(url.pathname + url.search, undefined, { signal });
+  const path = url.pathname + url.search;
+  return cacheQuery(() => api(path, undefined, { signal }), {
+    key: KEY.caseView(cid, path),
+    ttlMs: TTL.caseView,
+    persist: PERSIST.caseView,
+    force,
+  });
 }
 
 export function mutateCase(cid, range, action, body) {
@@ -21,29 +45,46 @@ export function mutateCase(cid, range, action, body) {
   return api(
     `/api/clients/${cid}/${action}${query ? `?${query}` : ""}`,
     body,
-  );
+  ).then((res) => {
+    invalidateCase(cid);
+    return res;
+  });
 }
 
 /** 手工新增一条交易（补录原件里漏识别的行）。服务端走同一套归一与质检。 */
 export function addTransaction(cid, draft) {
-  return api(`/api/clients/${cid}/transactions`, draft);
+  return api(`/api/clients/${cid}/transactions`, draft).then((res) => {
+    invalidateCase(cid);
+    return res;
+  });
 }
 
 /** 删除单条交易（误识别 / 重复录入时由用户移除）。 */
 export function deleteTransaction(cid, tid) {
   return api(`/api/clients/${cid}/transactions/${tid}`, undefined, {
     method: "DELETE",
+  }).then((res) => {
+    invalidateCase(cid);
+    return res;
   });
 }
 
 /** 原件正文按页浏览：返回按页切分好的已提取文字（不渲染 PDF）。 */
-export function documentText(cid, did) {
-  return api(`/api/clients/${cid}/documents/${did}/text`);
+// 解析产物只会在「重新解析」时变，半个月 TTL；重新解析会主动清掉，
+// 所以这里的 TTL 只是兜底，不是唯一失效手段。
+export function documentText(cid, did, { force } = {}) {
+  return cacheQuery(
+    () => api(`/api/clients/${cid}/documents/${did}/text`),
+    { key: KEY.docText(cid, did), ttlMs: TTL.docText, persist: PERSIST.docText, force },
+  );
 }
 
 /** 某份文档解析出的交易行（含原件原文 raw），供逐行对照。 */
-export function documentRows(cid, did) {
-  return api(`/api/clients/${cid}/documents/${did}/rows`);
+export function documentRows(cid, did, { force } = {}) {
+  return cacheQuery(
+    () => api(`/api/clients/${cid}/documents/${did}/rows`),
+    { key: KEY.docRows(cid, did), ttlMs: TTL.docRows, persist: PERSIST.docRows, force },
+  );
 }
 
 /** 本机拆行入库：原件落 Vault + 服务端权威校验 rows + 扣解析分，不进 upload worker。 */
@@ -54,7 +95,11 @@ export function uploadParsed(cid, { file, rows, source, batch }) {
   if (batch) form.set("batch", batch);
   form.set("rows_json", JSON.stringify(rows));
   form.append("file", file);
-  return api(`/api/clients/${cid}/upload-parsed`, form);
+  return api(`/api/clients/${cid}/upload-parsed`, form).then((res) => {
+    invalidateDoc(cid);
+    invalidateCase(cid);
+    return res;
+  });
 }
 
 export function listCaseJobs(cid, { signal } = {}) {
@@ -63,7 +108,12 @@ export function listCaseJobs(cid, { signal } = {}) {
 
 /** 原地重解析：用已存原件按（可纠正的）来源重跑解析主干。 */
 export function reparseDocument(cid, docId, source) {
-  return api(`/api/clients/${cid}/documents/${docId}/reparse`, { source });
+  return api(`/api/clients/${cid}/documents/${docId}/reparse`, { source }).then((res) => {
+    // 重新解析会重写这份文档的交易行与正文，缓存必须立刻作废。
+    invalidateDoc(cid, docId);
+    invalidateCase(cid);
+    return res;
+  });
 }
 
 /** 通用解析工具：取预设列表。 */
@@ -76,6 +126,9 @@ export function generalParse(cid, docId, preset, question) {
   return api(`/api/clients/${cid}/documents/${docId}/general-parse`, {
     preset,
     question,
+  }).then((res) => {
+    invalidateDoc(cid, docId);
+    return res;
   });
 }
 

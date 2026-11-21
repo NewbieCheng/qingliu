@@ -719,7 +719,7 @@ footer{border-top:1px solid var(--ql-line);color:var(--ql-muted)}
 .rail-collapsed .rail-user{justify-content:center}
 .rail-collapsed .rail-link-mark{width:9px;height:9px}
 .topbar{
-  display:flex;align-items:center;position:sticky;top:0;z-index:6;height:56px;padding:0 28px;background:rgba(247,248,242,.86);
+  display:flex;align-items:center;position:sticky;top:0;z-index:30;height:56px;padding:0 28px;background:rgba(247,248,242,.86);
   backdrop-filter:blur(10px);border-bottom:1px solid var(--ql-line);transition:height .18s ease;
 }
 .topbar-copy{display:flex;align-items:center;gap:14px;min-width:0}
@@ -747,7 +747,13 @@ footer{border-top:1px solid var(--ql-line);color:var(--ql-muted)}
   flex:1 0 auto;min-width:0;overflow:visible;
 }
 .page-wrap>main{padding:0;max-width:none;margin:0;overflow:visible}
-html,body{min-height:100%;overflow-x:hidden;overflow-y:auto}
+/* 顶部栏用 position:sticky 常驻。sticky 会被任意祖先的 overflow:hidden/auto
+   破坏——因为那会让该祖先变成滚动容器，sticky 元素就跟着它一起滚走。
+   这里原来写的是 overflow-x:hidden;overflow-y:auto，body 因此成了滚动容器，
+   顶栏就"随滚轮滚掉"了。改成 overflow-x:clip：clip 只裁剪、不创建滚动容器，
+   sticky 照常生效。横向照样不会溢出。
+   不支持 clip 的旧浏览器会忽略这条声明，退化为可横向滚动，但顶栏仍能固定。 */
+html,body{min-height:100%;overflow-x:clip}
 .page-wrap .account-page{max-width:none;padding:0}
 .workspace footer{max-width:var(--ql-content);margin:0 auto;padding:14px 34px 24px;width:100%}
 .card{background:var(--ql-surface);border-color:var(--ql-line);border-radius:2px;padding:26px}

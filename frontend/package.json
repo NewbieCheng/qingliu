@@ -7,6 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "lint": "eslint .",
+    "test:cache": "node --test test/cache.test.mjs",
     "test": "vitest run",
     "check": "pnpm run lint && pnpm run check:arch && pnpm run test && pnpm run build",
     "check:arch": "node scripts/check-architecture.mjs",

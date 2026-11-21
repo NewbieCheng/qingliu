@@ -1181,7 +1181,10 @@ func (a *App) mux() http.Handler {
 		etag := `"` + str(d, "sha") + ":" + fmt.Sprint(page) + `"`
 		q.w.Header().Set("ETag", etag)
 		q.w.Header().Set("X-Document-SHA", str(d, "sha"))
-		q.w.Header().Set("Cache-Control", "private, max-age=3600")
+		// 页图内容由「文档 sha + 页码」唯一确定，永不变更，
+		// 所以可以长缓存并标 immutable：同一份文件翻回同一页不再请求服务器。
+		// private 保证只缓存在用户自己的浏览器里，不经过共享代理。
+		q.w.Header().Set("Cache-Control", "private, max-age=604800, immutable")
 		if match := strings.TrimSpace(q.r.Header.Get("If-None-Match")); match != "" && match == etag {
 			q.w.WriteHeader(http.StatusNotModified)
 			return
