@@ -888,6 +888,148 @@ func (a *App) mux() http.Handler {
 		}
 		bad(404, "Transaction not found")
 	}))
+	// 通用解析工具：预设/自定义目标，基于已抽正文做定向提取（L3 未知文档路径）。
+	m.HandleFunc("GET /api/parse-presets", a.route(func(q *request) {
+		q.json(Object{"presets": parsePresets})
+	}))
+	m.HandleFunc("POST /api/clients/{cid}/documents/{did}/general-parse", a.route(func(q *request) {
+		q.edit(func(cid string) {
+			did := q.r.PathValue("did")
+			b := q.body()
+			preset := strings.TrimSpace(str(b, "preset"))
+			require(validPreset(preset), "Invalid preset")
+			question := str(b, "question")
+			d := s.one("SELECT name,payload FROM ql_documents WHERE customer_id=? AND id=?", cid, did)
+			require(d != nil, "Document not found")
+			meta := obj(str(d, "payload"))
+			text := str(meta, "extract_text")
+			if text == "" {
+				text = str(meta, "ocr_text")
+			}
+			require(strings.TrimSpace(text) != "", "文档没有可解析的正文")
+			// 余额校验：AI 调用按积分计费，余额为 0 时先提示充值。
+			if balance, ok := a.pointBalance(q.r.Context(), str(q.user, "id")); ok && balance <= 0 {
+				bad(402, insufficientPointsMessage)
+			}
+			result, err := a.runGeneralParse(q.r.Context(), str(q.user, "id"), preset, question, text)
+			if err != nil {
+				log.Printf("general-parse failed: cid=%s did=%s preset=%s err=%v", cid, did, preset, err)
+				bad(500, "解析失败："+err.Error())
+			}
+			meta["general_parse"] = result
+			meta["general_parse_preset"] = preset
+			meta["general_parse_at"] = time.Now().Format("2006-01-02 15:04:05")
+			s.exec("UPDATE ql_documents SET payload=? WHERE customer_id=? AND id=?", js(meta), cid, did)
+			q.event(cid, "general_parse", did)
+			q.json(Object{"ok": true, "result": result})
+		})
+	}))
+	// 流式通用解析：SSE 逐字下发，减少等待焦虑。事件见 sse.go。
+	m.HandleFunc("POST /api/clients/{cid}/documents/{did}/general-parse/stream", a.route(func(q *request) {
+		q.edit(func(cid string) {
+			did := q.r.PathValue("did")
+			b := q.body()
+			preset := strings.TrimSpace(str(b, "preset"))
+			require(validPreset(preset), "Invalid preset")
+			question := str(b, "question")
+			d := s.one("SELECT name,payload FROM ql_documents WHERE customer_id=? AND id=?", cid, did)
+			require(d != nil, "Document not found")
+			meta := obj(str(d, "payload"))
+			text := documentText(meta)
+			require(text != "", "文档没有可解析的正文")
+			if balance, ok := a.pointBalance(q.r.Context(), str(q.user, "id")); ok && balance <= 0 {
+				bad(402, insufficientPointsMessage)
+			}
+			stream := newSSE(q.w)
+			stream.Stage("准备正文")
+			userID := str(q.user, "id")
+			result, err := a.runGeneralParseStream(q.r.Context(), userID, preset, question, text, func(delta string) {
+				stream.Delta(delta)
+			})
+			if err != nil {
+				log.Printf("general-parse/stream failed: cid=%s did=%s preset=%s err=%v", cid, did, preset, err)
+				stream.Fail(err)
+				return
+			}
+			// 与同步接口保持一致：落库后再发 done。
+			meta["general_parse"] = result
+			meta["general_parse_preset"] = preset
+			meta["general_parse_at"] = time.Now().Format("2006-01-02 15:04:05")
+			s.exec("UPDATE ql_documents SET payload=? WHERE customer_id=? AND id=?", js(meta), cid, did)
+			q.event(cid, "general_parse", did)
+			stream.Done(result)
+		})
+	}))
+	// 多份资料一起交给 AI 总结（用户勾选后触发）。
+	m.HandleFunc("POST /api/clients/{cid}/documents/summarize", a.route(func(q *request) {
+		q.edit(func(cid string) {
+			b := q.body()
+			ids := list(b["document_ids"])
+			require(len(ids) > 0, "请先勾选资料")
+			require(len(ids) <= 10, "一次最多总结 10 份资料")
+			question := str(b, "question")
+			if balance, ok := a.pointBalance(q.r.Context(), str(q.user, "id")); ok && balance <= 0 {
+				bad(402, insufficientPointsMessage)
+			}
+			parts := make([]Object, 0, len(ids))
+			for _, v := range ids {
+				docID := strings.TrimSpace(str(map[string]any{"v": v}, "v"))
+				if docID == "" {
+					continue
+				}
+				d := s.one("SELECT name,payload FROM ql_documents WHERE customer_id=? AND id=?", cid, docID)
+				if d == nil {
+					continue
+				}
+				parts = append(parts, d)
+			}
+			require(len(parts) > 0, "选中的资料里没有可解析正文")
+			prompt := batchSummarizePrompt(question, parts, 20000)
+			stream := newSSE(q.w)
+			stream.Stage(fmt.Sprintf("汇总 %d 份资料", len(parts)))
+			userID := str(q.user, "id")
+			out, err := a.wbChatStream(q.r.Context(), userID, structureRescueModel(), prompt, func(d sseDelta) {
+				if d.Content != "" {
+					stream.Delta(d.Content)
+				}
+			})
+			if err != nil {
+				log.Printf("batch-summarize failed: cid=%s n=%d err=%v", cid, len(parts), err)
+				stream.Fail(err)
+				return
+			}
+			result := Object{"markdown": truncateRunes(out, 20000), "count": len(parts)}
+			s.exec("UPDATE ql_customers SET meta=JSON_SET(COALESCE(meta,'{}'),'$.batch_summary',?) WHERE id=?",
+				js(Object{"markdown": result["markdown"], "at": time.Now().Format("2006-01-02 15:04:05")}), cid)
+			stream.Done(result)
+		})
+	}))
+	// 原地重解析：用已存原件按（可纠正的）来源重跑单一主干，不重新上传、不重复扣费。
+	m.HandleFunc("POST /api/clients/{cid}/documents/{did}/reparse", a.route(func(q *request) {
+		q.edit(func(cid string) {
+			did := q.r.PathValue("did")
+			b := q.body()
+			d := s.one("SELECT id,name,sha FROM ql_documents WHERE customer_id=? AND id=?", cid, did)
+			require(d != nil, "Document not found")
+			source := strings.TrimSpace(str(b, "source"))
+			if source == "" {
+				source = "other"
+			}
+			require(validSource(source), "Invalid source")
+			jid := id()
+			payload := Object{
+				"id": jid, "name": str(d, "name"), "sha": str(d, "sha"),
+				"source": source, "reparse_of": did,
+			}
+			space := q.space()
+			_, e := s.db.Exec("INSERT INTO ql_jobs(id,customer_id,user_id,kind,status,payload,message,progress,stage,space_kind,space_id) VALUES(?,?,?,'upload','queued',?,'等待重解析',0,'queued',?,?)",
+				jid, cid, q.user["id"], js(payload), space.Kind, space.ID)
+			must(e)
+			s.bump(cid)
+			q.event(cid, "document_reparse", did)
+			q.json(Object{"ok": true, "job": jid})
+		})
+	}))
 	m.HandleFunc("GET /api/clients/{cid}/original/{did}/{page}", a.route(func(q *request) {
 		cid := q.access()
 		did := q.r.PathValue("did")
@@ -1271,7 +1413,7 @@ func ipHost(s string) string {
 	return s
 }
 func validSource(s string) bool {
-	return s == "other" || s == "bank_statement" || s == "wechat_statement" || s == "alipay_statement" || s == "credit_report"
+	return s == "other" || s == "bank_statement" || s == "wechat_statement" || s == "alipay_statement" || s == "credit_report" || s == "tax_form"
 }
 func (s *Store) addUser(name, display, pass, role string) error {
 	name = strings.TrimSpace(name)

@@ -79,6 +79,9 @@ export default {
   "source.wechat_statement": "微信钱包",
   "source.alipay_statement": "支付宝钱包",
   "source.credit_report": "个人征信",
+  "source.tax_form": "税务表单",
+  "doc.reparse_queued": "已提交重新识别",
+  "route.parse": "资料解析工具",
   "source.other": "自动识别 / 其他",
 
   "label.included": "暂计经营（未核实）",
@@ -446,6 +449,7 @@ export default {
   "auth.login_email_tab": "邮箱登录",
   "auth.email_code_required": "请填写邮箱验证码",
   "auth.login_failed": "登录失败，请重试",
+  "auth.captcha_ready_retry": "验证码已填好，请再点一次登录",
   "auth.email_or_phone": "工作邮箱 / 手机号",
   "auth.email_code": "邮箱验证码",
   "auth.resend_in": "{{seconds}}s 后重发",
@@ -775,6 +779,7 @@ export default {
   "billing.checkout_done": "完成",
   "billing.ledger_title": "积分流水",
   "billing.ledger_desc": "展示本账号的积分变动记录。",
+  "billing.ledger_page": "第 {{page}} / {{total}} 页",
   "billing.ledger_expire_reason": "临时积分到期作废",
   "billing.sku_choose_title": "选择套餐",
   "billing.sku_choose_desc":

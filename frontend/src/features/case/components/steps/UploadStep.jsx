@@ -5,11 +5,11 @@ import { SegmentedControl } from "@/shared/ui/SegmentedControl.jsx";
 import { UploadDropzone } from "@/shared/ui/UploadDropzone.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { SOURCES } from "@/shared/lib/constants.js";
-import { DocumentList } from "../DocumentList.jsx";
+import { ParseRecordsPanel } from "../ParseRecordsPanel.jsx";
 import { runUploadWaterfall } from "../../lib/upload-waterfall.js";
 import { useI18n } from "@/shared/i18n/index.jsx";
 
-export function UploadStep({ data, onUpload, onCommitParsed, onNext }) {
+export function UploadStep({ data, onUpload, onCommitParsed, onReparsed, onNext }) {
   const { t } = useI18n();
   const [progress, setProgress] = useState(null);
   const sourceOptions = useMemo(
@@ -77,7 +77,7 @@ export function UploadStep({ data, onUpload, onCommitParsed, onNext }) {
           </div>
         </div>
       </Form>
-      <DocumentList data={data} />
+      <ParseRecordsPanel data={data} onReparsed={onReparsed} />
     </section>
   );
 }

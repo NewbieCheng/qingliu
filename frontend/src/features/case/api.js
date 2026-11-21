@@ -39,6 +39,39 @@ export function listCaseJobs(cid, { signal } = {}) {
   return api(`/api/clients/${cid}/jobs`, undefined, { signal });
 }
 
+/** 原地重解析：用已存原件按（可纠正的）来源重跑解析主干。 */
+export function reparseDocument(cid, docId, source) {
+  return api(`/api/clients/${cid}/documents/${docId}/reparse`, { source });
+}
+
+/** 通用解析工具：取预设列表。 */
+export function listParsePresets() {
+  return api("/api/parse-presets");
+}
+
+/** 通用解析工具：对某文档按预设/自定义目标做定向提取。 */
+export function generalParse(cid, docId, preset, question) {
+  return api(`/api/clients/${cid}/documents/${docId}/general-parse`, {
+    preset,
+    question,
+  });
+}
+
+/** 批量重解析：把勾选的历史资料作为一批重新放回解析队列（复用 reparse）。 */
+export async function reparseBatch(cid, docs) {
+  const results = [];
+  for (const doc of docs) {
+    // 逐份入队；单份失败不阻断整批。
+    try {
+      const r = await reparseDocument(cid, doc.id, doc.meta?.source || "other");
+      results.push({ id: doc.id, ok: true, job: r.job });
+    } catch (e) {
+      results.push({ id: doc.id, ok: false, error: e.message });
+    }
+  }
+  return results;
+}
+
 export function getTransaction(cid, transactionId) {
   return api(`/api/clients/${cid}/transaction/${transactionId}`);
 }

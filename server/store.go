@@ -382,6 +382,63 @@ func (s *Store) documents(cid string) []Object {
 	}
 	return docs
 }
+
+// reparseDocument 原地更新某资料的解析结果：保留原 payload 备份，覆盖为新结果。
+// 表单重解析不产生交易行，因此只更新 payload，不碰 ql_transactions。
+// reparseDocument 原地重解析：更新文档 payload，并（有交易行时）重建该文档的交易行。
+//
+// 为什么必须重建交易行：解析器修好后（例：单列带符号金额、方向关键词推断），
+// 只更新文档 payload 不会让历史流水变好 —— 用户看到仍是"1078 笔全部解析失败"。
+// 重解析的语义就是"用新逻辑再算一遍"，所以交易行要按 document_id 整体替换。
+// 表单类（form）不产生交易行，`result.Rows` 为空时只更新 payload。
+func (s *Store) reparseDocument(cid, did, name, sha string, result ParseResult) error {
+	old := s.one("SELECT payload FROM ql_documents WHERE customer_id=? AND id=?", cid, did)
+	if old == nil {
+		return errors.New("Document not found")
+	}
+	meta := result.Meta
+	meta["_backup_before_reparse"] = obj(str(old, "payload"))
+	meta["reparsed_at"] = time.Now().Format("2006-01-02 15:04:05")
+
+	tx, e := s.db.Begin()
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback()
+	if _, e = tx.Exec("UPDATE ql_documents SET payload=? WHERE customer_id=? AND id=?", js(meta), cid, did); e != nil {
+		return e
+	}
+	if len(result.Rows) > 0 {
+		// 先删该文档旧行（连同它们的复核记录），再按新结果插入。
+		if _, e = tx.Exec("DELETE r FROM ql_reviews r JOIN ql_transactions t ON r.transaction_id=t.id WHERE t.customer_id=? AND t.document_id=?", cid, did); e != nil {
+			return e
+		}
+		if _, e = tx.Exec("DELETE FROM ql_transactions WHERE customer_id=? AND document_id=?", cid, did); e != nil {
+			return e
+		}
+		for _, t := range result.Rows {
+			var key any
+			if str(t, "transaction_id") != "" {
+				key = []any{t["source"], t["account"], t["transaction_id"]}
+			} else {
+				key = []any{t["source"], t["account"], t["date"], t["time"], t["income"], t["expense"], t["counterparty"], t["memo"]}
+			}
+			fp := hash([]byte(js(key)))
+			var n int
+			if e = tx.QueryRow("SELECT COUNT(*) FROM ql_transactions WHERE customer_id=? AND fingerprint=?", cid, fp).Scan(&n); e != nil {
+				return e
+			}
+			t["id"] = id()
+			t["document_id"] = did
+			t["filename"] = name
+			t["duplicate"] = n > 0
+			if _, e = tx.Exec("INSERT INTO ql_transactions(id,customer_id,document_id,fingerprint,payload) VALUES(?,?,?,?,?)", t["id"], cid, did, fp, js(t)); e != nil {
+				return e
+			}
+		}
+	}
+	return tx.Commit()
+}
 func (s *Store) caseData(cid, source, start, end string) Object {
 	c := s.one("SELECT * FROM ql_customers WHERE id=?", cid)
 	fields := obj(str(c, "payload"))

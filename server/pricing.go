@@ -16,7 +16,7 @@ import (
 //
 // 三档对应三条解析路径：
 //   text   有文字层，直接提取，按份
-//   ocr    本机 tesseract 逐页识别，按页
+//   ocr    后端 OCR 逐页转写（POST /v1/ocr），按页
 //   vision 视觉模型逐页识别，按页
 type parsePricing struct {
 	Text   int64 // 每份

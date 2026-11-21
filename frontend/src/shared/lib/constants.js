@@ -4,6 +4,7 @@ export const SOURCES = {
   wechat_statement: "source.wechat_statement",
   alipay_statement: "source.alipay_statement",
   credit_report: "source.credit_report",
+  tax_form: "source.tax_form",
   other: "source.other",
 };
 

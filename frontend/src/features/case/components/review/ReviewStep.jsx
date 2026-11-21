@@ -31,7 +31,6 @@ export function ReviewStep({
   onAIRevoke,
   onRulesSave,
   onCoverage,
-  onOpenOriginal,
   onStepChange,
 }) {
   const { t } = useI18n();
@@ -71,7 +70,6 @@ export function ReviewStep({
           data={data}
           selected={selected}
           onSelectedChange={onSelectedChange}
-          onOpenOriginal={onOpenOriginal}
         />
         {!data.rows.length && (
           <p className="empty">

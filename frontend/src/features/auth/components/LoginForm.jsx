@@ -223,8 +223,20 @@ export function LoginForm({ onRegister }) {
             }
           } catch (error) {
             if (mode === "password") setCaptcha({ id: "", code: "" });
-            setSubmitError(error?.message || t("auth.login_failed"));
+            const message = error?.message || t("auth.login_failed");
+            setSubmitError(message);
             error.silent = true;
+            // 上游要求/拒绝图形验证码时，不能只甩一句文字让用户干瞪眼：
+            // 自动重新拉起验证码，用户点完就能接着登。
+            // （之前这里只显示错误，用户看到"需要验证码"却找不到入口。）
+            if (mode === "password" && /验证码|captcha/i.test(message) && !error.captchaRetried) {
+              error.captchaRetried = true;
+              const solved = await askCaptcha("login");
+              if (solved && solved !== CANCELLED) {
+                setCaptcha(solved);
+                setSubmitError(t("auth.captcha_ready_retry"));
+              }
+            }
             throw error;
           }
           setSubmitError("");

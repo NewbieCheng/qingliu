@@ -319,6 +319,9 @@ func command(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 func parseFile(ctx context.Context, b []byte, name, source string, progress func(int, int)) (ParseResult, error) {
+	if progress == nil {
+		progress = func(int, int) {}
+	}
 	result := ParseResult{Object{"source": source, "status": "success", "issues": []string{}, "facts": []Object{}, "pages": 0, "subject_name": "", "coverage": "", "method": "standard-import"}, []Object{}}
 	ext := strings.ToLower(filepath.Ext(name))
 	if isImageExt(ext) {
@@ -533,16 +536,14 @@ func parseFile(ctx context.Context, b []byte, name, source string, progress func
 			progress(i+1, count)
 			words := p.words()
 			if len(words) == 0 {
-				// 优先级链：文字层取不到 → 自动降级到本机 tesseract（按 ocr 档计价）。
-				// 工作台计费 OCR（POST /v1/ocr）不在这里自动调用，由上传链路后段升级。
-				if txt, ok := localOCRPage(ctx, file, dir, i+1); ok {
-					ocrPages++
-					facts = append(facts, Object{"page": i + 1, "text": txt, "kind": "OCR候选，需对照原页人工核对"})
-					issues = append(issues, fmt.Sprintf("第%d页无文字层，已用本机 OCR 识别，请对照原页核对", i+1))
-					continue
-				}
+				// 无文字层的页统一交给后端 OCR（POST /v1/ocr），由上传链路后段
+				// tryEnhanceScanWithWorkbenchOCR 处理。
+				//
+				// 这里以前先降级到"本机 tesseract"，那是与后端 OCR 并存的第二套实现：
+				// 两套识别结果口径不同、计费档位不同、失败原因码也不同。
+				// 归一后只有一个 OCR 来源，生产机也不再需要装 tesseract/poppler 渲染。
 				visionPages++
-				issues = append(issues, fmt.Sprintf("第%d页无文字层且本机 OCR 未识别出内容，将尝试工作台 OCR", i+1))
+				issues = append(issues, fmt.Sprintf("第%d页无文字层，将用文档视觉识别转写", i+1))
 				continue
 			}
 			textPages++
@@ -952,29 +953,4 @@ func mupdfPages(b []byte) ([]PDFPage, error) {
 		pages = append(pages, PDFPage{Width: p.Width, Height: p.Height, Items: words})
 	}
 	return pages, nil
-}
-
-// localOCRPage 用本机 tesseract 识别单页（免费路径）。
-//
-// 只做「有没有字」这一步：识别结果作为候选事实交给人工核对，不据此自动
-// 生成金融结论。返回 false 表示本机也识别不出内容，调用方应提示走视觉模型。
-func localOCRPage(ctx context.Context, pdfPath, dir string, page int) (string, bool) {
-	if _, err := exec.LookPath("tesseract"); err != nil {
-		return "", false
-	}
-	prefix := filepath.Join(dir, fmt.Sprintf("ocr-%d", page))
-	if _, renderErr := command(ctx, "pdftoppm", "-f", fmt.Sprint(page), "-singlefile", "-scale-to", "2200", "-png", pdfPath, prefix); renderErr != nil {
-		return "", false
-	}
-	defer os.Remove(prefix + ".png")
-	txt, ocrErr := command(ctx, "tesseract", prefix+".png", "stdout", "-l", "chi_sim+eng")
-	if ocrErr != nil {
-		return "", false
-	}
-	text := strings.TrimSpace(string(txt))
-	// 少于 10 个可见字符视为没识别出来，避免把噪声当成内容。
-	if len([]rune(normalize(text))) < 10 {
-		return "", false
-	}
-	return text, true
 }

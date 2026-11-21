@@ -10,13 +10,11 @@ import {
   CaseAdminGrant,
   CaseHeader,
   CaseSteps,
-  OriginalEvidenceDialog,
   OwnershipStep,
   ReportStep,
   ReviewStep,
   TaskList,
   UploadStep,
-  getTransaction,
   uploadParsed,
   useCaseData,
 } from "@/features/case/index.js";
@@ -34,7 +32,6 @@ export function CasePage({ cid, user }) {
   const [view, setView] = useState("issues");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [original, setOriginal] = useState(null);
   // 解析是计费入口：积分不足时后端回 402，这里直接拉起「前往充值」，
   // 不用让用户看着一行报错自己找充值页。
   const [rechargeOpen, setRechargeOpen] = useState(false);
@@ -85,21 +82,8 @@ export function CasePage({ cid, user }) {
     setSearchParams(params);
   }
 
-  async function openOriginal(transactionId) {
-    try {
-      const detail = await getTransaction(cid, transactionId);
-      const document = data.docs.find(
-        (item) => String(item.id) === String(detail.row.document_id),
-      );
-      setOriginal({
-        ...detail,
-        pages: Number(document?.meta?.pages) || detail.row.page || 1,
-        sha: document?.sha || "",
-      });
-    } catch (requestError) {
-      toast(requestError.message, "error");
-    }
-  }
+  // 「对照原件」入口已下线（用户反馈该功能无用）。后端 /original/ 路由保留，
+  // 需要时可直接按文档 id + 页码访问原页，不再从核对表格里进入。
 
   return (
     <main className="case-page">
@@ -132,6 +116,7 @@ export function CasePage({ cid, user }) {
           data={data}
           onUpload={upload}
           onCommitParsed={commitParsed}
+          onReparsed={() => load({ force: true })}
           onNext={() => changeStep("ownership")}
         />
       )}
@@ -163,7 +148,6 @@ export function CasePage({ cid, user }) {
           onAIRevoke={(ids) => mutate("ai-revoke", { ids })}
           onRulesSave={(rules) => mutate("rules", rules)}
           onCoverage={(payload) => mutate("coverage", payload)}
-          onOpenOriginal={openOriginal}
           onStepChange={changeStep}
         />
       )}
@@ -176,13 +160,6 @@ export function CasePage({ cid, user }) {
           onGenerate={(payload) => mutate("report", payload)}
           onSubmit={() => mutate("submit", {})}
           onFormal={(payload) => mutate("report", payload)}
-        />
-      )}
-      {original && (
-        <OriginalEvidenceDialog
-          cid={cid}
-          original={original}
-          onClose={() => setOriginal(null)}
         />
       )}
       {rechargeOpen && <RechargeTipDialog onClose={() => setRechargeOpen(false)} />}

@@ -148,7 +148,7 @@ func iso(s string) (string, error) {
 var aliases = map[string][]string{
 	"date": {"交易日期", "日期", "记账日期"}, "time": {"交易时间", "时间", "记账时间"}, "income": {"收入金额", "收入", "贷方发生额"}, "expense": {"支出金额", "支出", "借方发生额"},
 	"counterparty": {"对手方", "交易对方", "对方户名", "对方账户名"}, "counter_account": {"对手账号", "对方账号", "对方卡号/账号"}, "payer": {"转出账户名称"}, "payer_account": {"转出账号(尾4)", "转出账号"}, "payee": {"转入账户名称"}, "payee_account": {"转入账号(尾4)", "转入账号"},
-	"memo": {"交易摘要/备注", "摘要", "备注", "交易摘要", "交易名称"}, "channel": {"交易渠道", "渠道"}, "account": {"本方账号", "账户"}, "account_type": {"账户类型"}, "direction": {"收支方向", "方向", "收/支"}, "amount": {"金额", "交易金额"}, "transaction_id": {"交易单号", "订单号"},
+	"memo": {"交易摘要/备注", "摘要", "备注", "交易摘要", "交易名称"}, "channel": {"交易渠道", "渠道"}, "account": {"本方账号", "账户"}, "account_type": {"账户类型"}, "direction": {"收支方向", "方向", "收/支", "收/支/其他"}, "amount": {"金额", "交易金额"}, "transaction_id": {"交易单号", "订单号"},
 }
 
 func standard(raw Object, source string, page int, locator string) Object {
@@ -165,6 +165,28 @@ func standard(raw Object, source string, page int, locator string) Object {
 				break
 			}
 		}
+		// 列名常带单位后缀（`金额(元)`、`交易金额（元）`），精确匹配会落空，
+		// 导致整份微信/支付宝流水判「方向或金额未确认」。这里按"别名 + 纯括号后缀"
+		// 兜底：只有剩余部分以 `(` 开头才认，避免 `支出` 误吞 `支出金额`。
+		if t[k] == "" {
+			for _, a := range append([]string{k}, aa...) {
+				na := normalize(a)
+				if na == "" {
+					continue
+				}
+				matched := ""
+				for key, v := range clean {
+					if strings.HasPrefix(key, na) && strings.HasPrefix(strings.TrimPrefix(key, na), "(") {
+						matched = text(v)
+						break
+					}
+				}
+				if matched != "" {
+					t[k] = matched
+					break
+				}
+			}
+		}
 	}
 	fail := func(msg string) Object {
 		t["quality"] = "invalid"
@@ -178,6 +200,15 @@ func standard(raw Object, source string, page int, locator string) Object {
 			t["date"] = ""
 		}
 		return t
+	}
+	// 有些来源（微信/支付宝导出的 CSV）只有「交易时间」一列，值是完整 datetime，
+	// 它被映射到 time 而非 date；若不回退取日期部分，整份流水都会判「日期无效」。
+	if strings.TrimSpace(str(t, "date")) == "" {
+		if ts := strings.TrimSpace(str(t, "time")); len(ts) >= 10 {
+			if dd, de := iso(ts); de == nil {
+				t["date"] = dd
+			}
+		}
 	}
 	d, e := iso(str(t, "date"))
 	if e != nil {
@@ -218,8 +249,42 @@ func standard(raw Object, source string, page int, locator string) Object {
 		direction = actual
 	} else {
 		amount, err := cents(str(t, "amount"))
-		if err != nil || amount < 0 || direction == "" {
+		if err != nil {
 			return fail("方向或金额未确认")
+		}
+		// 单列金额格式（例：招行 mx 导出）里，负号本身就是方向信息：
+		// `-100,000.00` = 流出。以前这里见到负数直接 fail("方向或金额未确认")，
+		// 导致同一份流水里所有支出行全被丢弃。
+		if amount < 0 {
+			amount = -amount
+			if direction == "" || direction == "expense" {
+				direction = "expense"
+			}
+		}
+		if amount == 0 {
+			// 支付宝「不计收支」类调整行金额就是 0：若来源已明确标注为中性，
+			// 这是有效记录（只是不进收支统计），不该判失败。
+			if direction == "neutral" {
+				t["income"] = int64(0)
+				t["expense"] = int64(0)
+				t["direction"] = "neutral"
+				t["amount"] = money(0)
+				for _, k := range []string{"counterparty", "counter_account", "memo", "channel", "transaction_id", "account"} {
+					if _, ok := t[k]; !ok {
+						t[k] = ""
+					}
+				}
+				return t
+			}
+			return fail("零金额没有明确方向")
+		}
+		if direction == "" {
+			direction = inferDirection(str(t, "memo"), str(t, "channel"), str(t, "raw"))
+		}
+		// 单列且金额为正、又没有任何支出线索时，按流入处理：
+		// 该格式的金额列是"带符号发生额"，正数即进账。
+		if direction == "" {
+			direction = "income"
 		}
 		if direction == "income" {
 			inc = amount
@@ -314,6 +379,35 @@ func quarterlyInterest(rows []Object, start, end string) Object {
 		}
 	}
 	return out
+}
+
+// 方向推断用的关键词表。
+//
+// 顺序很重要：先判支出，再判收入。因为"付息""利息支出"里都含"息/利息"，
+// 若先匹配收入关键词，付息会被误判成收入（真实的资金流向是流出）。
+var (
+	expenseHints = []string{"付息", "利息支出", "支出", "转出", "扣款", "扣费", "消费", "手续费", "还款", "缴费", "借方", "出账"}
+	incomeHints  = []string{"收入", "入账", "转入", "存入", "收到", "结息", "利息收入", "贷方", "进账", "退款", "冲正"}
+)
+
+// inferDirection 在流水只有单个金额列、没有显式收/支列时，从摘要推断方向。
+// 推不出来返回空字符串，由调用方决定是否判 invalid（不猜、不编）。
+func inferDirection(memo, channel, raw string) string {
+	text := normalize(memo + " " + channel + " " + raw)
+	if text == "" {
+		return ""
+	}
+	for _, w := range expenseHints {
+		if strings.Contains(text, normalize(w)) {
+			return "expense"
+		}
+	}
+	for _, w := range incomeHints {
+		if strings.Contains(text, normalize(w)) {
+			return "income"
+		}
+	}
+	return ""
 }
 
 func classify(t, c Object) (string, string, string) {

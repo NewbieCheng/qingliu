@@ -80,6 +80,9 @@ export default {
   "source.wechat_statement": "WeChat wallet",
   "source.alipay_statement": "Alipay wallet",
   "source.credit_report": "Credit report",
+  "source.tax_form": "Tax form",
+  "doc.reparse_queued": "Reparse queued",
+  "route.parse": "Parse tool",
   "source.other": "Auto-detect / other",
 
   "label.included": "Tentative business (unverified)",
@@ -450,6 +453,7 @@ export default {
   "auth.login_email_tab": "Email code",
   "auth.email_code_required": "Please enter the email verification code.",
   "auth.login_failed": "Sign-in failed. Please try again.",
+  "auth.captcha_ready_retry": "Captcha ready — press sign in again",
   "auth.email_or_phone": "Work email / phone",
   "auth.email_code": "Email verification code",
   "auth.resend_in": "Resend in {{seconds}}s",
@@ -781,6 +785,7 @@ export default {
   "billing.checkout_done": "Done",
   "billing.ledger_title": "Points ledger",
   "billing.ledger_desc": "Point changes for this account.",
+  "billing.ledger_page": "Page {{page}} / {{total}}",
   "billing.ledger_expire_reason": "Temporary points expired",
   "billing.sku_choose_title": "Choose a package",
   "billing.sku_choose_desc":

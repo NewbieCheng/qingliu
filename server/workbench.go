@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -25,6 +26,17 @@ type wbConfig struct {
 	Client   *http.Client
 }
 
+// 超时分档：普通接口快，模型推理慢。此前整个 client 共用 15s，
+// 导致生产上 chat 必然 context deadline exceeded（实测真实申报表 prompt
+// 本地就要 7.8s，生产网络下轻松破 15s）。见 docs/计划-AI面板重做+流式+不支持资料分流.md B1。
+const (
+	// wbAPITimeout 普通 REST 接口（余额、上传、文档、计价）。
+	wbAPITimeout = 15 * time.Second
+	// wbChatTimeout 模型推理（chat/completions）。思考链会输出很多 token，
+	// 实测 2983 字正文即达 1500 completion_tokens，必须给足时间。
+	wbChatTimeout = 180 * time.Second
+)
+
 func loadWBConfig() wbConfig {
 	base := strings.TrimRight(strings.TrimSpace(os.Getenv("WORKBENCH_BASE_URL")), "/")
 	if base == "" {
@@ -34,8 +46,14 @@ func loadWBConfig() wbConfig {
 		BaseURL:  base,
 		ClientID: strings.TrimSpace(os.Getenv("WORKBENCH_SERVICE_CLIENT")),
 		Secret:   strings.TrimSpace(os.Getenv("WORKBENCH_SERVICE_SECRET")),
-		Client:   &http.Client{Timeout: 15 * time.Second},
+		Client:   &http.Client{Timeout: wbAPITimeout},
 	}
+}
+
+// chatClient 返回用于模型推理的 client：不共享普通接口的 15s 超时，
+// 也不与它们共享连接池（避免长请求把短接口的连接占满）。
+func (c wbConfig) chatClient() *http.Client {
+	return &http.Client{Timeout: wbChatTimeout}
 }
 
 func (c wbConfig) Ready() bool { return c.BaseURL != "" && c.ClientID != "" && c.Secret != "" }
@@ -81,9 +99,64 @@ func (c wbConfig) login(ctx context.Context, args loginArgs) (wbSession, error) 
 		return wbSession{}, err
 	}
 	if status != http.StatusOK {
-		return wbSession{}, errors.New(wbMessage(data, "Incorrect account or password"))
+		return wbSession{}, wbLoginError(status, data)
 	}
 	return parseWBSession(data)
+}
+
+// wbLoginError 把上游登录错误码翻成用户能照着做的中文。
+//
+// 为什么需要这层：登录失败时如果只显示"认证失败"，用户无法判断
+// 该改密码、该等一会儿、该找客服，还是上游服务本身配置坏了。
+// 上游已经给出可区分的错误码（AUTH_INVALID_CREDENTIALS / AUTH_CAPTCHA_REQUIRED
+// / AUTH_ACCOUNT_LOCKED ...），这里按码翻译，不再把中文文案当唯一依据
+// （上游改文案时我们的提示不会跟着漂）。
+func wbLoginError(status int, data Object) error {
+	e := sub(data, "error")
+	code := strings.TrimSpace(str(e, "code"))
+	upstream := strings.TrimSpace(str(e, "message"))
+	if upstream == "" {
+		upstream = wbMessage(data, "")
+	}
+	switch code {
+	case "AUTH_INVALID_CREDENTIALS", "AUTH_UNAUTHORIZED":
+		// 安全上不区分"账号不存在"与"密码错误"，统一一句话。
+		return errors.New("账号或密码不正确")
+	case "AUTH_CAPTCHA_REQUIRED":
+		return errors.New("本次登录需要图形验证码，请点验证码后重试")
+	case "AUTH_CAPTCHA_INVALID":
+		return errors.New("图形验证码错误或已过期，请刷新后重试")
+	case "AUTH_ACCOUNT_LOCKED":
+		if upstream != "" {
+			return errors.New(upstream) // 上游带剩余分钟，原样透出更有用
+		}
+		return errors.New("密码错误次数过多，账号已临时锁定，请稍后再试")
+	case "AUTH_ACCOUNT_FROZEN":
+		return errors.New("账号已冻结，请联系管理员解冻")
+	case "AUTH_ACCOUNT_DISABLED":
+		return errors.New("账号已禁用，请联系管理员")
+	case "AUTH_SERVICE_UNAUTHORIZED":
+		return errors.New("清流服务与工作台的对接凭据失效，请联系管理员")
+	case "AUTH_SERVICE_SCOPE_MISMATCH":
+		return errors.New("该账号不属于清流服务，请用清流账号登录")
+	case "AUTH_NO_SPACE_AVAILABLE":
+		return errors.New("这个账号当前没有可进入的空间，请联系客服恢复")
+	case "SESSION_SUPERSEDED":
+		return errors.New("账号已在其他设备登录，请重新登录")
+	case "AUTH_LOGIN_RATE_LIMITED":
+		return errors.New("登录尝试过于频繁，请稍后再试")
+	case "AUTH_VERIFICATION_INVALID":
+		return errors.New("验证码无效或已过期，请重新获取")
+	case "AUTH_ACCOUNT_NOT_FOUND":
+		return errors.New("该账号尚未注册，请先注册或联系管理员")
+	}
+	if upstream != "" && upstream != "认证失败" {
+		return errors.New(upstream)
+	}
+	if status == http.StatusTooManyRequests {
+		return errors.New("登录尝试过于频繁，请稍后再试")
+	}
+	return errors.New("登录失败，请检查账号与密码后重试")
 }
 
 // register signs a new personal identity up on the workbench with the shared
@@ -139,6 +212,16 @@ func (c wbConfig) serviceRequest(ctx context.Context, method, path string, body 
 }
 
 func (c wbConfig) do(ctx context.Context, method, path string, body any, token string) (int, Object, error) {
+	return c.doWithClient(ctx, c.Client, method, path, body, token, "application/json")
+}
+
+// doChat 是模型推理专用：长超时 + 独立连接池。
+// 与 do 的区别只有 client 和 Accept，行为/错误语义保持一致。
+func (c wbConfig) doChat(ctx context.Context, method, path string, body any, token string) (int, Object, error) {
+	return c.doWithClient(ctx, c.chatClient(), method, path, body, token, "application/json")
+}
+
+func (c wbConfig) doWithClient(ctx context.Context, client *http.Client, method, path string, body any, token, accept string) (int, Object, error) {
 	var reader io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
@@ -151,7 +234,7 @@ func (c wbConfig) do(ctx context.Context, method, path string, body any, token s
 	if err != nil {
 		return 0, nil, err
 	}
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", accept)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -164,9 +247,13 @@ func (c wbConfig) do(ctx context.Context, method, path string, body any, token s
 		req.Header.Set("X-Service-Client", c.ClientID)
 		req.Header.Set("X-Service-Secret", c.Secret)
 	}
-	resp, err := c.Client.Do(req)
+	if client == nil {
+		client = c.Client
+	}
+	resp, err := client.Do(req)
 	if err != nil {
-		return 0, nil, errors.New("Workbench temporarily unavailable. Please retry later.")
+		log.Printf("wb.do: Client.Do failed method=%s url=%s err=%v", method, c.BaseURL+path, err)
+		return 0, nil, wbTransportError(err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
@@ -442,6 +529,7 @@ func (a *App) wbAccessToken(userID string) (string, error) {
 	}
 	expires := integer(account["token_expires"])
 	if expires > 0 && time.Now().Unix() > expires-60 {
+		log.Printf("wbAccessToken: token expiring (exp=%d now=%d), refresh userID=%s", expires, time.Now().Unix(), userID)
 		return a.wbRefresh(userID)
 	}
 	token := string(a.s.unseal(bytesOf(account["access_token"])))
@@ -720,6 +808,7 @@ func (a *App) wbRequest(ctx context.Context, userID, method, path string, body a
 	}
 	token, err := a.wbAccessToken(userID)
 	if err != nil {
+		log.Printf("wbRequest: wbAccessToken failed userID=%s err=%v", userID, err)
 		return http.StatusUnauthorized, nil, err
 	}
 	status, data, err := a.wb.do(ctx, method, path, body, token)
@@ -727,8 +816,10 @@ func (a *App) wbRequest(ctx context.Context, userID, method, path string, body a
 		return status, data, err
 	}
 	if status == http.StatusUnauthorized {
+		log.Printf("wbRequest: %s %s got 401, refreshing userID=%s", method, path, userID)
 		refreshed, refreshErr := a.wbRefresh(userID)
 		if refreshErr != nil {
+			log.Printf("wbRequest: refresh failed userID=%s err=%v", userID, refreshErr)
 			return http.StatusUnauthorized, nil, refreshErr
 		}
 		return a.wb.do(ctx, method, path, body, refreshed)

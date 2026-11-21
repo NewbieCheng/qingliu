@@ -9,7 +9,7 @@ function selectableRows(rows) {
   return rows.filter((row) => !row.scope_excluded && row.quality !== "invalid");
 }
 
-export function TransactionTable({ data, selected, onSelectedChange, onOpenOriginal }) {
+export function TransactionTable({ data, selected, onSelectedChange }) {
   const { t } = useI18n();
   const selectable = selectableRows(data.rows);
   const allSelected =
@@ -57,7 +57,6 @@ export function TransactionTable({ data, selected, onSelectedChange, onOpenOrigi
             <th>{t("review.col_expense")}</th>
             <th>{t("review.col_memo")}</th>
             <th>{t("review.col_status")}</th>
-            <th>{t("review.col_original")}</th>
           </tr>
         </thead>
         <tbody>
@@ -124,9 +123,6 @@ export function TransactionTable({ data, selected, onSelectedChange, onOpenOrigi
                       ? t("case.review.duplicate_quarantined")
                       : t(TRANSACTION_LABELS[row.label] || "label.pending")}
                 </StatusBadge>
-              </td>
-              <td>
-                <button onClick={() => onOpenOriginal(row.id)}>{t("review.btn_view_original")}</button>
               </td>
             </tr>
             );

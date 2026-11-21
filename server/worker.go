@@ -150,37 +150,58 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 	jobctx, cancel := context.WithTimeout(ctx, jobPolicy(str(job, "kind")).RunTimeout)
 	defer cancel()
 	if str(job, "kind") == "upload" {
+		reparseOf := str(p, "reparse_of") // 非空 = 原地重解析已有资料
 		path := filepath.Join(s.root, "pending", jid)
-		b, e := s.read(path)
+		var b []byte
+		var e error
+		if reparseOf != "" {
+			// 重解析：从已存原件读取（不重新上传、不重复扣费）。
+			b, e = s.read(filepath.Join(s.root, "uploads", cid, reparseOf))
+		} else {
+			b, e = s.read(path)
+		}
 		must(e)
 		if hash(b) != str(p, "sha") {
 			panic(fmt.Errorf("上传文件完整性校验失败"))
 		}
 		known := s.one("SELECT id FROM ql_documents WHERE customer_id=? AND sha=?", cid, p["sha"])
-		if known == nil {
-			result, e := parseFile(jobctx, b, str(p, "name"), str(p, "source"), func(page, total int) {
+		if known == nil || reparseOf != "" {
+			// 单一主干：所有上传/重解析都走 parseDocument（归类→抽取→裁判→导诊）。
+			outcome, e := app.parseDocument(jobctx, str(user, "id"), p, b, func(page, total int) {
 				s.jobProgress(jid, "parsing", fmt.Sprintf("正在识别第 %d / %d 页", page, total), parsePercent(page, total))
 			})
 			must(e)
-			if app != nil {
-				// 文字层/本机 OCR 不够时，只调工作台 POST /v1/ocr（模型路由由工作台负责）。
-				app.tryEnhanceScanWithWorkbenchOCR(jobctx, str(user, "id"), p, b, &result, func(msg string) {
-					s.jobProgress(jid, "parsing", msg, 90)
-				})
-			}
-			did := id()
-			must(s.write(filepath.Join(s.root, "uploads", cid, did), b))
-			if e = s.insertParse(cid, did, str(p, "name"), str(p, "sha"), result); e != nil {
-				os.Remove(filepath.Join(s.root, "uploads", cid, did))
-				panic(e)
-			}
-			s.bump(cid)
-			// 解析成功后扣积分：走哪条路径就按哪档单价，价格由后台配置。
-			if points, chargeErr := app.chargeParse(jobctx, str(user, "id"), jid, parseBillingTier(result), int(integer(result.Meta["pages"]))); chargeErr == nil && points > 0 {
-				s.jobProgress(jid, "charging", "已扣除 "+itoa(points)+" 积分", 98)
+			result := outcome.Result
+			// 把主干新增的结构化结论并入 payload。
+			result.Meta["doc_type"] = string(outcome.DocType)
+			result.Meta["verdict"] = string(outcome.Verdict)
+			result.Meta["checks"] = outcome.Checks
+			result.Meta["explain"] = outcome.Explain
+			result.Meta["risks"] = outcome.Risks
+			result.Meta["ai_failed"] = outcome.AIFailed
+			if reparseOf != "" {
+				// 原地更新：保留备份，不新建文档、不重复扣费、不碰交易行。
+				must(s.reparseDocument(cid, reparseOf, str(p, "name"), str(p, "sha"), result))
+			} else {
+				did := id()
+				must(s.write(filepath.Join(s.root, "uploads", cid, did), b))
+				if e = s.insertParse(cid, did, str(p, "name"), str(p, "sha"), result); e != nil {
+					os.Remove(filepath.Join(s.root, "uploads", cid, did))
+					panic(e)
+				}
+				s.bump(cid)
+				// 解析成功后扣积分：走哪条路径就按哪档单价，价格由后台配置。
+				if points, chargeErr := app.chargeParse(jobctx, str(user, "id"), jid, parseBillingTier(result), int(integer(result.Meta["pages"]))); chargeErr == nil && points > 0 {
+					s.jobProgress(jid, "charging", "已扣除 "+itoa(points)+" 积分", 98)
+				}
 			}
 		}
-		d := s.one("SELECT payload FROM ql_documents WHERE customer_id=? AND sha=?", cid, p["sha"])
+		var d Object
+		if reparseOf != "" {
+			d = s.one("SELECT payload FROM ql_documents WHERE customer_id=? AND id=?", cid, reparseOf)
+		} else {
+			d = s.one("SELECT payload FROM ql_documents WHERE customer_id=? AND sha=?", cid, p["sha"])
+		}
 		meta := obj(str(d, "payload"))
 		state := "done"
 		message := "Recognition complete. Confirm document ownership."
@@ -189,7 +210,9 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 			message = "Saved with incomplete recognition; review warnings before issuing a formal report"
 		}
 		s.jobFinish(jid, state, message)
-		must(os.Remove(path))
+		if reparseOf == "" {
+			must(os.Remove(path))
+		}
 	} else if str(job, "kind") == "ai_analysis" {
 		if app == nil {
 			panic(fmt.Errorf("AI 分析执行器未装配"))

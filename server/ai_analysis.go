@@ -423,7 +423,9 @@ func (a *App) tryEnhanceScanWithWorkbenchOCR(ctx context.Context, userID string,
 		}
 		applyWorkbenchOCRResult(result, ocrRes)
 	}
-	if result != nil && len(result.Rows) > 0 {
+	// 规则抽出的行**可用率**达标才收工；只是"有行"不够 ——
+	// 没见过的版式常常抽出大量 invalid 行，需要 AI 兜底重排。
+	if !needsAIRescue(result) {
 		return
 	}
 	a.tryStructureRescueAfterOCR(ctx, userID, payload, result, progress)

@@ -1,0 +1,12 @@
+/* 解析主干前端：verdict 徽章 + 导诊卡片 + 动作按钮 */
+.doc-badges{display:inline-flex;gap:6px;align-items:center}
+.doc-form-note{font-size:12px;color:var(--muted);margin:4px 0}
+.doc-explain{background:#f3f8f6;border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:8px 0}
+.doc-explain strong{display:block;color:var(--green);font-weight:600}
+.doc-explain .muted{font-size:12px;margin:4px 0 0}
+.doc-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.doc-actions button.ghost{border:1px solid var(--line);border-radius:5px;padding:5px 10px;background:#fff}
+.doc-actions button.ghost:hover{background:#edf5f2}
+.badge.green{background:#e3f3ec;color:#176b60}
+.badge.amber{background:#fbf0d9;color:#8a6300}
+.badge.red{background:#fbe4e2;color:#a8322a}

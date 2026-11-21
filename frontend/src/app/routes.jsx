@@ -2,6 +2,7 @@ import React from "react";
 import { LoginPage } from "@/pages/login/LoginPage.jsx";
 import { ClientsPage } from "@/pages/clients/ClientsPage.jsx";
 import { CasePage } from "@/pages/case/CasePage.jsx";
+import { ParsePage } from "@/pages/parse/ParsePage.jsx";
 import { RechargePage } from "@/pages/recharge/RechargePage.jsx";
 import { ProfilePage } from "@/pages/profile/ProfilePage.jsx";
 import { AdminPage } from "@/pages/admin/AdminPage.jsx";
@@ -25,6 +26,11 @@ export const ROUTES = [
     page: CasePage,
     titleKey: "route.case",
     back: { to: "/", labelKey: "route.back_customers" },
+  },
+  {
+    path: "/clients/:cid/parse",
+    page: ParsePage,
+    titleKey: "route.parse",
   },
   {
     path: "/recharge",
