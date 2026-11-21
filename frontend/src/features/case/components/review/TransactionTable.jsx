@@ -46,7 +46,6 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
   // 正在对照原件的行：null 时不显示右侧面板。
   const [peek, setPeek] = useState(null);
   // 原件面板形态：float=可拖拽浮窗（默认），dock=右侧固定一栏
-  const [peekMode, setPeekMode] = useState("float");
 
   function toggleAll(checked) {
     onSelectedChange(checked ? selectable.map((row) => row.id) : []);
@@ -144,7 +143,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
         </form>
       ) : null}
 
-      <div className={peek && peekMode === "dock" ? "pd-with-pdf" : ""}><div className="table-wrap table-compact">
+      <div className={""}><div className="table-wrap table-compact">
         <table>
           <thead>
             <tr>
@@ -284,8 +283,6 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
             peek.page
           }
           onClose={() => setPeek(null)}
-          mode={peekMode}
-          onModeChange={setPeekMode}
         />
       ) : null}
       </div>

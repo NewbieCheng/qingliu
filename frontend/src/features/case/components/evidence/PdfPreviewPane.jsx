@@ -29,7 +29,7 @@ async function loadPage(cid, did, page, sha, signal) {
   return objURL;
 }
 
-function Viewer({ cid, doc, row, totalPages, onClose, mode, onModeChange }) {
+function Viewer({ cid, doc, row, totalPages, onClose }) {
   const { t } = useI18n();
   const [page, setPage] = useState(Number(row?.page) || 1);
   const [src, setSrc] = useState("");
@@ -114,14 +114,6 @@ function Viewer({ cid, doc, row, totalPages, onClose, mode, onModeChange }) {
       >
         {t("pdf.next")}
       </button>
-      <button
-        type="button"
-        className="btn-outline btn-compact"
-        title={t("pdf.switch_mode_hint")}
-        onClick={() => onModeChange?.(mode === "float" ? "dock" : "float")}
-      >
-        {mode === "float" ? t("pdf.mode_dock") : t("pdf.mode_float")}
-      </button>
     </>
   );
 
@@ -151,26 +143,6 @@ function Viewer({ cid, doc, row, totalPages, onClose, mode, onModeChange }) {
     </div>
   );
 
-  if (mode === "dock") {
-    return (
-      <aside className="pdf-pane" aria-label={t("pdf.pane_aria")}>
-        <header className="pdf-pane-head">
-          <div className="pdf-pane-title">
-            <strong>{t("pdf.original")}</strong>
-            <span className="pdf-pane-doc" title={doc?.name}>{doc?.name}</span>
-          </div>
-          <div className="pdf-pane-nav">
-            {toolbar}
-            <button type="button" className="btn-outline btn-compact" onClick={onClose}>
-              {t("pdf.close")}
-            </button>
-          </div>
-        </header>
-        {body}
-      </aside>
-    );
-  }
-
   return (
     <FloatingPane
       title={t("pdf.original")}
@@ -186,7 +158,7 @@ function Viewer({ cid, doc, row, totalPages, onClose, mode, onModeChange }) {
   );
 }
 
-export function PdfPreviewPane({ cid, doc, row, totalPages, onClose, mode, onModeChange }) {
+export function PdfPreviewPane({ cid, doc, row, totalPages, onClose }) {
   if (!doc?.id) return null;
   return (
     <Viewer
@@ -195,8 +167,6 @@ export function PdfPreviewPane({ cid, doc, row, totalPages, onClose, mode, onMod
       row={row}
       totalPages={totalPages}
       onClose={onClose}
-      mode={mode}
-      onModeChange={onModeChange}
     />
   );
 }

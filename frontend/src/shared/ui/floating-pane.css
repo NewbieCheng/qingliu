@@ -101,3 +101,12 @@ body.floating-pane-dragging {
 body.floating-pane-dragging * {
   cursor: grabbing !important;
 }
+
+/* 内容让位：浮窗贴右时主内容自动留出右侧空间，不被遮挡。
+   用 padding 而不是 margin，保证页面背景与滚动条行为不变。 */
+html.has-floating-pane .case-page,
+html.has-floating-pane .clients-page,
+html.has-floating-pane .parse-page {
+  padding-right: calc(var(--floating-pane-inset-right, 0px) + 12px);
+  transition: padding-right .16s ease;
+}

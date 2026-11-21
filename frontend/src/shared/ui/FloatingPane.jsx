@@ -69,6 +69,21 @@ export function FloatingPane({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // 内容让位：浮窗贴住右边缘时，把主内容区右侧留出等宽空白，
+  // 这样浮窗不压住页面内容；用户把浮窗拖走后就恢复满宽。
+  // 用 CSS 变量而不是直接改 DOM 宽度，页面只需读变量即可。
+  useEffect(() => {
+    const vw = window.innerWidth;
+    const docked = box.x + box.w >= vw - 48;
+    const inset = docked ? Math.max(0, Math.round(vw - box.x) + 8) : 0;
+    document.documentElement.style.setProperty("--floating-pane-inset-right", `${inset}px`);
+    document.documentElement.classList.toggle("has-floating-pane", inset > 0);
+    return () => {
+      document.documentElement.style.setProperty("--floating-pane-inset-right", "0px");
+      document.documentElement.classList.remove("has-floating-pane");
+    };
+  }, [box.x, box.w]);
+
   // 统一用 pointer 事件：鼠标、触控笔、触摸屏一套代码。
   const startDrag = useCallback((kind, event) => {
     // 标题栏上的按钮点击不应该开始拖拽

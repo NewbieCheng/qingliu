@@ -20,7 +20,6 @@ export function DocumentList({ data, onReparsed }) {
   const [busy, setBusy] = useState("");
   // 正在查看正文的文档（null 表示不显示）。
   const [viewing, setViewing] = useState(null);
-  const [viewingMode, setViewingMode] = useState("float");
   if (!data.docs.length) return null;
   const pending = data.docs.filter(
     (document) => document.meta.status !== "success",
@@ -152,8 +151,6 @@ export function DocumentList({ data, onReparsed }) {
           row={null}
           totalPages={viewing.meta?.pages}
           onClose={() => setViewing(null)}
-          mode={viewingMode}
-          onModeChange={setViewingMode}
         />
       ) : null}
     </div>
