@@ -1682,3 +1682,67 @@ details>summary::before{content:none;display:none}
   outline-offset:2px;
   border-radius:4px;
 }
+/* ═══ 滚动条统一收细 ═══
+   默认滚动条在 1920 宽的屏上占 15px 且高对比，压在原件图边上很抢眼。
+   全局收细到 8px、轨道透明、滑块低对比，悬停才加深。 */
+html{scrollbar-width:thin;scrollbar-color:#cfc9c1 transparent}
+body::-webkit-scrollbar,
+html::-webkit-scrollbar{width:8px;height:8px}
+body::-webkit-scrollbar-track,
+html::-webkit-scrollbar-track{background:transparent}
+body::-webkit-scrollbar-thumb,
+html::-webkit-scrollbar-thumb{
+  background:#cfc9c1;border-radius:8px;
+  border:2px solid transparent;background-clip:content-box;
+}
+body::-webkit-scrollbar-thumb:hover,
+html::-webkit-scrollbar-thumb:hover{background:#a9a49e;background-clip:content-box}
+
+/* 原件面板内部滚动条再细一档：它紧贴页图，越窄越好 */
+.dock-body,
+.pdf-pane-viewport{scrollbar-width:thin;scrollbar-color:#d5cfc7 transparent}
+.dock-body::-webkit-scrollbar,
+.pdf-pane-viewport::-webkit-scrollbar{width:7px;height:7px}
+.dock-body::-webkit-scrollbar-thumb,
+.pdf-pane-viewport::-webkit-scrollbar-thumb{
+  background:#d5cfc7;border-radius:7px;border:2px solid transparent;background-clip:content-box;
+}
+/* ═══ 测算范围：工具条只留一个触发按钮，字段收进浮层 ═══
+   原来 source/start/end/应用 四个控件平铺在工具条里，把右侧的状态与搜索
+   挤到第二行，而且很容易被当作"改了就生效"。收成二级浮层后，
+   工具条变成：范围 ▸ | 状态 | 搜索，一行放得下，也不会误操作。 */
+.range-pop-wrap{position:relative;flex:0 0 auto}
+
+.review-range-trigger{
+  display:inline-flex;align-items:center;gap:8px;
+  min-height:26px;padding:3px 9px;
+  border:1px solid var(--ql-line,#d7ddd6);border-radius:6px;
+  background:#fff;cursor:pointer;
+  font-size:12.5px;color:var(--ql-ink,#203b39);
+  transition:border-color .14s ease,background-color .14s ease;
+}
+.review-range-trigger:hover{border-color:#9dc7b1;background:#f6faf7}
+.review-range-trigger.is-open{border-color:#2f8a5f;background:#eef7f1}
+.review-range-trigger:focus-visible{outline:2px solid rgba(47,138,95,.5);outline-offset:1px}
+.review-range-label{
+  font-size:10.5px;letter-spacing:.03em;color:var(--ql-muted,#5c6b63);
+  padding-right:8px;border-right:1px solid var(--ql-line,#e2e6e1);
+}
+.review-range-value{
+  font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600;
+}
+.review-range-dash{color:var(--ql-muted,#8b857f);font-weight:400;padding:0 2px}
+
+.range-pop{
+  position:absolute;top:calc(100% + 6px);left:0;z-index:40;
+  width:320px;padding:12px;
+  border:1px solid var(--ql-line,#d7ddd6);border-radius:10px;
+  background:#fff;
+  box-shadow:0 16px 36px -18px rgba(20,34,30,.45),0 2px 8px rgba(20,34,30,.06);
+}
+.range-pop .review-filter-range{display:grid;gap:10px}
+.range-pop-dates{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.range-pop-hint{
+  margin:0;font-size:11px;line-height:1.5;color:var(--ql-muted,#7a8480);
+}
+.range-pop-actions{display:flex;justify-content:flex-end;gap:8px}

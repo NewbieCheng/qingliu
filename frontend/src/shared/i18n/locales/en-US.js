@@ -407,6 +407,7 @@ export default {
   "ownership.rel_child": "Child",
   "ownership.rel_other": "Other",
   "review.filter_source": "Source",
+  "review.filter_range": "Calculation range",
   "review.filter_start": "Start",
   "review.filter_end": "End",
   "review.apply_range": "Apply range",

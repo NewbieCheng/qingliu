@@ -403,6 +403,7 @@ export default {
   "ownership.rel_child": "子女",
   "ownership.rel_other": "其他",
   "review.filter_source": "测算来源",
+  "review.filter_range": "测算范围",
   "review.filter_start": "开始",
   "review.filter_end": "截止",
   "review.apply_range": "应用范围",

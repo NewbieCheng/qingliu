@@ -37,11 +37,28 @@ export function SplitDock({
   onClose,
   children,
 }) {
-  const [width, setWidth] = useState(readStoredWidth);
+  // inline 形态的可用宽度由父容器决定（弹窗内是弹窗宽度），
+  // 用固定 px 会在窄容器里把翻页按钮挤出边界，所以这里记比例。
+  const [width, setWidth] = useState(() =>
+    variant === "fixed" ? readStoredWidth() : 0,
+  );
   const dragging = useRef(false);
   const paneRef = useRef(null);
 
-  const maxWidth = () => Math.round(window.innerWidth * 0.66);
+  const availWidth = useCallback(() => {
+    if (variant === "fixed") return window.innerWidth;
+    const parent = paneRef.current?.parentElement;
+    return parent ? parent.getBoundingClientRect().width : window.innerWidth;
+  }, [variant]);
+
+  const maxWidth = useCallback(() => Math.round(availWidth() * 0.66), [availWidth]);
+
+  // inline 首次挂载时按父容器 46% 定宽，并夹在 [320, 66%] 内。
+  useEffect(() => {
+    if (variant !== "inline") return;
+    const avail = availWidth();
+    setWidth(clampWidth(Math.round(avail * 0.46), Math.round(avail * 0.66)));
+  }, [variant, availWidth]);
 
   // 宽度变化时同步给页面：fixed 形态用 CSS 变量让主内容让位，
   // inline 形态由父容器自己用 flex 分配，不需要变量。
@@ -79,8 +96,7 @@ export function SplitDock({
       // fixed 的右边缘就是视口右边，inline 的右边缘是父容器右边。
       const rect = paneRef.current?.getBoundingClientRect();
       const right = rect ? rect.right : window.innerWidth;
-      const max = rect ? rect.right - rect.left + (rect.left - 40) : maxWidth();
-      const next = clampWidth(right - e.clientX, Math.max(MIN_W, max));
+      const next = clampWidth(right - e.clientX, maxWidth());
       setWidth(next);
     }
     function onUp() {
@@ -104,11 +120,13 @@ export function SplitDock({
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, []);
+  }, [maxWidth]);
 
   // 双击分隔条回到默认宽度，比反复拖拽省事。
   function resetWidth() {
-    setWidth(clampWidth(DEFAULT_W, maxWidth()));
+    const avail = availWidth();
+    const next = variant === "inline" ? Math.round(avail * 0.46) : DEFAULT_W;
+    setWidth(clampWidth(next, maxWidth()));
   }
 
   return (

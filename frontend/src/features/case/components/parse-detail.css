@@ -436,3 +436,36 @@
     border-top: 1px solid var(--ql-line, #d7ddd6);
   }
 }
+/* 行容器：可点击的头部 + 右侧「原稿」按钮。
+   原稿是显式动作，不点不打开，避免一进详情就被面板占掉半屏。 */
+.pd-row { position: relative; }
+.pd-row-peek {
+  position: absolute;
+  top: 7px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--ql-line, #d7ddd6);
+  border-radius: 5px;
+  background: #fff;
+  font-size: 11px;
+  color: var(--ql-muted, #5c6b63);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .14s ease, background-color .14s ease, color .14s ease;
+}
+/* 悬停/聚焦时才显形：常驻会让每行都多一颗按钮，噪声太大 */
+.pd-row:hover > .pd-row-peek,
+.pd-row-peek:focus-visible,
+.pd-row.is-open > .pd-row-peek {
+  opacity: 1;
+}
+.pd-row-peek:hover {
+  background: #f1f7f3;
+  color: #1f6b48;
+  border-color: #9dc7b1;
+}
+/* 给按钮留位，避免和右侧的状态徽章重叠 */
+.pd-row-head { padding-right: 78px; }

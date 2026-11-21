@@ -15,6 +15,7 @@ import {
   InfoIcon,
   AlertIcon,
   CheckIcon,
+  EyeIcon,
 } from "@/shared/ui/icons.jsx";
 import { documentRows } from "../api.js";
 import { counterpartyDisplay } from "../lib/counterparty.js";
@@ -516,11 +517,7 @@ export function ParseDetailDialog({
                           <button
                             type="button"
                             className="pd-row-head"
-                            onClick={() => {
-                              setExpanded(open ? null : row.id);
-                              // 同时把原件面板跳到这一行，形成"左选中、右框住"的呼应。
-                              setPeek(row);
-                            }}
+                            onClick={() => setExpanded(open ? null : row.id)}
                             aria-expanded={open}
                           >
                             <span className={`pd-row-caret${open ? " is-open" : ""}`}>
@@ -542,6 +539,15 @@ export function ParseDetailDialog({
                             ) : null}
                             {row.duplicate ? <span className="pd-chip pd-chip-duplicate">疑似重复</span> : null}
                             {row.manual ? <span className="pd-chip pd-chip-manual">手工</span> : null}
+                          </button>
+                          {/* 原稿是显式动作：不点就不打开，避免一进来就被面板占掉半屏 */}
+                          <button
+                            type="button"
+                            className="pd-row-peek"
+                            title="在右侧打开原件并框出这一行"
+                            onClick={() => setPeek(row)}
+                          >
+                            <EyeIcon size={13} />原稿
                           </button>
                           {open ? (
                             <div className="pd-row-detail">

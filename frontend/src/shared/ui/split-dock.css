@@ -135,10 +135,15 @@ body.dock-resizing * {
 /* 主内容让位：面板占多宽，内容就右移多少，两者永不重叠 */
 /* 不加 padding 过渡：padding 是布局属性，动画它会每帧重排。
    面板开合本来就是瞬间完成的动作，硬切比补间更利落。 */
-html.has-dock-pane .case-page,
-html.has-dock-pane .clients-page,
-html.has-dock-pane .parse-page {
-  padding-right: calc(var(--dock-inset, 0px) + 16px);
+/* 让位作用在 .main 的宽度上，而不是给内容加 padding。
+   .page-wrap 是 max-width + margin:auto 的居中容器：加 padding 只会让内容
+   在容器里向内缩，右侧留下一整条死白；收缩 .main 才能让容器重新在
+   「视口 − 面板」的剩余空间里居中，两侧留白对称。 */
+html.has-dock-pane .workspace .main {
+  width: calc(100% - var(--ql-rail) - var(--dock-inset, 0px));
+}
+html.has-dock-pane .workspace.rail-collapsed .main {
+  width: calc(100% - var(--ql-rail-collapsed) - var(--dock-inset, 0px));
 }
 
 @media (max-width: 900px) {
@@ -146,10 +151,9 @@ html.has-dock-pane .parse-page {
   .dock-pane-fixed {
     width: 100% !important;
   }
-  html.has-dock-pane .case-page,
-  html.has-dock-pane .clients-page,
-  html.has-dock-pane .parse-page {
-    padding-right: 0;
+  html.has-dock-pane .workspace .main,
+  html.has-dock-pane .workspace.rail-collapsed .main {
+    width: 100%;
   }
   .dock-handle { display: none; }
 }
@@ -157,7 +161,5 @@ html.has-dock-pane .parse-page {
 @media (prefers-reduced-motion: reduce) {
   .dock-handle,
   .dock-grip,
-  html.has-dock-pane .case-page {
-    transition: none;
-  }
+
 }
