@@ -33,6 +33,7 @@ export default [
         localStorage: "readonly",
         sessionStorage: "readonly",
         indexedDB: "readonly",
+        IntersectionObserver: "readonly",
         fetch: "readonly",
         FormData: "readonly",
         DataTransfer: "readonly",

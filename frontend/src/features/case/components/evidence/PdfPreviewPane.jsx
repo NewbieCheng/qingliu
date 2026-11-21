@@ -54,6 +54,17 @@ function Viewer({ cid, doc, row, totalPages, onClose, variant }) {
     return () => controller.abort();
   }, [cid, doc?.id, doc?.sha, page, t]);
 
+  // 预取前后各一页：滚动跟随时会连续换页，不做预取每次都要等网络，
+  // 跟随就会一顿一顿的。这里只预热缓存，失败静默。
+  useEffect(() => {
+    if (!cid || !doc?.id) return;
+    for (const p of [page - 1, page + 1]) {
+      if (p >= 1 && p <= total) {
+        loadPage(cid, doc.id, p, doc.sha || "", undefined).catch(() => {});
+      }
+    }
+  }, [cid, doc?.id, doc?.sha, page, total]);
+
   useEffect(() => {
     if (!bbox || page !== rowPage) return;
     boxRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -117,7 +128,16 @@ function Viewer({ cid, doc, row, totalPages, onClose, variant }) {
       {loading && !src ? <p className="muted">{t("pdf.loading")}</p> : null}
       {src ? (
         <div className="pdf-page-wrap" style={{ width: `${Math.round(zoom * 100)}%` }}>
-          <img className="pdf-page-img" src={src} alt={`${doc?.name} 第 ${page} 页`} />
+          <img
+            className="pdf-page-img"
+            src={src}
+            alt={`${doc?.name} 第 ${page} 页`}
+            onLoad={() => {
+              // 图片还没加载完时高度是 0，scrollIntoView 算出来的位置是错的，
+              // 于是"点了某行却没滚到那一行"。加载完成后再定位一次。
+              if (showBox) boxRef.current?.scrollIntoView({ block: "center" });
+            }}
+          />
           {showBox ? (
             <div
               ref={boxRef}

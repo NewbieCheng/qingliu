@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { Loading } from "@/shared/ui/Loading.jsx";
 import { SOURCES } from "@/shared/lib/constants.js";
 import { formatCents } from "@/shared/lib/format.js";
 import { useI18n } from "@/shared/i18n/index.jsx";
+import { useScrollSpy } from "@/shared/lib/useScrollSpy.js";
 import { toast } from "@/shared/ui/toast-api.js";
 import {
   CopyIcon,
@@ -202,6 +203,17 @@ export function ParseDetailDialog({
   const [expanded, setExpanded] = useState(null);
   const [filter, setFilter] = useState("all");
   const [peek, setPeek] = useState(null);
+  // 列表滚到哪一行，右侧原件就跟到哪一行（仅面板已打开时生效）
+  const rowsScrollRef = useRef(null);
+  useScrollSpy({
+    enabled: Boolean(peek),
+    rootRef: rowsScrollRef,
+    selector: "[data-row-id]",
+    onActive: (id) => {
+      const next = rows.find((r) => String(r.id) === String(id));
+      if (next) setPeek(next);
+    },
+  });
 
   useEffect(() => {
     if (!cid || !doc?.id) return undefined;
@@ -478,7 +490,7 @@ export function ParseDetailDialog({
             ) : null}
           </div>
         ) : (
-          <div className="pd-pane">
+          <div className="pd-pane" ref={rowsScrollRef}>
             {rowsError ? <p className="error">{rowsError}</p> : null}
             {!rows && !rowsError ? <Loading compact text={t("pd.rows_loading")} /> : null}
 
@@ -513,7 +525,7 @@ export function ParseDetailDialog({
                       const open = expanded === row.id;
                       const fields = open ? rawFields(row) : [];
                       return (
-                        <div className={`pd-row${open ? " is-open" : ""}${peek?.id === row.id ? " is-peeking" : ""}`} key={row.id}>
+                        <div className={`pd-row${open ? " is-open" : ""}${peek?.id === row.id ? " is-peeking" : ""}`} key={row.id} data-row-id={row.id}>
                           <button
                             type="button"
                             className="pd-row-head"

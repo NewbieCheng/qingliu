@@ -6,6 +6,7 @@ import { toast } from "@/shared/ui/toast-api.js";
 import { TrashIcon, EyeIcon } from "@/shared/ui/icons.jsx";
 import { aiStatusLabel } from "../../lib/ai-adopt.js";
 import { useI18n } from "@/shared/i18n/index.jsx";
+import { useScrollSpy } from "@/shared/lib/useScrollSpy.js";
 import { addTransaction, deleteTransaction } from "../../api.js";
 import { counterpartyDisplay } from "../../lib/counterparty.js";
 import { PdfPreviewPane } from "../evidence/PdfPreviewPane.jsx";
@@ -48,6 +49,18 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged, 
   const [busy, setBusy] = useState(false);
   // 正在对照原件的行：null 时不显示右侧面板。
   const [peek, setPeek] = useState(null);
+
+  // 面板打开后，页面滚动到哪一行，原件就跟着翻到那一行所在页。
+  // 只在面板已经打开时跟随——没打开时自动跟开就是"我没点它却弹出来了"。
+  useScrollSpy({
+    enabled: Boolean(peek),
+    rootRef: null,
+    selector: "tr[data-row-id]",
+    onActive: (id) => {
+      const next = data.rows?.find((r) => String(r.id) === String(id));
+      if (next) setPeek(next);
+    },
+  });
   // 原件面板形态：float=可拖拽浮窗（默认），dock=右侧固定一栏
 
   function toggleAll(checked) {
@@ -182,7 +195,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged, 
                   ? t("case.review.busy_not_selectable")
                   : undefined;
             return (
-            <tr key={row.id}>
+            <tr key={row.id} data-row-id={row.id}>
               <td title={blockReason}>
                 <input
                   type="checkbox"
