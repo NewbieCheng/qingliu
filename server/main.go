@@ -1124,6 +1124,37 @@ func (a *App) mux() http.Handler {
 			q.json(Object{"ok": true, "job": jid})
 		})
 	}))
+	// 某份文档解析出的交易行（含原始字段 raw），供"字段解析核对"逐行对照。
+	// 不能复用 GET /api/clients/{cid}：那是分页的客户级视图，且不带 raw 原文。
+	m.HandleFunc("GET /api/clients/{cid}/documents/{did}/rows", a.route(func(q *request) {
+		cid := q.access()
+		did := q.r.PathValue("did")
+		require(s.one("SELECT id FROM ql_documents WHERE customer_id=? AND id=?", cid, did) != nil, "Document not found")
+		rows := []Object{}
+		for _, t := range s.query("SELECT payload FROM ql_transactions WHERE customer_id=? AND document_id=? ORDER BY seq", cid, did) {
+			o := obj(str(t, "payload"))
+			// 只挑对照需要的字段，别把整份 payload 全塞给前端。
+			rows = append(rows, Object{
+				"id": str(o, "id"), "date": o["date"], "time": o["time"],
+				"direction": o["direction"], "amount": o["amount"],
+				"income": o["income"], "expense": o["expense"],
+				"counterparty": o["counterparty"], "memo": o["memo"],
+				"balance": o["balance"], "page": o["page"],
+				"quality": o["quality"], "error": o["error"],
+				"duplicate": o["duplicate"], "manual": o["manual"],
+				"raw": str(o, "raw"), "locator": o["locator"],
+			})
+		}
+		q.json(Object{"rows": rows, "total": len(rows)})
+	}))
+	// 原件正文按页浏览：不渲染 PDF，直接把已提取的文字按页铺开。
+	// 查看时从原件重新抽取完整正文（payload 里的 extract_text 是为 AI 截断过的）。
+	m.HandleFunc("GET /api/clients/{cid}/documents/{did}/text", a.route(func(q *request) {
+		cid := q.access()
+		did := q.r.PathValue("did")
+		q.event(cid, "view_original_text", did)
+		q.json(s.documentPageText(q, cid, did))
+	}))
 	m.HandleFunc("GET /api/clients/{cid}/original/{did}/{page}", a.route(func(q *request) {
 		cid := q.access()
 		did := q.r.PathValue("did")

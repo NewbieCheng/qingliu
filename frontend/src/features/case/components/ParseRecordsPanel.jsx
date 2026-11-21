@@ -193,6 +193,7 @@ export function ParseRecordsPanel({ data, onReparsed }) {
 
       {detail ? (
         <ParseDetailDialog
+          cid={caseIdFromPath()}
           doc={detail}
           onClose={() => setDetail(null)}
           onGeneralParse={handleGeneralParse}

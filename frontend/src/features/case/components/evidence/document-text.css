@@ -1,0 +1,106 @@
+/*
+  原件正文按页浏览。
+
+  排版要点：正文用等宽字体并保留换行——银行流水靠列对齐表达关系，
+  换成比例字体或折叠空白，列就散了，核对时看不出哪笔对哪列。
+*/
+
+.doc-text {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.doc-text-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted, #667);
+}
+
+.doc-text-search {
+  padding: 6px 10px;
+  border: 1px solid var(--line, #d6d6d6);
+  border-radius: 6px;
+  font-size: 13px;
+  min-width: 200px;
+}
+.doc-text-search:focus {
+  outline: none;
+  border-color: #4b8f6f;
+  box-shadow: 0 0 0 2px rgba(75, 143, 111, .14);
+}
+
+.doc-text-body {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 12px;
+  border: 1px solid var(--line, #e2e2e2);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.doc-text-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 6px;
+  max-height: 62vh;
+  overflow-y: auto;
+  background: #fafaf9;
+  border-right: 1px solid var(--line, #ececec);
+}
+
+.doc-text-page-btn {
+  padding: 5px 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--ink, #334);
+  cursor: pointer;
+}
+.doc-text-page-btn:hover { background: #eef2ef; }
+.doc-text-page-btn.is-active {
+  background: #e3efe8;
+  border-color: #4b8f6f;
+  color: #1f6b48;
+  font-weight: 600;
+}
+/* 该页没有文字层（扫描件 / 超出抽取范围） */
+.doc-text-page-btn.is-blank {
+  color: #b0aca6;
+  text-decoration: line-through;
+}
+/* 命中搜索关键词 */
+.doc-text-page-btn.is-hit::after {
+  content: "·";
+  color: #d98324;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.doc-text-content {
+  max-height: 62vh;
+  overflow: auto;
+  padding: 12px 14px;
+}
+
+.doc-text-pre {
+  margin: 0;
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+  color: #2b3330;
+}
+
+.doc-text-blank {
+  margin: 0;
+  font-size: 13px;
+  color: #9a958e;
+}

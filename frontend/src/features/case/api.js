@@ -36,6 +36,16 @@ export function deleteTransaction(cid, tid) {
   });
 }
 
+/** 原件正文按页浏览：返回按页切分好的已提取文字（不渲染 PDF）。 */
+export function documentText(cid, did) {
+  return api(`/api/clients/${cid}/documents/${did}/text`);
+}
+
+/** 某份文档解析出的交易行（含原件原文 raw），供逐行对照。 */
+export function documentRows(cid, did) {
+  return api(`/api/clients/${cid}/documents/${did}/rows`);
+}
+
 /** 本机拆行入库：原件落 Vault + 服务端权威校验 rows + 扣解析分，不进 upload worker。 */
 export function uploadParsed(cid, { file, rows, source, batch }) {
   const form = new FormData();

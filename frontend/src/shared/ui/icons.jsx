@@ -242,3 +242,66 @@ export function NavIcon({ kind, size = 17 }) {
     </Svg>
   );
 }
+
+// ── 操作按钮图标（统一 16px，随文字颜色继承） ──
+
+export function CopyIcon({ size = 15 }) {
+  return (
+    <Svg size={size}>
+      <rect x="7" y="7" width="9" height="9" rx="1.6" />
+      <path d="M13 4.5H5.5A1.5 1.5 0 0 0 4 6v7.5" />
+    </Svg>
+  );
+}
+
+export function FileTextIcon({ size = 15 }) {
+  return (
+    <Svg size={size}>
+      <path d="M11.5 3H6a1.5 1.5 0 0 0-1.5 1.5v11A1.5 1.5 0 0 0 6 17h8a1.5 1.5 0 0 0 1.5-1.5V7z" />
+      <path d="M11.5 3v4H15" />
+      <path d="M7.5 11h5M7.5 13.6h3.4" />
+    </Svg>
+  );
+}
+
+export function TableIcon({ size = 15 }) {
+  return (
+    <Svg size={size}>
+      <rect x="3.2" y="4.2" width="13.6" height="11.6" rx="1.6" />
+      <path d="M3.2 8.2h13.6M8.2 8.2v7.6" />
+    </Svg>
+  );
+}
+
+export function SparkIcon({ size = 15 }) {
+  return (
+    <Svg size={size}>
+      <path d="M10 3.2l1.6 4.2 4.2 1.6-4.2 1.6L10 15l-1.6-4.4L4.2 9l4.2-1.6z" />
+    </Svg>
+  );
+}
+
+export function PlusIcon({ size = 15 }) {
+  return (
+    <Svg size={size}>
+      <path d="M10 4.5v11M4.5 10h11" />
+    </Svg>
+  );
+}
+
+export function ChevronDownIcon({ size = 14 }) {
+  return (
+    <Svg size={size}>
+      <path d="M5.5 8l4.5 4.5L14.5 8" />
+    </Svg>
+  );
+}
+
+export function InfoIcon({ size = 15 }) {
+  return (
+    <Svg size={size}>
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 9v4.4M10 6.6v.1" />
+    </Svg>
+  );
+}

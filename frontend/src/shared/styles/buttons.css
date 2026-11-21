@@ -99,3 +99,25 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+/* 紧凑变体：表格行内、工具栏里空间紧张时用 */
+.btn-compact {
+  padding: 4px 9px;
+  font-size: 12px;
+  gap: 5px;
+}
+
+/* 禁用态：鼠标仍要能悬停出 title 提示（disabled 按钮不触发鼠标事件，
+   所以用读屏与视觉都能感知的表现，而不是靠 title 单独承担说明）。 */
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* title 提示的承载层：包住 disabled 按钮，让浏览器能正常弹提示。 */
+.btn-tip-wrap {
+  display: inline-flex;
+  cursor: not-allowed;
+}
+.btn-tip-wrap > button:disabled {
+  pointer-events: none;
+}

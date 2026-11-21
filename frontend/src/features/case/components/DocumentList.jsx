@@ -5,6 +5,7 @@ import { FoldPanel } from "@/shared/ui/FoldPanel.jsx";
 import { useI18n } from "@/shared/i18n/index.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { reparseDocument } from "../api.js";
+import { DocumentTextDialog } from "./evidence/DocumentTextDialog.jsx";
 
 function caseIdFromPath() {
   const m = window.location.pathname.match(/\/clients\/([^/?]+)/);
@@ -16,6 +17,8 @@ const VERDICT_TONE = { ok: "green", suspect: "amber", fail: "red" };
 export function DocumentList({ data, onReparsed }) {
   const { t } = useI18n();
   const [busy, setBusy] = useState("");
+  // 正在查看正文的文档（null 表示不显示）。
+  const [viewing, setViewing] = useState(null);
   if (!data.docs.length) return null;
   const pending = data.docs.filter(
     (document) => document.meta.status !== "success",
@@ -91,7 +94,7 @@ export function DocumentList({ data, onReparsed }) {
                       <button
                         type="button"
                         key={i}
-                        className="ghost"
+                        className="btn-outline-warning"
                         disabled={busy === document.id}
                         onClick={() => handleReparse(document)}
                         title={action.hint}
@@ -119,7 +122,7 @@ export function DocumentList({ data, onReparsed }) {
               <div className="doc-actions">
                 <button
                   type="button"
-                  className="ghost"
+                  className="btn-outline-warning"
                   disabled={busy === document.id}
                   onClick={() => handleReparse(document)}
                 >
@@ -127,9 +130,26 @@ export function DocumentList({ data, onReparsed }) {
                 </button>
               </div>
             ) : null}
+            {/* 查看原件正文：按页铺开已提取文字，不渲染 PDF */}
+            <div className="doc-actions">
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => setViewing(document)}
+              >
+                {t("doc_text.open")}
+              </button>
+            </div>
           </FoldPanel>
         );
       })}
+      {viewing ? (
+        <DocumentTextDialog
+          cid={caseIdFromPath()}
+          doc={viewing}
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
     </div>
   );
 }

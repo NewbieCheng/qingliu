@@ -3,6 +3,7 @@ import { useI18n } from "@/shared/i18n/index.jsx";
 import { navigate } from "@/shared/router/index.js";
 import { formatRelativeTime } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
+import { TrashIcon } from "@/shared/ui/icons.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { clientNextStep } from "../clientStatus.js";
 import { deleteClient } from "../api.js";
@@ -41,9 +42,7 @@ export function ClientsTable({ clients, canDelete = false, onDeleted }) {
               <th>{t("clients.col_customer")}</th>
               <th>{t("clients.col_progress")}</th>
               <th>{t("clients.col_updated")}</th>
-              {canDelete ? (
-                <th className="clients-col-actions">{t("clients.col_actions")}</th>
-              ) : null}
+              <th className="clients-col-actions">{t("clients.col_actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -83,23 +82,37 @@ export function ClientsTable({ clients, canDelete = false, onDeleted }) {
                     </div>
                   </td>
                   <td className="muted">{formatRelativeTime(client.created)}</td>
-                  {canDelete ? (
-                    <td className="clients-col-actions">
+                  <td className="clients-col-actions">
+                    {/* 删除按钮对所有角色可见，但只有管理员能点。
+                        只对管理员显示会让普通业务员以为"没有这个功能"；
+                        看到按钮 + 提示"需要管理员"，信息才完整。
+
+                        提示挂在外层 span 上：disabled 按钮不派发鼠标事件，
+                        直接写在 button 上浏览器不会弹 title。 */}
+                    <span
+                      className="btn-tip-wrap"
+                      title={
+                        canDelete
+                          ? t("clients.delete_hint")
+                          : t("clients.delete_admin_only")
+                      }
+                    >
                       <button
                         type="button"
-                        className="btn-outline-danger"
-                        disabled={busy === client.id}
-                        title={t("clients.delete_hint")}
+                        className="btn-outline-danger btn-compact"
+                        disabled={!canDelete || busy === client.id}
+                        aria-disabled={!canDelete}
                         onClick={(event) => {
-                          // 行本身可点进详情，删除按钮必须阻止冒泡。
                           event.stopPropagation();
+                          if (!canDelete) return;
                           setPending(client);
                         }}
                       >
+                        <TrashIcon size={14} />
                         {busy === client.id ? t("clients.deleting") : t("clients.delete")}
                       </button>
-                    </td>
-                  ) : null}
+                    </span>
+                  </td>
                 </tr>
               );
             })}

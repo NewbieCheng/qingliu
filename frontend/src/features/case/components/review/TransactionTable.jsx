@@ -3,6 +3,7 @@ import { TRANSACTION_LABELS } from "@/shared/lib/constants.js";
 import { formatCents } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
+import { TrashIcon, PlusIcon } from "@/shared/ui/icons.jsx";
 import { aiStatusLabel } from "../../lib/ai-adopt.js";
 import { useI18n } from "@/shared/i18n/index.jsx";
 import { addTransaction, deleteTransaction } from "../../api.js";
@@ -79,7 +80,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
           className="btn-outline"
           onClick={() => setAdding((v) => !v)}
         >
-          {adding ? t("common.cancel") : t("review.add_row")}
+          {adding ? t("common.cancel") : <><PlusIcon size={14} />{t("review.add_row")}</>}
         </button>
       </div>
 
@@ -228,12 +229,12 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
               <td>
                 <button
                   type="button"
-                  className="btn-outline-danger"
+                  className="btn-outline-danger btn-compact"
                   disabled={busy}
                   title={t("review.delete_hint")}
                   onClick={() => setPendingDelete(row)}
                 >
-                  {t("review.delete_row")}
+                  <TrashIcon size={14} />{t("review.delete_row")}
                 </button>
               </td>
             </tr>
@@ -257,7 +258,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
               </button>
               <button
                 type="button"
-                className="btn-outline-danger"
+                className="btn-outline-danger btn-compact"
                 disabled={busy}
                 onClick={() => void confirmDelete()}
               >

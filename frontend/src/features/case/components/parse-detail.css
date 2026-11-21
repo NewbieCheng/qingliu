@@ -1,38 +1,383 @@
-.pd-dialog{max-width:900px;width:min(92vw,900px)}
-.pd-body{max-height:74vh;overflow:auto;padding:4px 2px}
-/* 导诊区：解析失败/存疑时告诉用户到底发生了什么，并给出可点出路 */
-.pd-explain{display:flex;gap:14px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:12px 0;background:#fafafa}
-.pd-explain-body{min-width:220px;flex:1}
-.pd-explain-body strong{display:block;font-size:14px;margin-bottom:4px}
-.pd-explain-body p{margin:2px 0;font-size:13px;color:var(--muted);line-height:1.5}
-.pd-explain-tech{font-family:ui-monospace,monospace;font-size:12px!important;color:#8a6d3b!important;word-break:break-word}
-.pd-explain-actions{display:flex;gap:8px;flex-wrap:wrap}
-.pd-explain-fail{border-color:#e0b4b4;background:#fdf3f3}
-.pd-explain-fail .pd-explain-body strong{color:#b03a3a}
-.pd-explain-suspect{border-color:#f0cfa0;background:#fff7ec}
-.pd-explain-suspect .pd-explain-body strong{color:#a35b00}
-.pd-explain-ok{border-color:#bcd9c5;background:#f4faf6}
+/* ─────────────────────────────────────────────────────────────
+   解析详情对话框
+   两页：资料信息（判断这份文件抽对没有） / 字段解析核对（逐笔对原件）
+   ───────────────────────────────────────────────────────────── */
 
-.pd-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.pd-toolbar span{color:var(--muted);font-size:13px}
-.pd-toolbar-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-/* 高成本/破坏性操作统一描边 + 警示色，避免用户误触消耗积分 */
-.btn-outline-warning{
-  border:1px solid #d98324;background:#fff7ec;color:#a35b00;
-  border-radius:6px;padding:6px 12px;font-size:13px;font-weight:500;
+.pd-dialog {
+  max-width: 1080px;
+  width: min(1080px, 96vw);
 }
-.btn-outline-warning:hover:not(:disabled){background:#ffefd9}
-.btn-outline-warning:disabled{opacity:.5;cursor:not-allowed}
-.pd-explain{background:#f3f8f6;border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:14px 0;font-size:13px}
-.pd-explain strong{color:var(--green)}
-.pd-section{margin:18px 0}
-.pd-section h4{margin:0 0 8px;font-size:14px;color:var(--green);border-left:3px solid var(--green);padding-left:8px}
-.pd-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:auto;word-break:break-word}
-.pd-table th,.pd-table td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
-.pd-table thead th,.pd-table tbody tr:first-child th{background:#f3f8f6;color:var(--green);font-weight:600}
-.pd-kv th{width:32%;background:#f7faf9;color:var(--muted);font-weight:500}
-.pd-raw{background:#f6f8f7;border:1px solid var(--line);border-radius:5px;padding:10px;font-size:12px;white-space:pre-wrap;word-break:break-all;max-height:320px;overflow:auto}
-.pd-fact{margin-bottom:14px}
-.pd-fact .muted{font-size:12px;margin:0 0 6px}
-.pd-mixed .pd-text{margin:6px 0;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
-.pd-mixed .pd-table{margin:10px 0}
+
+.pd-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── 顶部结论与操作 ── */
+.pd-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pd-head-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pd-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.pd-verdict-ok { background: #e8f4ed; color: #1f6b48; border-color: #b9dcc9; }
+.pd-verdict-suspect { background: #fdf3e3; color: #92600d; border-color: #ecd2a2; }
+.pd-verdict-fail { background: #fbe9e9; color: #a83434; border-color: #eec2c2; }
+.pd-verdict-unknown { background: #f1f0ee; color: #6b6560; border-color: #dedbd7; }
+
+.pd-head-meta {
+  font-size: 12px;
+  color: #7c7772;
+}
+
+.pd-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 带图标的按钮：图标与文字基线对齐 */
+.pd-actions button,
+.pd-tab,
+.pd-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── 分页 ── */
+.pd-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #e6e4e1;
+}
+
+.pd-tab {
+  position: relative;
+  padding: 9px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font-size: 13px;
+  color: #6b6560;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.pd-tab:hover { color: #2b3330; }
+.pd-tab.is-active {
+  color: #1f6b48;
+  border-bottom-color: #2f8a5f;
+  font-weight: 600;
+}
+
+.pd-tab-badge {
+  font-style: normal;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #e8f4ed;
+  color: #1f6b48;
+}
+
+.pd-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 62vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* ── 区块 ── */
+.pd-section { display: flex; flex-direction: column; gap: 8px; }
+.pd-section h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2b3330;
+  padding-left: 8px;
+  border-left: 3px solid #2f8a5f;
+}
+
+/* ── 统计卡 ── */
+.pd-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+.pd-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid #eceae7;
+  border-radius: 8px;
+  background: #fbfbfa;
+}
+.pd-stat.is-warn { border-color: #ecd2a2; background: #fdf8ef; }
+.pd-stat-label { font-size: 11px; color: #8b857f; }
+.pd-stat-value { font-size: 16px; font-weight: 600; color: #2b3330; font-variant-numeric: tabular-nums; }
+
+/* ── 表格 ── */
+.pd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.pd-table th,
+.pd-table td {
+  border: 1px solid #eceae7;
+  padding: 7px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.pd-table thead th { background: #f6f5f3; font-weight: 600; }
+.pd-kv th { width: 30%; background: #f6f5f3; font-weight: 500; color: #55504b; }
+
+.pd-raw {
+  margin: 0;
+  padding: 10px 12px;
+  background: #f8f7f5;
+  border: 1px solid #eceae7;
+  border-radius: 6px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  max-height: 320px;
+  overflow: auto;
+}
+
+/* ── 导诊 ── */
+.pd-explain {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid;
+}
+.pd-explain-ok { background: #eff7f2; border-color: #b9dcc9; }
+.pd-explain-suspect { background: #fdf8ef; border-color: #ecd2a2; }
+.pd-explain-fail { background: #fbeff0; border-color: #eec2c2; }
+.pd-explain-body { flex: 1; min-width: 240px; font-size: 13px; }
+.pd-explain-body strong { display: block; margin-bottom: 4px; }
+.pd-explain-body p { margin: 0 0 4px; font-size: 12px; line-height: 1.6; color: #5c5751; }
+.pd-explain-tech {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px !important;
+  color: #7c7772 !important;
+  word-break: break-all;
+}
+.pd-explain-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── 小标签 ── */
+.pd-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.pd-chip-ok { background: #e8f4ed; color: #1f6b48; border-color: #b9dcc9; }
+.pd-chip-suspect { background: #fdf3e3; color: #92600d; border-color: #ecd2a2; }
+.pd-chip-duplicate { background: #eef0fb; color: #4550a8; border-color: #c6cbec; }
+.pd-chip-manual { background: #f1f0ee; color: #55504b; border-color: #dedbd7; }
+
+/* ── 字段核对：逐行可展开 ── */
+.pd-rows-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.pd-filter { display: flex; gap: 6px; }
+.pd-filter-btn {
+  padding: 5px 11px;
+  border: 1px solid #e0dedb;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12px;
+  color: #55504b;
+  cursor: pointer;
+}
+.pd-filter-btn:hover { background: #f5f4f2; }
+.pd-filter-btn.is-active {
+  border-color: #2f8a5f;
+  background: #e8f4ed;
+  color: #1f6b48;
+  font-weight: 600;
+}
+
+.pd-rows {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #eceae7;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pd-row { border-bottom: 1px solid #f1f0ee; }
+.pd-row:last-child { border-bottom: none; }
+.pd-row.is-open { background: #fbfbfa; }
+
+.pd-row-head {
+  display: grid;
+  grid-template-columns: 18px 62px 92px 56px 104px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  color: #2b3330;
+  cursor: pointer;
+}
+.pd-row-head:hover { background: #f6f5f3; }
+
+.pd-row-caret {
+  display: inline-flex;
+  color: #9a958e;
+  transition: transform .16s ease;
+}
+.pd-row-caret.is-open { transform: rotate(180deg); }
+
+.pd-row-page { color: #8b857f; font-size: 11px; }
+.pd-row-date { font-variant-numeric: tabular-nums; }
+
+.pd-row-dir {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  justify-self: start;
+  white-space: nowrap;
+}
+.pd-row-dir-income { background: #e8f4ed; color: #1f6b48; }
+.pd-row-dir-expense { background: #fdf3e3; color: #92600d; }
+.pd-row-dir-unknown { background: #f1f0ee; color: #6b6560; }
+
+.pd-row-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+  padding-right: 6px;
+}
+
+.pd-row-party {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 展开后的对照区：左边是解析字段，右边是原件按列拆开的原文 */
+.pd-row-detail {
+  padding: 4px 12px 14px 38px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pd-row-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.pd-row-detail-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pd-detail-label {
+  font-size: 11px;
+  color: #8b857f;
+}
+.pd-detail-value {
+  font-size: 12px;
+  color: #2b3330;
+  word-break: break-all;
+}
+
+.pd-detail-raw {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pd-raw-cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: col;
+}
+.pd-raw-cols li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 10px;
+  border: 1px solid #e6e4e1;
+  border-radius: 6px;
+  background: #fff;
+  max-width: 100%;
+}
+.pd-raw-col-no {
+  font-size: 10px;
+  color: #a9a49e;
+}
+.pd-raw-col-val {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  color: #2b3330;
+  word-break: break-all;
+}
+
+.pd-rows-more {
+  margin: 0;
+  font-size: 12px;
+}
+
+@media (max-width: 860px) {
+  .pd-row-head {
+    grid-template-columns: 18px 1fr auto;
+    grid-template-areas:
+      "caret date amount"
+      ". party party";
+  }
+  .pd-row-caret { grid-area: caret; }
+  .pd-row-page { display: none; }
+  .pd-row-date { grid-area: date; }
+  .pd-row-amount { grid-area: amount; }
+  .pd-row-party { grid-area: party; }
+  .pd-row-dir { display: none; }
+}
