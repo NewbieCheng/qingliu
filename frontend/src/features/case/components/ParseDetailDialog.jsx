@@ -483,7 +483,7 @@ export function ParseDetailDialog({
 
             {rows ? (
               rows.length ? (
-                <div className="pd-with-pdf">
+                <div className={peek ? "pd-with-pdf" : ""}>
                   <div className="pd-left">
                     <div className="pd-rows-bar">
                     <div className="pd-filter">

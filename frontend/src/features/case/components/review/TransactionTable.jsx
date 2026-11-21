@@ -142,7 +142,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
         </form>
       ) : null}
 
-      <div className="pd-with-pdf"><div className="table-wrap table-compact">
+      <div className={peek ? "pd-with-pdf" : ""}><div className="table-wrap table-compact">
         <table>
           <thead>
             <tr>
