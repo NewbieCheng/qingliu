@@ -1,9 +1,13 @@
 /*
   原件 PDF 对照面板。
 
-  布局原则：它是布局里的一栏，不是覆盖层（overlay）。覆盖层会挡住表格，
-  而对照的意义正是"一边看表格一边看原件"，任何遮挡都是设计错误。
-  窄屏时改为上下排布，仍然不重叠。
+  布局用 flex + 显式 order，而不是 grid 的自动放置：
+  grid 会按 DOM 顺序排队，任何一处 JSX 嵌套写错（多一个 </div>）都会让
+  原件面板跑到左边去压住表格。这里把左列（表格）和右列（原件）的
+  order 写死，位置就与 DOM 顺序无关了。
+
+  缩放：页容器宽度由内联 style 控制，CSS 不再设 max-width，
+  否则放大到 100% 以上会被截回原宽，看起来就是"放大没用"。
 */
 
 .pdf-pane {
@@ -15,7 +19,10 @@
   background: #fbfbfa;
   overflow: hidden;
   height: 620px;
-  min-width: 0;
+  order: 1;
+  flex: 0 0 42%;
+  min-width: 320px;
+  max-width: 560px;
 }
 
 .pdf-pane-head {
@@ -49,6 +56,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 .pdf-pane-page {
   font-size: 12px;
@@ -60,19 +68,22 @@
 
 .pdf-pane-viewport {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  align-items: center;
+  /* 用 flex-start + 子元素 margin auto 居中：
+     放大到超过容器宽度时，margin auto 归零，内容从左边开始，左侧不会被裁掉。 */
+  align-items: flex-start;
 }
 
-/* 页面图与高亮框共用同一坐标系，所以框用百分比定位 */
+/* 页容器宽度由内联 style 指定（即缩放比例），这里不设上限 */
 .pdf-page-wrap {
   position: relative;
-  display: inline-block;
-  max-width: 100%;
+  flex: 0 0 auto;
+  margin: 0 auto;
   box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
   background: #fff;
 }
@@ -100,19 +111,34 @@
   color: #8b857f;
 }
 
-/* 表格 + 原件：宽屏并排，窄屏上下，始终不遮挡 */
+/* ── 表格 + 原件：并排 ──
+   order 写死：0 = 表格（左），1 = 原件（右）。
+   即使 JSX 里两块的先后写反，位置也不会错。
+   宽屏并排、窄屏上下，任何时候都不遮挡。 */
 .pd-with-pdf {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 42%);
+  display: flex;
   gap: 14px;
-  align-items: start;
+  align-items: flex-start;
+}
+.pd-with-pdf > .pd-left,
+.pd-with-pdf > .table-wrap,
+.pd-with-pdf > .tx-block {
+  order: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 @media (max-width: 1100px) {
   .pd-with-pdf {
-    grid-template-columns: minmax(0, 1fr);
+    flex-direction: column;
   }
-  .pdf-pane { height: 460px; }
+  .pdf-pane {
+    order: 1;
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: none;
+    height: 460px;
+  }
 }
 
 /* 表格行被选中时给个淡底，与原件高亮呼应 */
@@ -139,11 +165,3 @@
   cursor: pointer;
 }
 .pdf-zoom-value:hover { background: #f2f1ef; }
-
-/* 放大后靠滚动查看，视口本身不撑破布局 */
-.pdf-pane-viewport { overflow: auto; }
-.pdf-page-wrap {
-  flex: 0 0 auto;
-  /* 缩放由内联 width 控制，这里只保证不溢出视口宽度基准 */
-  width: 100%;
-}
