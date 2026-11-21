@@ -201,6 +201,7 @@ export function ParseDetailDialog({
   const [expanded, setExpanded] = useState(null);
   const [filter, setFilter] = useState("all");
   const [peek, setPeek] = useState(null);
+  const [peekMode, setPeekMode] = useState("float");
 
   useEffect(() => {
     if (!cid || !doc?.id) return undefined;
@@ -483,7 +484,7 @@ export function ParseDetailDialog({
 
             {rows ? (
               rows.length ? (
-                <div className={peek ? "pd-with-pdf" : ""}>
+                <div className={peek && peekMode === "dock" ? "pd-with-pdf" : ""}>
                   <div className="pd-left">
                     <div className="pd-rows-bar">
                     <div className="pd-filter">
@@ -589,6 +590,8 @@ export function ParseDetailDialog({
                       row={peek}
                       totalPages={meta.pages}
                       onClose={() => setPeek(null)}
+                      mode={peekMode}
+                      onModeChange={setPeekMode}
                     />
                   ) : null}
                 </div>

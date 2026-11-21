@@ -1,20 +1,25 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Modal } from "@/shared/ui/Modal.jsx";
 import { Loading } from "@/shared/ui/Loading.jsx";
+import { FloatingPane } from "@/shared/ui/FloatingPane.jsx";
 import { useI18n } from "@/shared/i18n/index.jsx";
 import { documentText } from "../../api.js";
 import "./document-text.css";
 
 // 原件正文按页浏览：只显示已提取的文字，不渲染 PDF。
 //
-// 之所以不做 PDF 渲染：渲染要把每页转成图片，慢且占带宽，而这个功能真正的
-// 用途是"核对某一行的原文长什么样"。文字按页铺开反而能直接看、能复制、能搜索。
+// 排版上有个真实矛盾：
+//   - 银行流水靠等宽 + 不换行来维持列对齐，一换行列就散了；
+//   - 申报表这类长句表单，不换行就会横向溢出，看不全（用户截图就是这个）。
+// 所以给一个"自动换行"开关：默认换行（先保证看得全），需要看列对齐时关掉。
+
 export function DocumentTextDialog({ cid, doc, onClose }) {
   const { t } = useI18n();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [active, setActive] = useState(1);
   const [query, setQuery] = useState("");
+  // 默认换行：长表格一旦横向溢出，用户第一眼就是"内容被切掉了"。
+  const [wrap, setWrap] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,7 +29,6 @@ export function DocumentTextDialog({ cid, doc, onClose }) {
       .then((payload) => {
         if (cancelled) return;
         setData(payload);
-        // 默认落在第一个有内容的页，避免一打开就是空白扫描页。
         const firstFilled = (payload.pages || []).find((p) =>
           String(p.text || "").trim(),
         );
@@ -41,6 +45,7 @@ export function DocumentTextDialog({ cid, doc, onClose }) {
   const pages = data?.pages || [];
   const blank = useMemo(() => new Set(data?.blank || []), [data]);
   const current = pages.find((p) => p.page === active);
+
   const hits = useMemo(() => {
     const q = query.trim();
     if (!q) return new Set();
@@ -51,31 +56,52 @@ export function DocumentTextDialog({ cid, doc, onClose }) {
     return matched;
   }, [pages, query]);
 
+  const toolbar = (
+    <>
+      <button
+        type="button"
+        className={`btn-outline btn-compact${wrap ? " is-on" : ""}`}
+        title={t("doc_text.wrap_hint")}
+        onClick={() => setWrap((v) => !v)}
+      >
+        {wrap ? t("doc_text.wrap_on") : t("doc_text.wrap_off")}
+      </button>
+      <input
+        type="search"
+        className="doc-text-search"
+        placeholder={t("doc_text.search_placeholder")}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+    </>
+  );
+
   return (
-    <Modal
-      title={t("doc_text.title", { name: doc.name })}
+    <FloatingPane
+      title={t("doc_text.title_short")}
+      subtitle={doc?.name}
+      toolbar={toolbar}
       onClose={onClose}
-      className="modal--wide"
+      ariaLabel={t("doc_text.title_short")}
+      defaultWidth={860}
+      defaultHeight={720}
     >
-      {error ? <p className="error">{error}</p> : null}
-      {!data && !error ? <Loading compact text={t("doc_text.loading")} /> : null}
+      {error ? <p className="error doc-text-pad">{error}</p> : null}
+      {!data && !error ? (
+        <div className="doc-text-pad">
+          <Loading compact text={t("doc_text.loading")} />
+        </div>
+      ) : null}
 
       {data ? (
         <div className="doc-text">
           <div className="doc-text-meta">
-            <span>
-              {t("doc_text.summary", {
-                total: data.total,
-                blank: blank.size,
-              })}
-            </span>
-            <input
-              type="search"
-              className="doc-text-search"
-              placeholder={t("doc_text.search_placeholder")}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+            <span>{t("doc_text.summary", { total: data.total, blank: blank.size })}</span>
+            {query.trim() ? (
+              <span className="doc-text-hits">
+                {t("doc_text.hits", { n: hits.size })}
+              </span>
+            ) : null}
           </div>
 
           <div className="doc-text-body">
@@ -90,11 +116,7 @@ export function DocumentTextDialog({ cid, doc, onClose }) {
                     (blank.has(p.page) ? " is-blank" : "") +
                     (hits.has(p.page) ? " is-hit" : "")
                   }
-                  title={
-                    blank.has(p.page)
-                      ? t("doc_text.blank_page_hint")
-                      : undefined
-                  }
+                  title={blank.has(p.page) ? t("doc_text.blank_page_hint") : undefined}
                   onClick={() => setActive(p.page)}
                 >
                   {p.page}
@@ -106,12 +128,14 @@ export function DocumentTextDialog({ cid, doc, onClose }) {
               {blank.has(active) ? (
                 <p className="doc-text-blank">{t("doc_text.blank_page")}</p>
               ) : (
-                <pre className="doc-text-pre">{current?.text || ""}</pre>
+                <pre className={`doc-text-pre${wrap ? " is-wrap" : ""}`}>
+                  {current?.text || ""}
+                </pre>
               )}
             </div>
           </div>
         </div>
       ) : null}
-    </Modal>
+    </FloatingPane>
   );
 }

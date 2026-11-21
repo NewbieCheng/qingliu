@@ -165,3 +165,9 @@
   cursor: pointer;
 }
 .pdf-zoom-value:hover { background: #f2f1ef; }
+
+/* 浮窗内复用同一套视口，但要让缩放真正生效：
+   容器宽度由内联 style 控制，这里不能再有 max-width 上限。 */
+.floating-pane .pdf-pane-viewport {
+  height: 100%;
+}
