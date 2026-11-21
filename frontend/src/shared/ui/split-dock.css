@@ -1,0 +1,163 @@
+/*
+  右侧停靠面板 + 可拖拽分隔条。
+
+  分隔条是这条设计里最重要的一个小东西：
+  它是"可以调"这件事的唯一可发现入口，所以必须有明确的抓握暗示
+  （悬停变实、抓握点显形、光标变 col-resize），否则用户永远不知道能拖。
+*/
+
+.dock-pane {
+  display: flex;
+  flex-direction: column;
+  background: var(--ql-surface, #fff);
+  min-width: 0;
+  z-index: 24;
+}
+
+/* 贴视口右侧：整列高度，页面主内容靠 --dock-inset 让位 */
+.dock-pane-fixed {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  border-left: 1px solid var(--ql-line, #d7ddd6);
+  box-shadow: -12px 0 28px rgba(20, 34, 30, .07);
+}
+
+/* 贴在父容器右侧（弹窗内部）：静态 flex 子项，靠分隔条改宽度。
+   不用绝对定位——绝对定位会盖住左侧内容，正是要避免的那种遮挡。 */
+.dock-pane-inline {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 320px;
+  max-width: 62%;
+  border-left: 1px solid var(--ql-line, #d7ddd6);
+}
+
+/* ── 分隔条 ── */
+.dock-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px; /* 探出面板边缘，热区比视觉宽度大，好抓 */
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  transition: background-color .16s ease;
+}
+.dock-handle:hover,
+.dock-handle:focus-visible {
+  background: rgba(47, 138, 95, .10);
+  outline: none;
+}
+.dock-handle:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(47, 138, 95, .55);
+}
+
+/* 抓握点：默认很淡，悬停才清晰——静止时不该抢视线 */
+.dock-grip {
+  width: 3px;
+  height: 34px;
+  border-radius: 2px;
+  background: var(--ql-line, #d7ddd6);
+  transition: background-color .16s ease, transform .16s ease;
+}
+/* 用 scaleY 而不是 height：改 height 会触发布局重算，改 transform 不会 */
+.dock-handle:hover .dock-grip,
+.dock-handle:focus-visible .dock-grip {
+  background: #2f8a5f;
+  transform: scaleY(1.4);
+}
+
+body.dock-resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+body.dock-resizing * {
+  cursor: col-resize !important;
+}
+
+/* ── 头部 ── */
+.dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--ql-line, #eceae7);
+  background: #fbfbf9;
+  flex: 0 0 auto;
+}
+
+.dock-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.dock-title strong {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .02em;
+  color: var(--ql-ink, #203b39);
+}
+.dock-sub {
+  font-size: 11px;
+  color: var(--ql-muted, #7a8480);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+
+.dock-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 主内容让位：面板占多宽，内容就右移多少，两者永不重叠 */
+/* 不加 padding 过渡：padding 是布局属性，动画它会每帧重排。
+   面板开合本来就是瞬间完成的动作，硬切比补间更利落。 */
+html.has-dock-pane .case-page,
+html.has-dock-pane .clients-page,
+html.has-dock-pane .parse-page {
+  padding-right: calc(var(--dock-inset, 0px) + 16px);
+}
+
+@media (max-width: 900px) {
+  /* 窄屏优先保证内容可读：面板改为占满宽度，内容不再让位 */
+  .dock-pane-fixed {
+    width: 100% !important;
+  }
+  html.has-dock-pane .case-page,
+  html.has-dock-pane .clients-page,
+  html.has-dock-pane .parse-page {
+    padding-right: 0;
+  }
+  .dock-handle { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dock-handle,
+  .dock-grip,
+  html.has-dock-pane .case-page {
+    transition: none;
+  }
+}

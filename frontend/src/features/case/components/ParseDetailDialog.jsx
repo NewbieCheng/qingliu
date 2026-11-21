@@ -483,7 +483,7 @@ export function ParseDetailDialog({
 
             {rows ? (
               rows.length ? (
-                <div className={""}>
+                <div className={peek ? "pd-split" : ""}>
                   <div className="pd-left">
                     <div className="pd-rows-bar">
                     <div className="pd-filter">
@@ -589,6 +589,7 @@ export function ParseDetailDialog({
                       row={peek}
                       totalPages={meta.pages}
                       onClose={() => setPeek(null)}
+                      variant="inline"
                     />
                   ) : null}
                 </div>

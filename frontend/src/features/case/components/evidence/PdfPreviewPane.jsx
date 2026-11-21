@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/shared/i18n/index.jsx";
-import { FloatingPane } from "@/shared/ui/FloatingPane.jsx";
+import { SplitDock } from "@/shared/ui/SplitDock.jsx";
 import { originalPageURL } from "../../api.js";
 import { loadPageURL } from "@/shared/cache/pageCache.js";
 import "./pdf-preview-pane.css";
@@ -23,7 +23,7 @@ function loadPage(cid, did, page, sha, signal) {
   });
 }
 
-function Viewer({ cid, doc, row, totalPages, onClose }) {
+function Viewer({ cid, doc, row, totalPages, onClose, variant }) {
   const { t } = useI18n();
   const [page, setPage] = useState(Number(row?.page) || 1);
   const [src, setSrc] = useState("");
@@ -138,21 +138,19 @@ function Viewer({ cid, doc, row, totalPages, onClose }) {
   );
 
   return (
-    <FloatingPane
+    <SplitDock
+      variant={variant}
       title={t("pdf.original")}
       subtitle={doc?.name}
       toolbar={toolbar}
       onClose={onClose}
-      ariaLabel={t("pdf.pane_aria")}
-      defaultWidth={620}
-      defaultHeight={680}
     >
       {body}
-    </FloatingPane>
+    </SplitDock>
   );
 }
 
-export function PdfPreviewPane({ cid, doc, row, totalPages, onClose }) {
+export function PdfPreviewPane({ cid, doc, row, totalPages, onClose, variant = "fixed" }) {
   if (!doc?.id) return null;
   return (
     <Viewer
@@ -161,6 +159,8 @@ export function PdfPreviewPane({ cid, doc, row, totalPages, onClose }) {
       row={row}
       totalPages={totalPages}
       onClose={onClose}
+
+      variant={variant}
     />
   );
 }

@@ -423,7 +423,7 @@
   .profile-form{grid-template-columns:1fr}
   .account-action-grid{grid-template-columns:1fr}
 }
-.ai-panel{border-left:3px solid var(--ql-copper)}
+.ai-panel{border:1px solid var(--ql-line,#d7ddd6);border-radius:10px;background:#fdfdfb}
 .ai-result{margin-top:14px;display:flex;flex-direction:column;gap:12px}
 .ai-summary{font-family:"Noto Serif SC",serif;font-size:15px;line-height:1.7;margin:0;color:var(--ql-ink);white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
 .ai-result h3{font-size:13px;letter-spacing:.08em;color:var(--ql-muted);margin:0 0 4px}
@@ -1616,3 +1616,69 @@ details>summary::before{content:none;display:none}
   .clients-toolbar .toolbar-actions > .primary{margin-left:auto}
 }
 
+
+/* ═══ 核对页版面修整 ═══
+   这一段集中解决三件具体的事，不做整体重设计：
+   1) 统计条数字被折成"1363 / 2303 / .02 / 元"——固定五等分列太窄。
+   2) 筛选栏吸顶的 top 比顶栏矮，滚起来被顶栏压住一半。
+   3) 卡片之间的空隙不均，读起来散。 */
+
+/* 1) 统计条：给每格一个最小可读宽度，宁可换行也不要折数字。
+   auto-fit 让它随容器（含右侧原件面板占位后变窄）自动重排。 */
+.accounting{
+  grid-template-columns:repeat(auto-fit,minmax(152px,1fr));
+}
+.accounting>div{min-width:0}
+.accounting-label{white-space:nowrap}
+.accounting strong{
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+  font-size:clamp(17px,1.15vw,20px);
+  letter-spacing:-.01em;
+}
+
+/* 2) 筛选栏贴住顶栏下沿。顶栏 56px，胶囊态 38px。 */
+.card.review-filter{
+  top:56px;
+  z-index:20;
+  box-shadow:0 8px 18px -14px rgba(20,34,30,.45);
+}
+.topbar-collapsed .card.review-filter{top:38px}
+
+/* 3) 纵向节奏：区块之间给足，区块内部收紧。 */
+.case-page .accounting-panel{margin-bottom:10px}
+.case-page .card.review-table-card{margin-top:0}
+.case-page > * + *{margin-top:0}
+
+/* 原件面板与表格里的滚动条：默认滚动条在这套米绿底上很突兀 */
+.dock-pane,
+.doc-text-content,
+.pd-pane,
+.table-wrap{
+  scrollbar-width:thin;
+  scrollbar-color:#c9c4bd transparent;
+}
+.dock-pane::-webkit-scrollbar,
+.doc-text-content::-webkit-scrollbar,
+.pd-pane::-webkit-scrollbar,
+.table-wrap::-webkit-scrollbar{width:10px;height:10px}
+.dock-pane::-webkit-scrollbar-thumb,
+.doc-text-content::-webkit-scrollbar-thumb,
+.pd-pane::-webkit-scrollbar-thumb,
+.table-wrap::-webkit-scrollbar-thumb{
+  background:#c9c4bd;border-radius:6px;border:3px solid transparent;background-clip:content-box;
+}
+.dock-pane::-webkit-scrollbar-thumb:hover,
+.doc-text-content::-webkit-scrollbar-thumb:hover,
+.pd-pane::-webkit-scrollbar-thumb:hover,
+.table-wrap::-webkit-scrollbar-thumb:hover{background:#a9a49e;background-clip:content-box}
+
+/* 选中色与焦点环跟这套配色对齐，而不是浏览器默认蓝 */
+::selection{background:rgba(47,138,95,.22);color:inherit}
+.case-page a:focus-visible,
+.case-page button:focus-visible,
+.dock-pane button:focus-visible{
+  outline:2px solid rgba(47,138,95,.55);
+  outline-offset:2px;
+  border-radius:4px;
+}

@@ -143,7 +143,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
         </form>
       ) : null}
 
-      <div className={""}><div className="table-wrap table-compact">
+      <div><div className="table-wrap table-compact">
         <table>
           <thead>
             <tr>

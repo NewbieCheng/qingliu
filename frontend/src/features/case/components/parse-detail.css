@@ -113,10 +113,12 @@
 .pd-section h4 {
   margin: 0;
   font-size: 13px;
-  font-weight: 600;
+  /* 以前靠左侧 3px 色条强调，是"侧边标签"最典型的模板味。
+     改成字重 + 字距 + 上方留白来建立层级，更安静也更耐看。 */
+  font-weight: 650;
   color: #2b3330;
-  padding-left: 8px;
-  border-left: 3px solid #2f8a5f;
+  letter-spacing: .01em;
+  margin-top: 4px;
 }
 
 /* ── 统计卡 ── */
@@ -332,9 +334,13 @@
   gap: 6px;
 }
 
+/* 按列拆开的原件原文。
+   用 grid 而不是 flex-wrap：flex 子项的 min-width 默认是 auto（内容宽度），
+   一条长文本会把卡片撑得比容器还宽，直接盖到右边那一列上。
+   grid 的 1fr 列天然有上限，配上 min-width:0 才能保证换行而不是溢出。 */
 .pd-raw-cols {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
   gap: 6px;
   list-style: none;
   margin: 0;
@@ -349,7 +355,7 @@
   border: 1px solid #e6e4e1;
   border-radius: 6px;
   background: #fff;
-  max-width: 100%;
+  min-width: 0;
 }
 .pd-raw-col-no {
   font-size: 10px;
@@ -359,7 +365,11 @@
   font-family: ui-monospace, Consolas, monospace;
   font-size: 12px;
   color: #2b3330;
-  word-break: break-all;
+  /* anywhere 才允许在无空格的长串里断行（账号、摘要常见），
+     break-all 会把英文单词也劈开，读起来更差。 */
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.5;
 }
 
 .pd-rows-more {
@@ -393,4 +403,36 @@
   padding: 1px 6px;
   display: inline-block;
   white-space: nowrap;
+}
+/* ── 弹窗内的左右分栏 ──
+   打开原件时，左侧字段核对与右侧原件真正并排，各占一栏。
+   分隔条在 SplitDock 里，这里只负责两侧的伸缩关系。 */
+.pd-split {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-height: 0;
+}
+.pd-split > .pd-left {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 12px;
+}
+
+/* 窄屏改为上下：并排在手机上只会两边都看不清 */
+@media (max-width: 860px) {
+  .pd-split {
+    flex-direction: column;
+  }
+  .pd-split > .pd-left {
+    padding-right: 0;
+  }
+  .dock-pane-inline {
+    width: 100% !important;
+    max-width: none;
+    min-width: 0;
+    height: 420px;
+    border-left: 0;
+    border-top: 1px solid var(--ql-line, #d7ddd6);
+  }
 }
