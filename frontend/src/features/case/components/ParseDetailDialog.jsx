@@ -256,13 +256,13 @@ export function ParseDetailDialog({ doc, onClose, onGeneralParse, onRequestRepar
             {verdict ? ` · ${verdict === "ok" ? "识别正常" : verdict === "suspect" ? "需核对" : "识别失败"}` : ""}
           </span>
           <span className="pd-toolbar-actions">
-            <button type="button" className="ghost" onClick={handleCopy} title="复制为 Markdown">
+            <button type="button" className="btn-outline" onClick={handleCopy} title="复制为 Markdown">
               {copied ? "✓ 已复制" : "复制"}
             </button>
-            <button type="button" className="ghost" onClick={() => handleExport("md")} title="导出 Markdown">
+            <button type="button" className="btn-outline" onClick={() => handleExport("md")} title="导出 Markdown">
               导出 .md
             </button>
-            <button type="button" className="ghost" onClick={() => handleExport("csv")} title="导出 CSV">
+            <button type="button" className="btn-outline" onClick={() => handleExport("csv")} title="导出 CSV">
               导出 .csv
             </button>
             <button

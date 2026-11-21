@@ -620,6 +620,48 @@ func (a *App) mux() http.Handler {
 		q.event(cid, "create_customer", "")
 		q.json(Object{"id": cid})
 	}))
+	// 删除客户档案：连同该客户的全部关联数据与磁盘原件一起清理。
+	//
+	// 职责边界：清流负责删掉**自己的**数据（库里的行 + uploads 目录下的原件）。
+	// 不加班总后台对上传原件的统一清理是另一套机制（定时），两者不冲突：
+	// 这里删干净了，后端清理任务扫不到东西自然跳过。
+	//
+	// 为什么必须一并删原件：只删库会让 /var/lib/qingliu/uploads 里留下永远
+	// 回收不到的孤儿文件，长期占满磁盘，且这些是客户的真实流水，留着有合规风险。
+	m.HandleFunc("DELETE /api/clients/{cid}", a.route(func(q *request) {
+		// 删除档案不可撤销（连原件一起清掉），只允许管理员操作。
+		// 前端也会据此隐藏按钮，但后端必须自己校验，不能只依赖前端。
+		q.admin()
+		q.edit(func(cid string) {
+			require(s.one("SELECT id FROM ql_customers WHERE id=?", cid) != nil, "Customer not found")
+			tx, e := s.db.Begin()
+			must(e)
+			defer tx.Rollback()
+			// 复核记录挂在交易行上，必须先于交易行删除。
+			_, e = tx.Exec("DELETE r FROM ql_reviews r JOIN ql_transactions t ON r.transaction_id=t.id WHERE t.customer_id=?", cid)
+			must(e)
+			for _, stmt := range []string{
+				"DELETE FROM ql_transactions WHERE customer_id=?",
+				"DELETE FROM ql_ai_analyses WHERE customer_id=?",
+				"DELETE FROM ql_documents WHERE customer_id=?",
+				"DELETE FROM ql_jobs WHERE customer_id=?",
+				"DELETE FROM ql_reports WHERE customer_id=?",
+				"DELETE FROM ql_upload_batches WHERE customer_id=?",
+				"DELETE FROM ql_submissions WHERE customer_id=?",
+				"DELETE FROM ql_grants WHERE customer_id=?",
+				"DELETE FROM ql_events WHERE customer_id=?",
+				"DELETE FROM ql_customers WHERE id=?",
+			} {
+				_, e = tx.Exec(stmt, cid)
+				must(e)
+			}
+			must(tx.Commit())
+			// 磁盘原件：库删成功后再删，避免回滚后原件已丢。
+			s.purgeUploads(cid)
+			q.event(cid, "delete_customer", "")
+			q.json(Object{"ok": true})
+		})
+	}))
 	m.HandleFunc("GET /api/clients/{cid}", a.route(func(q *request) {
 		cid := q.access()
 		data := q.data(cid)
@@ -829,6 +871,58 @@ func (a *App) mux() http.Handler {
 			s.exec("UPDATE ql_customers SET payload=? WHERE id=?", js(fields), cid)
 			s.bump(cid)
 			q.event(cid, "update_rules", "")
+			q.json(Object{"ok": true})
+		})
+	}))
+	// 手工新增一条交易：用于原件里漏识别、或客户补充说明的补录。
+	//
+	// 走同一套 standard() 归一与质检，所以新增行的 quality/direction 与自动
+	// 解析出来的完全一致，后续核对规则不需要为"手工行"开特例。
+	m.HandleFunc("POST /api/clients/{cid}/transactions", a.route(func(q *request) {
+		q.edit(func(cid string) {
+			b := q.body()
+			source := strings.TrimSpace(str(b, "source"))
+			if source == "" {
+				source = "bank_statement"
+			}
+			raw := Object{
+				"date":      strings.TrimSpace(str(b, "date")),
+				"amount":    strings.TrimSpace(str(b, "amount")),
+				"direction": strings.TrimSpace(str(b, "direction")),
+				"对手方":       strings.TrimSpace(str(b, "counterparty")),
+				"摘要":        strings.TrimSpace(str(b, "memo")),
+			}
+			require(raw["date"] != "" && raw["amount"] != "", "请填写日期与金额")
+			row := standard(raw, source, 0, "manual:"+id())
+			require(str(row, "quality") == "structured", "新增条目未通过校验："+str(row, "error"))
+			row["id"] = id()
+			row["filename"] = "手工新增"
+			row["manual"] = true
+			fp := hash([]byte(js([]any{row["source"], row["account"], row["date"], row["time"], row["income"], row["expense"], row["counterparty"], row["memo"]})))
+			row["duplicate"] = s.one("SELECT id FROM ql_transactions WHERE customer_id=? AND fingerprint=?", cid, fp) != nil
+			_, e := s.db.Exec("INSERT INTO ql_transactions(id,customer_id,fingerprint,payload) VALUES(?,?,?,?)", row["id"], cid, fp, js(row))
+			must(e)
+			s.bump(cid)
+			q.event(cid, "add_transaction", str(row, "id"))
+			q.json(Object{"ok": true, "id": row["id"]})
+		})
+	}))
+	// 删除单条交易：误识别或重复录入时由用户移除。
+	// 复核记录与交易行是外键式关系，必须先删复核记录再删行。
+	m.HandleFunc("DELETE /api/clients/{cid}/transactions/{tid}", a.route(func(q *request) {
+		q.edit(func(cid string) {
+			tid := q.r.PathValue("tid")
+			require(s.one("SELECT id FROM ql_transactions WHERE id=? AND customer_id=?", tid, cid) != nil, "Record not found")
+			tx, e := s.db.Begin()
+			must(e)
+			defer tx.Rollback()
+			_, e = tx.Exec("DELETE FROM ql_reviews WHERE transaction_id=?", tid)
+			must(e)
+			_, e = tx.Exec("DELETE FROM ql_transactions WHERE id=? AND customer_id=?", tid, cid)
+			must(e)
+			must(tx.Commit())
+			s.bump(cid)
+			q.event(cid, "delete_transaction", tid)
 			q.json(Object{"ok": true})
 		})
 	}))

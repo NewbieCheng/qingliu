@@ -129,6 +129,7 @@ export function CasePage({ cid, user }) {
       )}
       {step === "review" && (
         <ReviewStep
+          cid={cid}
           data={data}
           summary={summary}
           selected={selected}
@@ -149,6 +150,7 @@ export function CasePage({ cid, user }) {
           onRulesSave={(rules) => mutate("rules", rules)}
           onCoverage={(payload) => mutate("coverage", payload)}
           onStepChange={changeStep}
+          onRefresh={() => mutate("refresh", {})}
         />
       )}
       {step === "report" && (

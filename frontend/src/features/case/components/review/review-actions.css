@@ -1,0 +1,59 @@
+/*
+  交易核对的条目操作（手工新增 / 逐条删除）。
+
+  放在这里而不是散落在组件内联样式：这两块在核对页出现频率很高，
+  需要和全局按钮体系（buttons.css）保持一致的间距与高度。
+*/
+
+.tx-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tx-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tx-add-form {
+  display: grid;
+  grid-template-columns: 140px 110px 150px 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px dashed var(--line, #d8d8d8);
+  border-radius: 8px;
+  background: #fafaf9;
+}
+
+.tx-add-form input,
+.tx-add-form select {
+  padding: 6px 9px;
+  border: 1px solid var(--line, #d6d6d6);
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  min-width: 0;
+}
+
+.tx-add-form input:focus,
+.tx-add-form select:focus {
+  outline: none;
+  border-color: #4b8f6f;
+  box-shadow: 0 0 0 2px rgba(75, 143, 111, .14);
+}
+
+@media (max-width: 900px) {
+  .tx-add-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* 客户列表操作列 */
+.clients-col-actions {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}

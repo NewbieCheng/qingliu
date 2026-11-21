@@ -8,6 +8,7 @@ import { EmptyState } from "@/shared/ui/EmptyState.jsx";
 import { SegmentedControl } from "@/shared/ui/SegmentedControl.jsx";
 import { RefreshIcon } from "@/shared/ui/icons.jsx";
 import { invalidateClients, queryClients } from "@/app/queries/index.js";
+import { isQingliuAdmin } from "@/shared/lib/constants.js";
 import {
   CLIENT_FILTERS,
   ClientsTable,
@@ -15,7 +16,7 @@ import {
   filterClients,
 } from "@/features/clients/index.js";
 
-export function ClientsPage() {
+export function ClientsPage({ user }) {
   const { t } = useI18n();
   const [data, setData] = useState(null);
   const [search, setSearch] = useState("");
@@ -117,7 +118,16 @@ export function ClientsPage() {
         {error && <p className="error">{error}</p>}
         {!data && !error && <Loading compact text={t("clients.loading")} />}
         {data && visibleClients.length > 0 && (
-          <ClientsTable clients={visibleClients} />
+          <ClientsTable
+            clients={visibleClients}
+            // 删除档案会连原件一起清掉，属于不可撤销的破坏性操作：
+            // 只对管理员开放，普通操作员看不到这个按钮。
+            canDelete={isQingliuAdmin(user)}
+            onDeleted={() => {
+              invalidateClients();
+              void refresh();
+            }}
+          />
         )}
         {data?.clients.length === 0 && (
           <EmptyState title={t("clients.empty_title")}>

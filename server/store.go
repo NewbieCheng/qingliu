@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -177,6 +178,38 @@ func (s *Store) write(path string, b []byte) error {
 	}
 	return nil
 }
+// purgeUploads 删除某客户在磁盘上的全部原件（uploads/<cid>/ 整个目录）。
+//
+// 只删库不删文件会留下永远回收不到的孤儿加密件，长期占满磁盘；而且这些是
+// 客户的真实流水，删除档案后还留着有合规风险。
+// 找不到目录不算错误：可能本来就没上传过，或已被清理任务处理。
+func (s *Store) purgeUploads(cid string) {
+	dir := filepath.Join(s.root, "uploads", cid)
+	if e := os.RemoveAll(dir); e != nil && !os.IsNotExist(e) {
+		log.Printf("purge uploads failed: cid=%s err=%v", cid, e)
+	}
+	// pending 下也可能残留该客户的中转文件（按 job id 命名，扫描清理）。
+	pending := filepath.Join(s.root, "pending")
+	entries, e := os.ReadDir(pending)
+	if e != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if s.one("SELECT id FROM ql_jobs WHERE id=? AND customer_id=?", name, cid) == nil &&
+			s.one("SELECT id FROM ql_jobs WHERE id=?", name) != nil {
+			continue
+		}
+		// 该 job 已随客户删除而消失，则对应中转文件是孤儿。
+		if s.one("SELECT id FROM ql_jobs WHERE id=?", name) == nil {
+			_ = os.Remove(filepath.Join(pending, name))
+		}
+	}
+}
+
 func (s *Store) read(path string) ([]byte, error) {
 	b, e := os.ReadFile(path)
 	if e != nil {

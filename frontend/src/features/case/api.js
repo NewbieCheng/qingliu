@@ -24,6 +24,18 @@ export function mutateCase(cid, range, action, body) {
   );
 }
 
+/** 手工新增一条交易（补录原件里漏识别的行）。服务端走同一套归一与质检。 */
+export function addTransaction(cid, draft) {
+  return api(`/api/clients/${cid}/transactions`, draft);
+}
+
+/** 删除单条交易（误识别 / 重复录入时由用户移除）。 */
+export function deleteTransaction(cid, tid) {
+  return api(`/api/clients/${cid}/transactions/${tid}`, undefined, {
+    method: "DELETE",
+  });
+}
+
 /** 本机拆行入库：原件落 Vault + 服务端权威校验 rows + 扣解析分，不进 upload worker。 */
 export function uploadParsed(cid, { file, rows, source, batch }) {
   const form = new FormData();

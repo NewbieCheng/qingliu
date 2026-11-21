@@ -645,6 +645,26 @@ func pageLines(words []Word) []string {
 }
 
 // Header labels determine columns; unrecognized layouts never guess monetary direction.
+// isPageFooterLine 判断一行是不是 PDF 页脚/汇总行（不是交易）。
+//
+// 依据：银行流水页脚固定包含「打印时间/打印方式/打印机构/打印柜员」，
+// 以及每页小计「本页支出 / 本页收入」。它们出现在表格坐标范围内，
+// 但语义上不是一笔交易，抽出来只会变成无效行污染整份结果。
+func isPageFooterLine(line string) bool {
+	n := normalize(line)
+	if n == "" {
+		return false
+	}
+	// 页脚强特征：出现任意两个即可判定（避免把摘要里恰好含"打印"的正常行误杀）。
+	hits := 0
+	for _, key := range []string{"打印时间", "打印方式", "打印机构", "打印柜员", "本页支出", "本页收入", "本页合计"} {
+		if strings.Contains(n, key) {
+			hits++
+		}
+	}
+	return hits >= 2
+}
+
 func parsePage(p PDFPage, source string, page int, owner, account string, walletLayout *[]Anchor) ([]Object, []string) {
 	words := p.words()
 	labels := map[string]string{}
@@ -806,6 +826,16 @@ func parsePage(p PDFPage, source string, page int, owner, account string, wallet
 			raw[a.Key] = cells[j]
 		}
 		raw["raw_cells"] = strings.Join(cells, " | ")
+		// 页脚汇总行不是交易，直接丢掉。
+		//
+		// 银行流水每页页脚会印「打印时间 / 本页支出 / 本页收入 / 打印方式 /
+		// 打印机构 / 打印柜员」，坐标落在表格范围内，会被当成一笔交易抽出来。
+		// 它们没有真实方向与金额，最终变成 quality=invalid 的脏行，把整份文档
+		// 从 success 拖成 partial/suspect（用户看到"部分交易字段无效"）。
+		// 这类行从来不是流水，跳过而不是标记失败。
+		if isPageFooterLine(str(raw, "raw_cells")) {
+			continue
+		}
 		d := dateRE.FindString(str(raw, "date"))
 		if d == "" {
 			v := regexp.MustCompile(`\d{8}`).FindString(str(raw, "date"))

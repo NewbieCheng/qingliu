@@ -15,6 +15,7 @@ import { adoptedAIRows, highConfidenceSuggested } from "../../lib/ai-adopt.js";
 import { useI18n } from "@/shared/i18n/index.jsx";
 
 export function ReviewStep({
+  cid,
   data,
   summary,
   selected,
@@ -32,6 +33,7 @@ export function ReviewStep({
   onRulesSave,
   onCoverage,
   onStepChange,
+  onRefresh,
 }) {
   const { t } = useI18n();
   const highAI = highConfidenceSuggested(data.rows);
@@ -67,9 +69,10 @@ export function ReviewStep({
         defaultOpen
       >
         <TransactionTable
-          data={data}
+          data={{ ...data, cid }}
           selected={selected}
           onSelectedChange={onSelectedChange}
+          onChanged={onRefresh}
         />
         {!data.rows.length && (
           <p className="empty">
