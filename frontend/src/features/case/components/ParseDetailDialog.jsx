@@ -17,6 +17,8 @@ import {
   CheckIcon,
 } from "@/shared/ui/icons.jsx";
 import { documentRows } from "../api.js";
+import { counterpartyDisplay } from "../lib/counterparty.js";
+import { PdfPreviewPane } from "./evidence/PdfPreviewPane.jsx";
 import "./parse-detail.css";
 
 // ─────────────────────────────────────────────────────────────
@@ -164,6 +166,15 @@ function baseName(name) {
   return String(name || "解析结果").replace(/\.[^.]+$/, "");
 }
 
+// 对手方：银行内部交易（取现/归还贷款利息）原件里本来就没有对方，
+// 直接写"原件未记载"会让人以为解析漏了。
+function CounterpartyText({ row }) {
+  const { text, kind } = counterpartyDisplay(row);
+  if (kind === "party") return <>{text}</>;
+  if (kind === "internal") return <span className="pd-party-internal">{text}</span>;
+  return <em className="muted">原件未记载</em>;
+}
+
 function verdictTone(v) {
   if (v === "ok") return "ok";
   if (v === "suspect") return "suspect";
@@ -189,6 +200,7 @@ export function ParseDetailDialog({
   const [rowsError, setRowsError] = useState("");
   const [expanded, setExpanded] = useState(null);
   const [filter, setFilter] = useState("all");
+  const [peek, setPeek] = useState(null);
 
   useEffect(() => {
     if (!cid || !doc?.id) return undefined;
@@ -471,8 +483,9 @@ export function ParseDetailDialog({
 
             {rows ? (
               rows.length ? (
-                <>
-                  <div className="pd-rows-bar">
+                <div className="pd-with-pdf">
+                  <div className="pd-left">
+                    <div className="pd-rows-bar">
                     <div className="pd-filter">
                       {[
                         ["all", `全部 ${rows.length}`],
@@ -489,7 +502,9 @@ export function ParseDetailDialog({
                         </button>
                       ))}
                     </div>
-                    <span className="muted">点任意一行展开，对照原件里对应的那一行</span>
+                    <span className="muted">
+                      点任意一行：展开字段对照，同时在右侧原件上框出这一行
+                    </span>
                   </div>
 
                   <div className="pd-rows">
@@ -497,11 +512,15 @@ export function ParseDetailDialog({
                       const open = expanded === row.id;
                       const fields = open ? rawFields(row) : [];
                       return (
-                        <div className={`pd-row${open ? " is-open" : ""}`} key={row.id}>
+                        <div className={`pd-row${open ? " is-open" : ""}${peek?.id === row.id ? " is-peeking" : ""}`} key={row.id}>
                           <button
                             type="button"
                             className="pd-row-head"
-                            onClick={() => setExpanded(open ? null : row.id)}
+                            onClick={() => {
+                              setExpanded(open ? null : row.id);
+                              // 同时把原件面板跳到这一行，形成"左选中、右框住"的呼应。
+                              setPeek(row);
+                            }}
                             aria-expanded={open}
                           >
                             <span className={`pd-row-caret${open ? " is-open" : ""}`}>
@@ -516,7 +535,7 @@ export function ParseDetailDialog({
                               {formatCents(row.income !== 0 ? row.income : row.expense)}
                             </span>
                             <span className="pd-row-party">
-                              {row.counterparty || <em className="muted">原件未记载</em>}
+                              <CounterpartyText row={row} />
                             </span>
                             {row.quality !== "structured" ? (
                               <span className="pd-chip pd-chip-suspect">{row.error || "待核对"}</span>
@@ -562,7 +581,17 @@ export function ParseDetailDialog({
                       只显示前 300 行，完整清单请导出 .md / .csv。
                     </p>
                   ) : null}
-                </>
+                  </div>
+                  {peek ? (
+                    <PdfPreviewPane
+                      cid={cid}
+                      doc={doc}
+                      row={peek}
+                      totalPages={meta.pages}
+                      onClose={() => setPeek(null)}
+                    />
+                  ) : null}
+                </div>
               ) : (
                 <p className="muted">这份文件没有解析出交易行。</p>
               )

@@ -146,7 +146,7 @@ export function ClientsPage({ user }) {
             <p>{t("clients.filtered_empty_description")}</p>
             <button
               type="button"
-              className="ghost"
+              className="btn-outline"
               onClick={() => setFilter("all")}
             >
               {t("clients.show_all")}

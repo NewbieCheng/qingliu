@@ -63,3 +63,22 @@
   white-space: nowrap;
   text-align: right;
 }
+
+/* 银行内部交易（取现/归还贷款利息等）：原件里本来就没有对方 */
+.tx-party-internal,
+.pd-party-internal {
+  font-size: 11px;
+  color: #8b857f;
+  background: #f4f3f1;
+  border: 1px solid #e6e4e1;
+  border-radius: 4px;
+  padding: 1px 6px;
+  display: inline-block;
+  white-space: nowrap;
+}
+/* 行内操作：原件 + 删除并排 */
+.tx-row-actions {
+  display: inline-flex;
+  gap: 6px;
+  white-space: nowrap;
+}

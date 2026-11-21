@@ -1,0 +1,120 @@
+/*
+  原件 PDF 对照面板。
+
+  布局原则：它是布局里的一栏，不是覆盖层（overlay）。覆盖层会挡住表格，
+  而对照的意义正是"一边看表格一边看原件"，任何遮挡都是设计错误。
+  窄屏时改为上下排布，仍然不重叠。
+*/
+
+.pdf-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid #e6e4e1;
+  border-radius: 8px;
+  background: #fbfbfa;
+  overflow: hidden;
+  height: 620px;
+  min-width: 0;
+}
+
+.pdf-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-bottom: 1px solid #eceae7;
+  background: #fff;
+}
+
+.pdf-pane-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.pdf-pane-title strong { font-size: 12px; color: #2b3330; }
+.pdf-pane-doc {
+  font-size: 11px;
+  color: #8b857f;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdf-pane-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pdf-pane-page {
+  font-size: 12px;
+  color: #55504b;
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+  text-align: center;
+}
+
+.pdf-pane-viewport {
+  flex: 1;
+  overflow: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 页面图与高亮框共用同一坐标系，所以框用百分比定位 */
+.pdf-page-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+  background: #fff;
+}
+
+.pdf-page-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.pdf-row-box {
+  position: absolute;
+  pointer-events: none;
+  border: 2px solid #d98324;
+  background: rgba(217, 131, 36, .16);
+  border-radius: 3px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, .04);
+  transition: top .18s ease, height .18s ease;
+}
+
+.pdf-pane-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #8b857f;
+}
+
+/* 表格 + 原件：宽屏并排，窄屏上下，始终不遮挡 */
+.pd-with-pdf {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 42%);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .pd-with-pdf {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pdf-pane { height: 460px; }
+}
+
+/* 表格行被选中时给个淡底，与原件高亮呼应 */
+.pd-row.is-peeking > .pd-row-head {
+  background: #fdf6ea;
+}

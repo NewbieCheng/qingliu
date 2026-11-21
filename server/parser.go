@@ -685,6 +685,24 @@ func parsePage(p PDFPage, source string, page int, owner, account string, wallet
 	if source == "bank_statement" {
 		labels[normalize("交易时间")] = "time"
 	}
+	// 已学习的格式适配器：先用现有标签探一遍表头，算出签名，命中就把
+	// AI 学到的列名映射补进来重新探一次。只补空缺，不覆盖人工映射。
+	// 这样同一家银行的新模板只需第一次走 AI，之后本地直接解析。
+	if s := globalStore; s != nil {
+		if probe := headerCandidates(words, labels); len(probe) > 0 {
+			texts := make([]string, 0, len(probe))
+			for _, a := range probe {
+				texts = append(texts, a.Name)
+			}
+			if m := s.loadAdapter(headerSignature(texts)); m != nil {
+				before := len(labels)
+				applyAdapter(labels, m)
+				if len(labels) > before {
+					_ = m // 标签已扩充，下面的候选构建会用新标签重算
+				}
+			}
+		}
+	}
 	if source == "bank_statement" {
 		for label, key := range map[string]string{"账号": "account", "地区": "ignore_region", "币种": "ignore_currency", "钞汇": "ignore_cash", "储种": "ignore_deposit", "序号": "ignore_sequence"} {
 			labels[normalize(label)] = key
@@ -888,6 +906,20 @@ func parsePage(p PDFPage, source string, page int, owner, account string, wallet
 			}
 		}
 		t := standard(raw, source, page, fmt.Sprintf("pdf:row:%d", i+1))
+		// 行级定位框（归一化到 0~1），供前端在原件页上框选这一行。
+		// 用 pdftotext -bbox-layout 已有的词坐标算，不额外依赖渲染服务。
+		if p.Width > 0 && p.Height > 0 {
+			top, bot := start.Y-2, bottom+1
+			if bot <= top {
+				bot = top + 12
+			}
+			t["bbox"] = Object{
+				"x": 0.0,
+				"y": clamp01(top / p.Height),
+				"w": 1.0,
+				"h": clamp01((bot - top) / p.Height),
+			}
+		}
 		t["raw"] = raw["raw_cells"]
 		t["account_holder"] = owner
 		if n, e := cents(str(raw, "balance")); e == nil {
@@ -983,4 +1015,15 @@ func mupdfPages(b []byte) ([]PDFPage, error) {
 		pages = append(pages, PDFPage{Width: p.Width, Height: p.Height, Items: words})
 	}
 	return pages, nil
+}
+
+// clamp01 把归一化坐标压到 [0,1]，避免边界行算出负数或超过页面。
+func clamp01(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }

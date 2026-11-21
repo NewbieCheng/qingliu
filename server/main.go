@@ -1143,6 +1143,8 @@ func (a *App) mux() http.Handler {
 				"quality": o["quality"], "error": o["error"],
 				"duplicate": o["duplicate"], "manual": o["manual"],
 				"raw": str(o, "raw"), "locator": o["locator"],
+				// 原件页上的归一化框（0~1），前端据此高亮这一行。
+				"bbox": o["bbox"],
 			})
 		}
 		q.json(Object{"rows": rows, "total": len(rows)})

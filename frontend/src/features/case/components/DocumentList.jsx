@@ -4,6 +4,7 @@ import { StatusBadge } from "@/shared/ui/Badge.jsx";
 import { FoldPanel } from "@/shared/ui/FoldPanel.jsx";
 import { useI18n } from "@/shared/i18n/index.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
+import { EyeIcon, RefreshIcon } from "@/shared/ui/icons.jsx";
 import { reparseDocument } from "../api.js";
 import { DocumentTextDialog } from "./evidence/DocumentTextDialog.jsx";
 
@@ -126,7 +127,7 @@ export function DocumentList({ data, onReparsed }) {
                   disabled={busy === document.id}
                   onClick={() => handleReparse(document)}
                 >
-                  {busy === document.id ? "识别中…" : "重新识别"}
+                  <RefreshIcon size={14} />{busy === document.id ? "识别中…" : "重新识别"}
                 </button>
               </div>
             ) : null}
@@ -137,7 +138,7 @@ export function DocumentList({ data, onReparsed }) {
                 className="btn-outline"
                 onClick={() => setViewing(document)}
               >
-                {t("doc_text.open")}
+                <EyeIcon size={14} />{t("doc_text.open")}
               </button>
             </div>
           </FoldPanel>

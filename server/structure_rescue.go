@@ -433,4 +433,50 @@ func (a *App) tryStructureRescueAfterOCR(ctx context.Context, userID string, pay
 		return
 	}
 	log.Printf("qingliu upload structure-rescue ok: file=%s rows=%d", str(payload, "name"), len(result.Rows))
+
+	// 兜底成功说明"这个表头我们的规则认不出来"，正是需要学习一条适配器的时机。
+	// 让 AI 只产出「列名 → 标准字段」的映射存进库，下次同格式文件本地直接命中，
+	// 不用再花一次模型调用。学习失败不影响本次结果。
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("learnAdapter panic: %v", r)
+			}
+		}()
+		learnCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		a.learnAdapterFromText(learnCtx, userID, source, raw)
+	}()
+}
+
+// learnAdapterFromText 从兜底输入的原文里提取表头与样例，交给 AI 生成适配器。
+func (a *App) learnAdapterFromText(ctx context.Context, userID, source, raw string) {
+	lines := strings.Split(raw, "\n")
+	headers := []string{}
+	sample := []string{}
+	for _, line := range lines {
+		l := strings.TrimSpace(line)
+		if l == "" {
+			continue
+		}
+		if len(headers) == 0 {
+			// 第一行非空文本当表头：按连续空白/竖线拆列。
+			for _, cell := range strings.FieldsFunc(l, func(r rune) bool {
+				return r == '|' || r == '\t' || r == ' '
+			}) {
+				if c := strings.TrimSpace(cell); c != "" {
+					headers = append(headers, c)
+				}
+			}
+			continue
+		}
+		sample = append(sample, l)
+		if len(sample) >= 8 {
+			break
+		}
+	}
+	if len(headers) < 3 || len(sample) == 0 {
+		return
+	}
+	a.learnAdapter(ctx, userID, source, headers, strings.Join(sample, "\n"))
 }

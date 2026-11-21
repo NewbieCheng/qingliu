@@ -91,7 +91,10 @@ func openStore() (*Store, error) {
 	}
 	block, _ := aes.NewCipher(raw)
 	aead, _ := cipher.NewGCM(block)
-	return &Store{db: db, root: root, vault: aead}, nil
+	st := &Store{db: db, root: root, vault: aead}
+	// 供 parser 在解析阶段查已学习的格式适配器。
+	globalStore = st
+	return st, nil
 }
 func (s *Store) exec(q string, args ...any) {
 	if _, e := s.db.Exec(q, args...); e != nil {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useI18n } from "@/shared/i18n/index.jsx";
+import { RefreshIcon, SparkIcon, FileTextIcon, WalletIcon } from "@/shared/ui/icons.jsx";
 import { formatDateTime } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
 import { Modal } from "@/shared/ui/Modal.jsx";
@@ -329,13 +330,13 @@ function AIAnalysisDialog({
             <span>{t("ai.recharge_prompt_body")}</span>
             <button
               type="button"
-              className="ghost"
+              className="btn-outline"
               onClick={() => {
                 onClose();
                 navigate("/recharge");
               }}
             >
-              {t("ai.go_recharge")}
+              <WalletIcon size={14} />{t("ai.go_recharge")}
             </button>
           </div>
         ) : null}
@@ -386,10 +387,10 @@ function AIAnalysisDialog({
         <ModalActions className="actions-end">
           <button
             type="button"
-            className="ghost"
+            className="btn-outline"
             onClick={() => void load({ force: true })}
           >
-            {t("topbar.refresh")}
+            <RefreshIcon size={14} />{t("topbar.refresh")}
           </button>
           <button
             type="button"
@@ -629,14 +630,14 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
                 className="primary"
                 onClick={() => openReport(entry.latestDone)}
               >
-                {t("ai.btn_view_report")}
+                <FileTextIcon size={14} />{t("ai.btn_view_report")}
               </button>
               <button
                 type="button"
-                className="ghost"
+                className="btn-outline-warning"
                 onClick={() => openSetup("rerun")}
               >
-                {t("ai.btn_rerun")}
+                <SparkIcon size={14} />{t("ai.btn_rerun")}
               </button>
             </>
           ) : null}
@@ -647,15 +648,15 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
                 className="primary"
                 onClick={() => openSetup("rerun")}
               >
-                {t("ai.btn_rerun")}
+                <SparkIcon size={14} />{t("ai.btn_rerun")}
               </button>
               {entry.latestDone ? (
                 <button
                   type="button"
-                  className="ghost"
+                  className="btn-outline"
                   onClick={() => openReport(entry.latestDone)}
                 >
-                  {t("ai.btn_view_report")}
+                  <FileTextIcon size={14} />{t("ai.btn_view_report")}
                 </button>
               ) : null}
             </>

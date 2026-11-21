@@ -3,6 +3,7 @@ import { DOCUMENT_STATUS, SOURCES } from "@/shared/lib/constants.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
 import { useI18n } from "@/shared/i18n/index.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
+import { RefreshIcon } from "@/shared/ui/icons.jsx";
 import { generalParse, reparseBatch } from "../api.js";
 import { ParseDetailDialog } from "./ParseDetailDialog.jsx";
 import "./parse-records.css";
@@ -109,7 +110,7 @@ export function ParseRecordsPanel({ data, onReparsed }) {
           {confirming ? (
             <span className="pr-confirm" role="alert">
               会重新调用 AI 解析，可能消耗积分。
-              <button type="button" className="ghost" onClick={() => setConfirming(false)}>
+              <button type="button" className="btn-outline btn-compact" onClick={() => setConfirming(false)}>
                 取消
               </button>
               <button
@@ -118,7 +119,7 @@ export function ParseRecordsPanel({ data, onReparsed }) {
                 disabled={busy}
                 onClick={handleBatchReparse}
               >
-                {busy ? "提交中…" : `确认重新解析 ${selected.size} 份`}
+                <RefreshIcon size={14} />{busy ? "提交中…" : `确认重新解析 ${selected.size} 份`}
               </button>
             </span>
           ) : (
@@ -129,7 +130,7 @@ export function ParseRecordsPanel({ data, onReparsed }) {
               title="重新调用 AI 解析，会消耗积分"
               onClick={() => setConfirming(true)}
             >
-              ↻ 重新解析（已选 {selected.size}）
+              <RefreshIcon size={14} />重新解析（已选 {selected.size}）
             </button>
           )}
         </div>

@@ -126,7 +126,7 @@ export function ClientsTable({ clients, canDelete = false, onDeleted }) {
             <h3>{t("clients.delete_confirm_title", { name: pending.name })}</h3>
             <p>{t("clients.delete_confirm_body")}</p>
             <div className="confirm-actions">
-              <button type="button" className="ghost" onClick={() => setPending(null)}>
+              <button type="button" className="btn-outline" onClick={() => setPending(null)}>
                 {t("common.cancel")}
               </button>
               <button

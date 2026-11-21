@@ -25,7 +25,7 @@ export function LogoutConfirmDialog({ onClose }) {
     <Modal title={t("auth.sign_out_title")} onClose={onClose}>
       <p className="account-dialog-lead">{t("auth.sign_out_description")}</p>
       <div className="account-dialog-actions">
-        <button type="button" className="ghost" onClick={onClose} disabled={busy}>
+        <button type="button" className="btn-outline" onClick={onClose} disabled={busy}>
           {t("common.cancel")}
         </button>
         <button type="button" className="primary" onClick={() => void onConfirm()} disabled={busy}>

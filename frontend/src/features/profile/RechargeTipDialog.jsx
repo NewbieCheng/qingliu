@@ -90,7 +90,7 @@ export function RechargeTipDialog({ onClose }) {
       </div>
 
       <div className="account-dialog-actions">
-        <button type="button" className="ghost" onClick={onClose}>
+        <button type="button" className="btn-outline" onClick={onClose}>
           {t("profile.maybe_later")}
         </button>
         <button

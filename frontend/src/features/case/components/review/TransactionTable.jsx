@@ -3,14 +3,27 @@ import { TRANSACTION_LABELS } from "@/shared/lib/constants.js";
 import { formatCents } from "@/shared/lib/format.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
-import { TrashIcon, PlusIcon } from "@/shared/ui/icons.jsx";
+import { TrashIcon, PlusIcon, EyeIcon } from "@/shared/ui/icons.jsx";
 import { aiStatusLabel } from "../../lib/ai-adopt.js";
 import { useI18n } from "@/shared/i18n/index.jsx";
 import { addTransaction, deleteTransaction } from "../../api.js";
+import { counterpartyDisplay } from "../../lib/counterparty.js";
+import { PdfPreviewPane } from "../evidence/PdfPreviewPane.jsx";
 import "./review-actions.css";
 
 function selectableRows(rows) {
   return rows.filter((row) => !row.scope_excluded && row.quality !== "invalid");
+}
+
+// 对手方单元格：有对方正常显示；银行内部交易标灰说明；真缺才写"原件未记载"。
+function CounterpartyCell({ row }) {
+  const { t } = useI18n();
+  const { text, kind } = counterpartyDisplay(row);
+  if (kind === "party") return <strong className="block">{text}</strong>;
+  if (kind === "internal") {
+    return <span className="tx-party-internal">{text}</span>;
+  }
+  return <strong className="block">{t("review.original_not_provided")}</strong>;
 }
 
 export function TransactionTable({ data, selected, onSelectedChange, onChanged }) {
@@ -30,6 +43,8 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
     memo: "",
   });
   const [busy, setBusy] = useState(false);
+  // 正在对照原件的行：null 时不显示右侧面板。
+  const [peek, setPeek] = useState(null);
 
   function toggleAll(checked) {
     onSelectedChange(checked ? selectable.map((row) => row.id) : []);
@@ -127,7 +142,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
         </form>
       ) : null}
 
-      <div className="table-wrap table-compact">
+      <div className="pd-with-pdf"><div className="table-wrap table-compact">
         <table>
           <thead>
             <tr>
@@ -187,7 +202,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
               <td>
                 {row.date}
                 <strong className="block">
-                  {row.counterparty || t("review.original_not_provided")}
+                  <CounterpartyCell row={row} />
                 </strong>
               </td>
               <td className="number">{formatCents(row.income)}</td>
@@ -227,21 +242,48 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
                 </StatusBadge>
               </td>
               <td>
-                <button
-                  type="button"
-                  className="btn-outline-danger btn-compact"
-                  disabled={busy}
-                  title={t("review.delete_hint")}
-                  onClick={() => setPendingDelete(row)}
-                >
-                  <TrashIcon size={14} />{t("review.delete_row")}
-                </button>
+                <span className="tx-row-actions">
+                  <button
+                    type="button"
+                    className="btn-outline btn-compact"
+                    title={t("review.peek_original")}
+                    onClick={() => setPeek(row)}
+                  >
+                    <EyeIcon size={14} />{t("review.peek")}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-outline-danger btn-compact"
+                    disabled={busy}
+                    title={t("review.delete_hint")}
+                    onClick={() => setPendingDelete(row)}
+                  >
+                    <TrashIcon size={14} />{t("review.delete_row")}
+                  </button>
+                </span>
               </td>
             </tr>
             );
           })}
         </tbody>
       </table>
+      </div>
+      {peek ? (
+        <PdfPreviewPane
+          cid={data.cid}
+          doc={{
+            id: peek.document_id,
+            name: peek.filename || "原件",
+            sha: (data.docs || []).find((d) => d.id === peek.document_id)?.sha || "",
+          }}
+          row={peek}
+          totalPages={
+            (data.docs || []).find((d) => d.id === peek.document_id)?.meta?.pages ||
+            peek.page
+          }
+          onClose={() => setPeek(null)}
+        />
+      ) : null}
       </div>
 
       {pendingDelete ? (
@@ -253,7 +295,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged }
               {formatCents(pendingDelete.income !== 0 ? pendingDelete.income : pendingDelete.expense)}
             </p>
             <div className="confirm-actions">
-              <button type="button" className="ghost" onClick={() => setPendingDelete(null)}>
+              <button type="button" className="btn-outline" onClick={() => setPendingDelete(null)}>
                 {t("common.cancel")}
               </button>
               <button

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
+import { CopyIcon } from "@/shared/ui/icons.jsx";
 import { Link } from "@/shared/router/index.js";
 import {
   getCase,
@@ -143,10 +144,10 @@ export function ParsePage({ cid }) {
               <div className="parse-actions">
                 <button
                   type="button"
-                  className="ghost"
+                  className="btn-outline"
                   onClick={() => navigator.clipboard?.writeText(result.markdown || "")}
                 >
-                  复制结果
+            <CopyIcon size={14} />复制结果
                 </button>
               </div>
               <iframe

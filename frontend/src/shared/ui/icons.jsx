@@ -305,3 +305,12 @@ export function InfoIcon({ size = 15 }) {
     </Svg>
   );
 }
+export function WalletIcon({ size = 15 }) {
+  return (
+    <Svg size={size}>
+      <rect x="3.2" y="5.4" width="13.6" height="9.8" rx="2" />
+      <path d="M3.2 8.6h13.6" />
+      <circle cx="13.4" cy="12" r="1.15" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}

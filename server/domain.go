@@ -105,6 +105,47 @@ func normalize(s string) string {
 	return strings.ToLower(strings.Join(strings.Fields(norm.NFKC.String(s)), ""))
 }
 
+// splitCounterparty 拆「对方账号/户名」合成列。
+//
+// 输入形如 `11123338871/蒋丰蔚`，也可能反过来是 `蒋丰蔚/11123338871`，
+// 或者只有其中一半。按内容判断：像账号的那半（够长且全是数字/星号）当账号，
+// 另一半当户名；两边都不像账号时整串都当户名——宁可户名难看，也不要把
+// 真正的对方名字丢掉。
+func splitCounterparty(v string) (account, name string) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return "", ""
+	}
+	parts := strings.Split(v, "/")
+	if len(parts) < 2 {
+		if looksLikeAccount(v) {
+			return v, ""
+		}
+		return "", v
+	}
+	a, b := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+	switch {
+	case looksLikeAccount(a):
+		return a, b
+	case looksLikeAccount(b):
+		return b, a
+	default:
+		// 两边都不像账号：保留原串做户名，避免把一个真实公司名截断。
+		return "", v
+	}
+}
+
+// looksLikeAccount 判断一段文本是不是账号（6 位以上的数字，允许掩码星号）。
+var accountLikeRE = regexp.MustCompile(`^[0-9*]{6,}$`)
+
+func looksLikeAccount(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	return accountLikeRE.MatchString(strings.ReplaceAll(s, " ", ""))
+}
+
 var amountRE = regexp.MustCompile(`^[+-]?\d+(\.\d+)?$`)
 
 func cents(s string) (int64, error) {
@@ -148,7 +189,11 @@ func iso(s string) (string, error) {
 var aliases = map[string][]string{
 	"date": {"交易日期", "日期", "记账日期"}, "time": {"交易时间", "时间", "记账时间"}, "income": {"收入金额", "收入", "贷方发生额"}, "expense": {"支出金额", "支出", "借方发生额"},
 	"counterparty": {"对手方", "交易对方", "对方户名", "对方账户名"}, "counter_account": {"对手账号", "对方账号", "对方卡号/账号"}, "payer": {"转出账户名称"}, "payer_account": {"转出账号(尾4)", "转出账号"}, "payee": {"转入账户名称"}, "payee_account": {"转入账号(尾4)", "转入账号"},
-	"memo": {"交易摘要/备注", "摘要", "备注", "交易摘要", "交易名称"}, "channel": {"交易渠道", "渠道"}, "account": {"本方账号", "账户"}, "account_type": {"账户类型"}, "direction": {"收支方向", "方向", "收/支", "收/支/其他"}, "amount": {"金额", "交易金额"}, "transaction_id": {"交易单号", "订单号"},
+	"memo": {"交易摘要/备注", "摘要", "备注", "交易摘要", "交易名称", "摘要/备注", "备注/摘要", "交易摘要及备注", "交易摘要与备注"}, "channel": {"交易渠道", "渠道"}, "account": {"本方账号", "账户"}, "account_type": {"账户类型"}, "direction": {"收支方向", "方向", "收/支", "收/支/其他"}, "amount": {"金额", "交易金额"}, "transaction_id": {"交易单号", "订单号"},
+	// 银行流水常把对方账号与户名合成一列（`对方账号/户名` → `11123338871/蒋丰蔚`）。
+	// 不单独成列的话，这一列会和左边几列粘连，对手方永远提不到，用户只看得到
+	// "原件未记载"。这里先整体收进来，再在 standard() 里按 `/` 拆成账号 + 户名。
+	"counter_both": {"对方账号/户名", "对方账户/户名", "对方账号及户名", "对方账户名称及账号", "对方账号户名"},
 }
 
 func standard(raw Object, source string, page int, locator string) Object {
@@ -187,6 +232,18 @@ func standard(raw Object, source string, page int, locator string) Object {
 				}
 			}
 		}
+	}
+	// 「对方账号/户名」合成列拆开：`11123338871/蒋丰蔚` → 账号 + 户名。
+	// 按内容判断哪边是账号，不按位置——有的银行反过来写 `户名/账号`。
+	if both := strings.TrimSpace(str(t, "counter_both")); both != "" {
+		acc, name := splitCounterparty(both)
+		if str(t, "counter_account") == "" {
+			t["counter_account"] = acc
+		}
+		if str(t, "counterparty") == "" {
+			t["counterparty"] = name
+		}
+		delete(t, "counter_both")
 	}
 	fail := func(msg string) Object {
 		t["quality"] = "invalid"

@@ -45,7 +45,7 @@ export function CreateClientDialog({ onClose }) {
             {t("clients.authorization_label")}
           </label>
           <ModalActions className="actions-end">
-            <button type="button" className="ghost" onClick={onClose}>
+            <button type="button" className="btn-outline" onClick={onClose}>
               {t("common.cancel")}
             </button>
             <button className="primary">{t("clients.create_record")}</button>
