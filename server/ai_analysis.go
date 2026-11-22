@@ -70,6 +70,11 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, pay
 	analysisID := str(payload, "analysis_id")
 	docID := str(payload, "document_id")
 	name := str(payload, "name")
+	task := str(payload, "task")
+	if task == personMergeTask {
+		a.runPersonMergeJob(ctx, userID, cid, jid, payload, report)
+		return
+	}
 	step := func(stage, message string) {
 		progress, text := analyzeStageProgress(stage)
 		// 调用方给的 message 常常与阶段文案相同，直接拼会得到
@@ -101,7 +106,6 @@ func (a *App) runAIAnalysisJob(ctx context.Context, userID, cid, jid string, pay
 		return
 	}
 	path := filepath.Join(a.s.root, "uploads", cid, docID)
-	task := str(payload, "task")
 	if task == "" {
 		task = "statement_review"
 	}
@@ -258,8 +262,8 @@ func (a *App) writebackPageOCR(cid, docID, name string, result Object) (int, err
 }
 
 func (a *App) latestAIAnalyses(cid string, limit int) []Object {
-	if limit <= 0 || limit > 20 {
-		limit = 10
+	if limit <= 0 || limit > 40 {
+		limit = 30
 	}
 	rows := a.s.query("SELECT id,customer_id,document_id,workbench_analysis_id,status,stage,progress,result,error,created,completed FROM ql_ai_analyses WHERE customer_id=? ORDER BY created DESC LIMIT ?", cid, limit)
 	for _, row := range rows {

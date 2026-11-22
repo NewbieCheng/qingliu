@@ -10,6 +10,7 @@ export function SegmentedControl({
   defaultValue,
   value,
   onChange,
+  prefix = null,
   "aria-label": ariaLabel,
   className = "",
 }) {
@@ -21,10 +22,11 @@ export function SegmentedControl({
 
   return (
     <div
-      className={`ql-segment${className ? ` ${className}` : ""}`}
+      className={`ql-segment${prefix ? " has-prefix" : ""}${className ? ` ${className}` : ""}`}
       role="radiogroup"
       aria-label={ariaLabel}
     >
+      {prefix ? <span className="ql-segment-prefix">{prefix}</span> : null}
       {options.map((option) => {
         const active = current === option.value;
         return (

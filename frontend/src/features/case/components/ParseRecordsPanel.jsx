@@ -100,37 +100,37 @@ export function ParseRecordsPanel({ data, onReparsed }) {
   return (
     <div className="pr-panel">
       <div className="pr-header">
-        <div>
+        <div className="pr-header-copy">
           <h3 className="pr-title">解析记录</h3>
-          <p className="muted">
-            共 {docs.length} 份 · 勾选后可重新放回解析队列（无需重新上传）
-          </p>
+          <span className="pr-count muted">
+            {docs.length} 份 · 勾选后可重新解析
+          </span>
         </div>
         <div className="pr-actions">
           {confirming ? (
             <span className="pr-confirm" role="alert">
-              会重新调用 AI 解析，可能消耗积分。
+              将消耗积分
               <button type="button" className="btn-outline btn-compact" onClick={() => setConfirming(false)}>
                 取消
               </button>
               <button
                 type="button"
-                className="btn-outline-warning"
+                className="btn-outline-warning btn-compact"
                 disabled={busy}
                 onClick={handleBatchReparse}
               >
-                <RefreshIcon size={14} />{busy ? "提交中…" : `确认重新解析 ${selected.size} 份`}
+                <RefreshIcon size={13} />{busy ? "提交中…" : `确认 ${selected.size} 份`}
               </button>
             </span>
           ) : (
             <button
               type="button"
-              className="btn-outline-warning"
+              className="btn-outline-warning btn-compact"
               disabled={busy || selected.size === 0}
               title="重新调用 AI 解析，会消耗积分"
               onClick={() => setConfirming(true)}
             >
-              <RefreshIcon size={14} />重新解析（已选 {selected.size}）
+              <RefreshIcon size={13} />{selected.size > 0 ? `重新解析 ${selected.size}` : "重新解析"}
             </button>
           )}
         </div>
@@ -141,14 +141,16 @@ export function ParseRecordsPanel({ data, onReparsed }) {
           const meta = doc.meta || {};
           const globalNo = (page - 1) * PAGE_SIZE + i + 1;
           const verdict = meta.verdict;
+          const checked = selected.has(doc.id);
           return (
-            <div className="pr-row" key={doc.id}>
-              <label className="pr-check">
+            <div className={`pr-row${checked ? " is-selected" : ""}`} key={doc.id}>
+              <label className={`pr-check${checked ? " is-checked" : ""}`}>
                 <input
                   type="checkbox"
-                  checked={selected.has(doc.id)}
+                  checked={checked}
                   onChange={() => toggle(doc.id)}
                 />
+                <span className="pr-check-box" aria-hidden="true" />
                 <span className="pr-no">{globalNo}</span>
               </label>
               <button
@@ -181,13 +183,14 @@ export function ParseRecordsPanel({ data, onReparsed }) {
       </div>
 
       <div className="pr-footer">
-        <label className="pr-selectall">
+        <label className={`pr-selectall${allOnPageSelected ? " is-checked" : ""}`}>
           <input type="checkbox" checked={allOnPageSelected} onChange={togglePage} />
+          <span className="pr-check-box" aria-hidden="true" />
           本页全选
         </label>
         <div className="pr-pager">
           <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>上一页</button>
-          <span>第 {page} / {totalPages} 页</span>
+          <span>{page} / {totalPages}</span>
           <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>下一页</button>
         </div>
       </div>

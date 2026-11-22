@@ -5,14 +5,26 @@ import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
 import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { ledgerChangeLabel } from "../constants.js";
 
-export function LedgerTable({ ledgers, page = 1, pageSize = 10, total = 0, onPageChange }) {
+export function LedgerTable({
+  ledgers,
+  page = 1,
+  pageSize = 10,
+  total = 0,
+  onPageChange,
+  framed = true,
+  showTitle = true,
+}) {
   const { t } = useI18n();
+  const showHeading = framed ? showTitle : false;
+
   return (
-    <section className="card">
-      <SectionTitle
-        title={t("billing.ledger_title")}
-        description={t("billing.ledger_desc")}
-      />
+    <section className={framed ? "card" : "ledger-panel"}>
+      {showHeading ? (
+        <SectionTitle
+          title={t("billing.ledger_title")}
+          description={t("billing.ledger_desc")}
+        />
+      ) : null}
       <div className="table-wrap">
         <table>
           <thead>
@@ -75,8 +87,11 @@ export function LedgerTable({ ledgers, page = 1, pageSize = 10, total = 0, onPag
           }
           label={
             total > 0
-              ? t("billing.ledger_page", { page, total })
-              : t("common.page", { page })
+              ? t("billing.ledger_page", {
+                  page,
+                  pages: Math.max(1, Math.ceil(total / pageSize)),
+                })
+              : String(page)
           }
         />
       )}

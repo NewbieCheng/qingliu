@@ -108,7 +108,7 @@ export function ClientsTable({ clients, canDelete = false, onDeleted }) {
                           setPending(client);
                         }}
                       >
-                        <TrashIcon size={14} />
+                        <TrashIcon size={13} />
                         {busy === client.id ? t("clients.deleting") : t("clients.delete")}
                       </button>
                     </span>

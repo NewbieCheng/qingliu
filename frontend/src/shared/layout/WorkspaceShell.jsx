@@ -3,10 +3,10 @@ import { useStoredFlag } from "@/shared/hooks/useStoredFlag.js";
 import { Sidebar } from "./Sidebar.jsx";
 import { Topbar } from "./Topbar.jsx";
 import { MobileTabBar } from "./MobileTabBar.jsx";
+import { ChromeTitleProvider } from "./ChromeTitle.jsx";
 import { useI18n } from "@/shared/i18n/index.jsx";
 
 const RAIL_KEY = "ql.rail.collapsed";
-const TOPBAR_KEY = "ql.topbar.collapsed";
 const NARROW_QUERY = "(max-width: 1000px)";
 const PHONE_QUERY = "(max-width: 680px)";
 
@@ -17,14 +17,14 @@ const PHONE_QUERY = "(max-width: 680px)";
 export function WorkspaceShell({
   user,
   pathname,
-  title,
-  back,
+  title = "",
   onPassword,
   onLogout,
   spaceSwitcher = null,
   children,
 }) {
-  const { t } = useI18n();  const [railCollapsed, setRailCollapsed] = useStoredFlag(RAIL_KEY);
+  const { t } = useI18n();
+  const [railCollapsed, setRailCollapsed] = useStoredFlag(RAIL_KEY);
 
   // 打开原件对照时自动收起侧栏，给内容让出宽度；关闭后不自动展开，
   // 因为用户可能正想继续用收起态。只做"收起"这一个方向，不来回拨。
@@ -35,7 +35,6 @@ export function WorkspaceShell({
     window.addEventListener("ql:rail-autocollapse", onAutoCollapse);
     return () => window.removeEventListener("ql:rail-autocollapse", onAutoCollapse);
   }, [setRailCollapsed]);
-  const [topbarCollapsed, setTopbarCollapsed] = useStoredFlag(TOPBAR_KEY);
   const [narrow, setNarrow] = useState(() =>
     typeof window !== "undefined"
       ? window.matchMedia(NARROW_QUERY).matches
@@ -84,41 +83,40 @@ export function WorkspaceShell({
   }
 
   return (
-    <div
-      className={`workspace ${effectiveCollapsed ? "rail-collapsed" : ""} ${
-        topbarCollapsed ? "topbar-collapsed" : ""
-      }${phone ? " is-phone" : ""}`}
-    >
-      {!phone ? (
+    <ChromeTitleProvider defaultTitle={title}>
+      <div
+        className={`workspace ${effectiveCollapsed ? "rail-collapsed" : ""}${
+          phone ? " is-phone" : ""
+        }`}
+      >
+        {!phone ? (
         <Sidebar
           user={user}
           pathname={pathname}
           collapsed={effectiveCollapsed}
+          onToggleRail={toggleRail}
           spaceSwitcher={spaceSwitcher}
         />
       ) : null}
       <div className="main">
         <Topbar
-          collapsed={topbarCollapsed}
-          onToggle={() => setTopbarCollapsed((value) => !value)}
           railCollapsed={effectiveCollapsed}
           onToggleRail={toggleRail}
           hideRailToggle={phone}
-          title={title}
-          back={back}
         />
-        <div className="page-wrap">{children}</div>
-        <footer>{t("layout.footer_disclaimer")}</footer>
+          <div className="page-wrap">{children}</div>
+          <footer>{t("layout.footer_disclaimer")}</footer>
+        </div>
+        {phone ? (
+          <MobileTabBar
+            user={user}
+            pathname={pathname}
+            onPassword={onPassword}
+            onLogout={onLogout}
+            spaceSwitcher={spaceSwitcher}
+          />
+        ) : null}
       </div>
-      {phone ? (
-        <MobileTabBar
-          user={user}
-          pathname={pathname}
-          onPassword={onPassword}
-          onLogout={onLogout}
-          spaceSwitcher={spaceSwitcher}
-        />
-      ) : null}
-    </div>
+    </ChromeTitleProvider>
   );
 }

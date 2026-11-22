@@ -3,7 +3,13 @@ import { createPortal } from "react-dom";
 import { XIcon } from "@/shared/ui/icons.jsx";
 import { useI18n } from "@/shared/i18n/index.jsx";
 
-export function Modal({ title, onClose, children, className = "" }) {
+export function Modal({
+  title,
+  onClose,
+  children,
+  className = "",
+  hideHeader = false,
+}) {
   const { t } = useI18n();
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -31,18 +37,20 @@ export function Modal({ title, onClose, children, className = "" }) {
         aria-label={title}
         className={`modal ${className}`.trim()}
       >
-        <header className="modal-header">
-          <h2>{title}</h2>
-          <button
-            type="button"
-            className="modal-close"
-            onClick={onClose}
-            aria-label={t("common.close")}
-            autoFocus
-          >
-            <XIcon size={16} />
-          </button>
-        </header>
+        {hideHeader ? null : (
+          <header className="modal-header">
+            <h2>{title}</h2>
+            <button
+              type="button"
+              className="modal-close"
+              onClick={onClose}
+              aria-label={t("common.close")}
+              autoFocus
+            >
+              <XIcon size={16} />
+            </button>
+          </header>
+        )}
         {children}
       </section>
     </div>,

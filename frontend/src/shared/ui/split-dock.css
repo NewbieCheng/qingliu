@@ -6,22 +6,57 @@
   （悬停变实、抓握点显形、光标变 col-resize），否则用户永远不知道能拖。
 */
 
+/* 必须用 aside.dock-pane：legacy 里裸 `aside{padding:34px 22px;width:220px;…}`
+   是旧登录侧栏样式，portal 到 body 的原件栏也会中招，头被顶到 top=34。 */
+aside.dock-pane,
 .dock-pane {
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  color: inherit;
   background: var(--ql-surface, #fff);
   min-width: 0;
   z-index: 24;
 }
 
-/* 贴视口右侧：整列高度，页面主内容靠 --dock-inset 让位 */
+/* 贴视口右上角：与顶栏同高齐顶（portal 到 body，top 相对视口） */
+aside.dock-pane-fixed,
 .dock-pane-fixed {
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
+  z-index: 41;
   border-left: 1px solid var(--ql-line, #d7ddd6);
   box-shadow: -12px 0 28px rgba(20, 34, 30, .07);
+}
+/* inline 宿主：参与父级 flex 拉伸；头栏贴顶无内边距空隙 */
+.dock-inline-host {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.dock-inline-host > .dock-pane-inline {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.dock-pane-inline {
+  padding: 0;
+  margin: 0;
+}
+.dock-pane-inline > .dock-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.dock-pane-inline > .dock-head {
+  margin: 0;
+  flex: 0 0 34px;
 }
 
 /* 贴在父容器右侧（弹窗内部）：静态 flex 子项，靠分隔条改宽度。
@@ -82,46 +117,55 @@ body.dock-resizing * {
   cursor: col-resize !important;
 }
 
-/* ── 头部 ── */
+/* ── 头部：与顶栏同高 34px、同色，拼成一条连续顶栏 ── */
 .dock-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 9px 12px;
-  border-bottom: 1px solid var(--ql-line, #eceae7);
-  background: #fbfbf9;
+  gap: 8px;
+  flex-wrap: nowrap;
+  box-sizing: border-box;
+  height: 34px;
+  min-height: 34px;
+  max-height: 34px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--ql-line, #d5dbd2);
+  background: rgba(247, 248, 242, .86);
+  backdrop-filter: blur(10px);
   flex: 0 0 auto;
+}
+.dock-pane-fixed > .dock-head {
+  border-left: 0;
 }
 
 .dock-title {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+  /* 窄栏时标题让位，避免右侧「收起」被 overflow 裁切 */
+  flex: 1 1 0;
   min-width: 0;
-}
-.dock-title strong {
+  margin: 0;
   font-size: 12px;
   font-weight: 650;
   letter-spacing: .02em;
   color: var(--ql-ink, #203b39);
-}
-.dock-sub {
-  font-size: 11px;
-  color: var(--ql-muted, #7a8480);
-  max-width: 240px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .dock-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 4px;
+  flex-wrap: nowrap;
   flex: 0 0 auto;
+  min-width: max-content;
+  max-width: 100%;
+}
+.dock-actions .btn-outline.btn-compact {
+  padding: 2px 7px;
+  font-size: 11px;
+  line-height: 1.2;
+  border-radius: 2px;
 }
 
 .dock-body {
@@ -136,9 +180,9 @@ body.dock-resizing * {
 /* 不加 padding 过渡：padding 是布局属性，动画它会每帧重排。
    面板开合本来就是瞬间完成的动作，硬切比补间更利落。 */
 /* 让位作用在 .main 的宽度上，而不是给内容加 padding。
-   .page-wrap 是 max-width + margin:auto 的居中容器：加 padding 只会让内容
-   在容器里向内缩，右侧留下一整条死白；收缩 .main 才能让容器重新在
-   「视口 − 面板」的剩余空间里居中，两侧留白对称。 */
+   .page-wrap 流体铺满 .main 并封顶 --ql-content-max：加 padding 只会让内容
+   在容器里向内缩，右侧留下一整条死白；收缩 .main 才能让纸面跟着变窄，
+   两侧留白仍对称。 */
 html.has-dock-pane .workspace .main {
   width: calc(100% - var(--ql-rail) - var(--dock-inset, 0px));
 }
@@ -148,8 +192,10 @@ html.has-dock-pane .workspace.rail-collapsed .main {
 
 @media (max-width: 900px) {
   /* 窄屏优先保证内容可读：面板改为占满宽度，内容不再让位 */
+  aside.dock-pane-fixed,
   .dock-pane-fixed {
     width: 100% !important;
+    padding: 0;
   }
   html.has-dock-pane .workspace .main,
   html.has-dock-pane .workspace.rail-collapsed .main {
@@ -160,6 +206,7 @@ html.has-dock-pane .workspace.rail-collapsed .main {
 
 @media (prefers-reduced-motion: reduce) {
   .dock-handle,
-  .dock-grip,
-
+  .dock-grip {
+    transition: none;
+  }
 }

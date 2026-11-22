@@ -701,6 +701,13 @@ func (a *App) mux() http.Handler {
 		data["rows"] = filtered[start:end]
 		data["row_count"] = len(filtered)
 		data["page"] = page
+		// 案件包里的 jobs 与 /jobs 一致：库内存英文/key，出站再按请求语言翻译。
+		locale := localeFromRequest(q.r)
+		if jobs, ok := data["jobs"].([]Object); ok {
+			for _, job := range jobs {
+				job["message"] = localizeStoredMessage(locale, str(job, "message"))
+			}
+		}
 		q.json(data)
 	}))
 	m.HandleFunc("GET /api/clients/{cid}/jobs", a.route(func(q *request) {
@@ -708,8 +715,9 @@ func (a *App) mux() http.Handler {
 		jobs := s.query("SELECT id,kind,status,message,progress,stage,created FROM ql_jobs WHERE customer_id=? ORDER BY seq DESC LIMIT 30", cid)
 		// 排队中的任务附带「前面还有几份」：串行解析时用户最想知道的是这个，
 		// 而不是一个笼统的「排队中」。
+		locale := localeFromRequest(q.r)
 		for _, job := range jobs {
-			job["message"] = localizeStoredMessage(localeFromRequest(q.r), str(job, "message"))
+			job["message"] = localizeStoredMessage(locale, str(job, "message"))
 			if str(job, "status") == "queued" {
 				job["queue_position"] = s.queuePosition(str(job, "id")) + 1
 			}
@@ -1240,7 +1248,7 @@ func (a *App) mux() http.Handler {
 	}))
 	m.HandleFunc("GET /api/clients/{cid}/ai-analysis", a.route(func(q *request) {
 		cid := q.access()
-		q.json(Object{"items": a.latestAIAnalyses(cid, 10)})
+		q.json(Object{"items": a.latestAIAnalyses(cid, 30)})
 	}))
 	m.HandleFunc("POST /api/clients/{cid}/ai-analysis", a.route(func(q *request) {
 		q.edit(func(cid string) {
@@ -1251,16 +1259,50 @@ func (a *App) mux() http.Handler {
 				bad(402, insufficientPointsMessage)
 			}
 			b := q.body()
-			docID := strings.TrimSpace(str(b, "document_id"))
-			require(docID != "", "Select a document to analyze")
-			// task=page_ocr 时走工作台的「文档视觉识别」，适合扫描件/图片型流水。
 			task := strings.TrimSpace(str(b, "task"))
+			userID := str(q.user, "id")
+			space := q.space()
+
+			// 同人合并：吃已完成单源分析摘要，不重传原件全文。
+			if task == personMergeTask {
+				ids := strList(b["analysis_ids"])
+				if len(ids) == 0 {
+					for _, item := range list(b["analysis_ids"]) {
+						if code := strings.TrimSpace(text(item)); code != "" {
+							ids = append(ids, code)
+						}
+					}
+				}
+				row := a.startPersonMerge(userID, cid, ids, space)
+				q.json(Object{"ok": true, "analysis": row, "analyses": []Object{row}, "count": 1})
+				return
+			}
+
 			if task != "page_ocr" {
 				task = ""
 			}
-			row := a.startAIAnalysis(str(q.user, "id"), cid, docID, task, q.space())
-			require(row != nil, "Document not found")
-			q.json(Object{"ok": true, "analysis": row})
+			docIDs := uniqueNonEmpty(strList(b["document_ids"]))
+			if len(docIDs) == 0 {
+				for _, item := range list(b["document_ids"]) {
+					if code := strings.TrimSpace(text(item)); code != "" {
+						docIDs = append(docIDs, code)
+					}
+				}
+				docIDs = uniqueNonEmpty(docIDs)
+			}
+			if single := strings.TrimSpace(str(b, "document_id")); single != "" {
+				docIDs = uniqueNonEmpty(append(docIDs, single))
+			}
+			require(len(docIDs) > 0, "Select a document to analyze")
+			require(len(docIDs) <= 10, "一次最多分析 10 份资料")
+
+			rows := make([]Object, 0, len(docIDs))
+			for _, docID := range docIDs {
+				row := a.startAIAnalysis(userID, cid, docID, task, space)
+				require(row != nil, "Document not found")
+				rows = append(rows, row)
+			}
+			q.json(Object{"ok": true, "analysis": rows[0], "analyses": rows, "count": len(rows)})
 		})
 	}))
 	// S6：手动把某次 page_ocr 转写写回核对（自动路径失败时补刀）。

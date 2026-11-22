@@ -1,9 +1,15 @@
-import React, { useCallback, useEffect, useId, useState } from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "@/shared/ui/toast-api.js";
 import { Modal } from "@/shared/ui/Modal.jsx";
-import { BuildingIcon, CheckIcon, UserIcon } from "@/shared/ui/icons.jsx";
+import { BuildingIcon, CheckIcon, ChevronDownIcon, UserIcon } from "@/shared/ui/icons.jsx";
 import { useI18n } from "@/shared/i18n/index.jsx";
-import { invalidateAll, querySpaces } from "@/app/queries/index.js";
+import { invalidateAll, invalidateBalance, queryBalance, querySpaces } from "@/app/queries/index.js";
+import {
+  availablePoints,
+  periodExpiresAt,
+  periodPoints,
+  permanentPoints,
+} from "@/shared/lib/billing.js";
 import { enableSpace, switchSpace } from "../api.js";
 import { LogoutConfirmDialog } from "../LogoutConfirmDialog.jsx";
 
@@ -42,26 +48,34 @@ function SpaceGlyph({ kind }) {
   return <UserIcon size={15} />;
 }
 
+function formatPoints(value) {
+  return Number(value).toLocaleString();
+}
+
 /**
  * 侧栏底部空间入口。
- * - 展开：头像 + 姓名 + 当前空间
- * - 收栏：只留压缩头像按钮
+ * - 展开：头像 + 姓名 + 当前空间名 + 可用积分（种类进弹层/悬停，触发器不重复徽标）
+ * - 收栏：只留圆形缩写，避免挤出栏宽遮挡主区；悬停看空间名与积分明细
  * - 点开一律走居中二级弹层（避免收栏时菜单被挤坏）
  */
 export function SpaceSwitcher({ user, collapsed = false }) {
   const { t } = useI18n();
   const listId = useId();
+  const hoverTimer = useRef(null);
   const [open, setOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [hoverDetail, setHoverDetail] = useState(false);
   const [items, setItems] = useState([]);
   const [warn, setWarn] = useState("");
   const [busy, setBusy] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [points, setPoints] = useState(null);
+  const [balance, setBalance] = useState(null);
 
   const initials = (user?.display || t("space.user_initial")).slice(0, 1);
   const accountLine = user?.email || (user?.role ? t(`role.${user.role}`) : t("space.account"));
 
-  const load = useCallback(async () => {
+  const loadSpaces = useCallback(async () => {
     try {
       const payload = await querySpaces();
       // 清流不支持平台空间：后端切过去会 400，列表里露出只会让人狂点报错。
@@ -78,14 +92,33 @@ export function SpaceSwitcher({ user, collapsed = false }) {
     }
   }, [t]);
 
+  const loadBalance = useCallback(async (force = false) => {
+    try {
+      if (force) invalidateBalance();
+      const data = await queryBalance({ force });
+      setPoints(availablePoints(data));
+      setBalance(data);
+    } catch {
+      setPoints(null);
+      setBalance(null);
+    }
+  }, []);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadSpaces();
+    void loadBalance();
+    const onChanged = () => void loadBalance(true);
+    window.addEventListener("ql:balance-changed", onChanged);
+    return () => {
+      window.removeEventListener("ql:balance-changed", onChanged);
+      if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+    };
+  }, [loadSpaces, loadBalance]);
 
   useEffect(() => {
     if (!open) return undefined;
-    void load();
-  }, [open, load]);
+    void loadSpaces();
+  }, [open, loadSpaces]);
 
   const current =
     items.find((item) => item.current) ||
@@ -102,6 +135,22 @@ export function SpaceSwitcher({ user, collapsed = false }) {
   const currentKind = current?.kind || "personal";
   const currentTitle = spaceTitle(current, t);
   const currentDetail = spaceDetail(current, t);
+  const permanent = permanentPoints(balance);
+  const period = periodPoints(balance);
+  const expires = periodExpiresAt(balance);
+  const hasPeriod = period > 0;
+  const pointsLabel = points === null ? "—" : formatPoints(points);
+  const showDetail = hoverDetail && !open && points !== null;
+
+  function openDetailSoon() {
+    if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setHoverDetail(true), 80);
+  }
+
+  function closeDetailSoon() {
+    if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setHoverDetail(false), 120);
+  }
 
   async function onSwitch(item) {
     if (item.current || busy) return;
@@ -134,15 +183,31 @@ export function SpaceSwitcher({ user, collapsed = false }) {
   }
 
   return (
-    <div className={`rail-space${collapsed ? " is-compact" : ""}${open ? " is-open" : ""}`}>
+    <div
+      className={`rail-space${collapsed ? " is-compact" : ""}${open ? " is-open" : ""}${
+        showDetail ? " is-detail" : ""
+      }`}
+      onMouseEnter={openDetailSoon}
+      onMouseLeave={closeDetailSoon}
+      onFocus={openDetailSoon}
+      onBlur={closeDetailSoon}
+    >
       <button
         type="button"
         className="rail-space-trigger"
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-describedby={showDetail ? `${listId}-points` : undefined}
         aria-label={t("space.open_switcher", { title: currentTitle })}
-        title={`${currentTitle} · ${currentDetail}`}
-        onClick={() => setOpen(true)}
+        title={
+          collapsed
+            ? `${currentTitle} · ${currentDetail} · ${t("topbar.points")} ${pointsLabel}`
+            : `${currentTitle} · ${currentDetail}`
+        }
+        onClick={() => {
+          setHoverDetail(false);
+          setOpen(true);
+        }}
       >
         <span className="rail-avatar" aria-hidden="true">
           {initials}
@@ -151,21 +216,60 @@ export function SpaceSwitcher({ user, collapsed = false }) {
           <>
             <span className="rail-space-copy">
               <strong className="rail-space-user">{user?.display || t("space.user")}</strong>
-              <span className="rail-space-now">
-                <em>{t(SPACE_KIND[currentKind]?.short || "space.generic")}</em>
-                {currentTitle}
+              <span className="rail-space-now">{currentTitle}</span>
+            </span>
+            <span className="rail-space-side">
+              <span className="rail-space-points" aria-hidden={showDetail ? "true" : undefined}>
+                <span className="rail-space-points-label">{t("topbar.points")}</span>
+                <strong>{pointsLabel}</strong>
+              </span>
+              <span className="rail-space-chevron" aria-hidden="true">
+                <ChevronDownIcon size={12} />
               </span>
             </span>
-            <span className="rail-space-chevron" aria-hidden="true">
-              ▾
-            </span>
           </>
-        ) : (
-          <span className="rail-space-compact-meta" aria-hidden="true">
-            {t(SPACE_KIND[currentKind]?.short || "space.generic")}
-          </span>
-        )}
+        ) : null}
       </button>
+
+      {showDetail ? (
+        <div
+          className="rail-points-pop"
+          id={`${listId}-points`}
+          role="tooltip"
+          onMouseEnter={openDetailSoon}
+          onMouseLeave={closeDetailSoon}
+        >
+          {collapsed ? (
+            <p className="rail-points-pop-space">
+              <em>{t(SPACE_KIND[currentKind]?.short || "space.generic")}</em>
+              <span>{currentTitle}</span>
+            </p>
+          ) : null}
+          <div className="rail-points-pop-head">
+            <span>{t("billing.available_points")}</span>
+            <strong>{formatPoints(points)}</strong>
+          </div>
+          <div className="rail-points-pop-buckets">
+            <div className="rail-points-pop-bucket">
+              <span>{t("billing.permanent")}</span>
+              <strong>{formatPoints(permanent)}</strong>
+              <em>{t("billing.no_expiry")}</em>
+            </div>
+            <div className={`rail-points-pop-bucket${hasPeriod ? "" : " is-empty"}`}>
+              <span>{t("billing.temporary")}</span>
+              <strong>{formatPoints(period)}</strong>
+              <em>
+                {hasPeriod && expires
+                  ? t("rail.points.expire_at", { at: expires.toLocaleDateString() })
+                  : t("billing.none")}
+              </em>
+            </div>
+          </div>
+          <p className="rail-points-pop-hint">
+            {hasPeriod ? t("billing.hint_with_period") : t("billing.hint_no_period")}
+          </p>
+        </div>
+      ) : null}
 
       {open ? (
         <Modal

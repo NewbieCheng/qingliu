@@ -487,6 +487,17 @@ func (a *App) wbUpsertLocalUser(session wbSession) string {
 	// 原先是「三档之外一律 sales」，让只读成员拿到了写权限；这里保持原始
 	// 服务角色，判定交给权限快照。
 	role := localRole(str(user, "service_role"))
+	wbID := integer(user["user_id"])
+	// 先按工作台 user_id 找已有绑定：本地曾用测试邮箱建过影子行时，
+	// 只按 email 匹配会新建第二行，而 wbSaveLogin 的 workbench_user_id
+	// 唯一键又把 token 写回旧行 → 新会话无 token，充值页全空。
+	if wbID > 0 {
+		if bound := a.s.one("SELECT user_id FROM ql_workbench_accounts WHERE workbench_user_id=?", wbID); bound != nil {
+			uid := str(bound, "user_id")
+			a.s.exec("UPDATE ql_users SET username=?,display=?,role=?,active=TRUE WHERE id=?", email, display, role, uid)
+			return uid
+		}
+	}
 	if existing := a.s.one("SELECT id FROM ql_users WHERE username=?", email); existing != nil {
 		uid := str(existing, "id")
 		a.s.exec("UPDATE ql_users SET display=?,role=?,active=TRUE WHERE id=?", display, role, uid)

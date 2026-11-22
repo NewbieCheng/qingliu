@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { Loading } from "@/shared/ui/Loading.jsx";
+import { ScrollRegion } from "@/shared/ui/ScrollRegion.jsx";
 import { SOURCES } from "@/shared/lib/constants.js";
 import { formatCents } from "@/shared/lib/format.js";
 import { useI18n } from "@/shared/i18n/index.jsx";
@@ -8,7 +9,6 @@ import { useScrollSpy } from "@/shared/lib/useScrollSpy.js";
 import { toast } from "@/shared/ui/toast-api.js";
 import {
   CopyIcon,
-  DownloadIcon,
   SparkIcon,
   TableIcon,
   FileTextIcon,
@@ -17,6 +17,7 @@ import {
   AlertIcon,
   CheckIcon,
   EyeIcon,
+  XIcon,
 } from "@/shared/ui/icons.jsx";
 import { documentRows } from "../api.js";
 import { counterpartyDisplay } from "../lib/counterparty.js";
@@ -54,17 +55,12 @@ function KeyValueTable({ obj }) {
   );
 }
 
-// 原始字段：把 "568 | 2026-05-23 | CNY | -1,000.00 | 5,850.26财付通…"
-// 拆成可读的键值，让用户看得出「这一笔是从原件哪一段来的」。
-function rawFields(row) {
+// 原件原文按 | 拆成单元格；界面用一行条带展示，不再贴「第 N 列」小卡片。
+function rawCells(row) {
   const raw = String(row.raw || "").trim();
   if (!raw) return [];
-  const parts = raw.split("|").map((s) => s.trim());
-  if (parts.length < 2) return [{ label: "原件文本", value: raw }];
-  return parts.map((value, i) => ({
-    label: `第 ${i + 1} 列`,
-    value,
-  }));
+  const parts = raw.split("|").map((s) => s.trim()).filter(Boolean);
+  return parts.length ? parts : [raw];
 }
 
 function toMarkdown(doc, meta, generalResult, rows) {
@@ -311,66 +307,89 @@ export function ParseDetailDialog({
 
   const tone = verdictTone(verdict);
 
+  const fileName = doc?.name || "解析记录";
+
   return (
-    <Modal title={doc?.name || "解析记录"} onClose={onClose} className="pd-dialog">
-      <div className="pd-body">
-        {/* 顶部：结论 + 操作 */}
-        <div className="pd-head">
-          <div className="pd-head-info">
+    <Modal
+      title={fileName}
+      onClose={onClose}
+      className="pd-dialog"
+      hideHeader
+    >
+      <div className={`pd-body${peek && tab === "rows" ? " is-peeking" : ""}`}>
+        <div className="pd-main-col">
+        {/* 单行工具栏：文件名+状态 | 页签 | 操作+关闭 */}
+        <div className="pd-chrome">
+          <div className="pd-chrome-lead">
+            <h2 className="pd-filename" title={fileName}>
+              {fileName}
+            </h2>
             <span className={`pd-verdict pd-verdict-${tone}`}>
-              {tone === "ok" ? <CheckIcon size={13} /> : tone === "unknown" ? <InfoIcon size={13} /> : <AlertIcon size={13} />}
+              {tone === "ok" ? <CheckIcon size={12} /> : tone === "unknown" ? <InfoIcon size={12} /> : <AlertIcon size={12} />}
               {verdict === "ok" ? "识别正常" : verdict === "suspect" ? "需核对" : verdict === "fail" ? "识别失败" : "待确认"}
             </span>
             <span className="pd-head-meta">
               {t(SOURCES[meta.source] || "source.other")} · {meta.pages || 0} 页 · {meta.rows || 0} 笔
             </span>
           </div>
-          <div className="pd-actions">
-            <button type="button" className="btn-outline" onClick={handleCopy} title="复制为 Markdown">
-              <CopyIcon />{copied ? "已复制" : "复制"}
-            </button>
-            <button type="button" className="btn-outline" onClick={() => handleExport("md")} title="导出 Markdown">
-              <DownloadIcon size={15} />导出 .md
-            </button>
-            <button type="button" className="btn-outline" onClick={() => handleExport("csv")} title="导出 CSV">
-              <DownloadIcon size={15} />导出 .csv
+          <div className="pd-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "info"}
+              className={`pd-tab${tab === "info" ? " is-active" : ""}`}
+              onClick={() => setTab("info")}
+            >
+              <FileTextIcon size={13} />资料信息
             </button>
             <button
               type="button"
-              className="btn-outline-warning"
-              disabled={busy}
-              onClick={() => onGeneralParse?.(doc)}
+              role="tab"
+              aria-selected={tab === "rows"}
+              className={`pd-tab${tab === "rows" ? " is-active" : ""}`}
+              onClick={() => setTab("rows")}
             >
-              <SparkIcon />{busy ? "解析中…" : "AI 提取要点"}
+              <TableIcon size={13} />字段核对
+              {rows?.length ? <em className="pd-tab-badge">{rows.length}</em> : null}
+            </button>
+          </div>
+          <div className="pd-chrome-end">
+            <div className="pd-actions">
+              <div className="pd-export" role="group" aria-label="导出">
+                <button type="button" className="pd-tool" onClick={handleCopy} title="复制为 Markdown">
+                  <CopyIcon size={13} />{copied ? "已复制" : "复制"}
+                </button>
+                <button type="button" className="pd-tool" onClick={() => handleExport("md")} title="导出 Markdown">
+                  .md
+                </button>
+                <button type="button" className="pd-tool" onClick={() => handleExport("csv")} title="导出 CSV">
+                  .csv
+                </button>
+              </div>
+              <button
+                type="button"
+                className="pd-ai"
+                disabled={busy}
+                onClick={() => onGeneralParse?.(doc)}
+                title="用 AI 提炼这份资料的要点（可能消耗积分）"
+              >
+                <SparkIcon size={13} />{busy ? "解析中…" : "AI 要点"}
+              </button>
+            </div>
+            <button
+              type="button"
+              className="modal-close"
+              onClick={onClose}
+              aria-label={t("common.close")}
+              autoFocus
+            >
+              <XIcon size={16} />
             </button>
           </div>
         </div>
 
-        {/* 分页 */}
-        <div className="pd-tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "info"}
-            className={`pd-tab${tab === "info" ? " is-active" : ""}`}
-            onClick={() => setTab("info")}
-          >
-            <FileTextIcon size={14} />资料信息
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "rows"}
-            className={`pd-tab${tab === "rows" ? " is-active" : ""}`}
-            onClick={() => setTab("rows")}
-          >
-            <TableIcon size={14} />字段解析核对
-            {rows?.length ? <em className="pd-tab-badge">{rows.length}</em> : null}
-          </button>
-        </div>
-
         {tab === "info" ? (
-          <div className="pd-pane">
+          <ScrollRegion className="pd-pane">
             {/* 导诊：有问题才显示，避免正常文件也挂一片黄条 */}
             {meta.explain?.what && tone !== "ok" ? (
               <div className={`pd-explain pd-explain-${tone}`}>
@@ -399,31 +418,30 @@ export function ParseDetailDialog({
               </div>
             ) : null}
 
-            {/* 摘要卡片 */}
             <section className="pd-section">
               <h4>识别概况</h4>
-              <div className="pd-stats">
+              <dl className="pd-stats">
                 <div className="pd-stat">
-                  <span className="pd-stat-label">页数</span>
-                  <span className="pd-stat-value">{meta.pages || 0}</span>
+                  <dt>页数</dt>
+                  <dd>{meta.pages || 0}</dd>
                 </div>
                 <div className="pd-stat">
-                  <span className="pd-stat-label">笔数</span>
-                  <span className="pd-stat-value">{stats?.count ?? meta.rows ?? 0}</span>
+                  <dt>笔数</dt>
+                  <dd>{stats?.count ?? meta.rows ?? 0}</dd>
                 </div>
                 <div className={`pd-stat${stats?.issues ? " is-warn" : ""}`}>
-                  <span className="pd-stat-label">待核对</span>
-                  <span className="pd-stat-value">{stats?.issues ?? 0}</span>
+                  <dt>待核对</dt>
+                  <dd>{stats?.issues ?? 0}</dd>
                 </div>
                 <div className="pd-stat">
-                  <span className="pd-stat-label">流入合计</span>
-                  <span className="pd-stat-value">{formatCents(stats?.income ?? 0)}</span>
+                  <dt>流入合计</dt>
+                  <dd>{formatCents(stats?.income ?? 0)}</dd>
                 </div>
                 <div className="pd-stat">
-                  <span className="pd-stat-label">流出合计</span>
-                  <span className="pd-stat-value">{formatCents(stats?.expense ?? 0)}</span>
+                  <dt>流出合计</dt>
+                  <dd>{formatCents(stats?.expense ?? 0)}</dd>
                 </div>
-              </div>
+              </dl>
             </section>
 
             {/* 表单类：基本信息 + 栏次 */}
@@ -473,10 +491,10 @@ export function ParseDetailDialog({
             ) : null}
 
             {generalResult ? (
-              <section className="pd-section">
-                <h4>AI 提取结果</h4>
+              <section className="pd-section pd-section-ai">
+                <h4>AI 要点</h4>
                 {generalResult.markdown ? (
-                  <pre className="pd-raw">{generalResult.markdown}</pre>
+                  <pre className="pd-raw pd-raw-ai">{generalResult.markdown}</pre>
                 ) : null}
                 {generalResult.note ? <p className="muted">{generalResult.note}</p> : null}
               </section>
@@ -488,17 +506,16 @@ export function ParseDetailDialog({
                 {meta.issues.map((issue, i) => <p className="error" key={i}>{issue}</p>)}
               </section>
             ) : null}
-          </div>
+          </ScrollRegion>
         ) : (
-          <div className="pd-pane" ref={rowsScrollRef}>
+          <ScrollRegion className="pd-pane" ref={rowsScrollRef}>
             {rowsError ? <p className="error">{rowsError}</p> : null}
             {!rows && !rowsError ? <Loading compact text={t("pd.rows_loading")} /> : null}
 
             {rows ? (
               rows.length ? (
-                <div className={peek ? "pd-split" : ""}>
-                  <div className="pd-left">
-                    <div className="pd-rows-bar">
+                <>
+                  <div className="pd-rows-bar">
                     <div className="pd-filter">
                       {[
                         ["all", `全部 ${rows.length}`],
@@ -518,12 +535,12 @@ export function ParseDetailDialog({
                     <span className="muted">
                       点任意一行：展开字段对照，同时在右侧原件上框出这一行
                     </span>
-                    </div>
+                  </div>
 
-                    <div className="pd-rows">
+                  <div className="pd-rows">
                     {shown.slice(0, 300).map((row) => {
                       const open = expanded === row.id;
-                      const fields = open ? rawFields(row) : [];
+                      const cells = open ? rawCells(row) : [];
                       return (
                         <div className={`pd-row${open ? " is-open" : ""}${peek?.id === row.id ? " is-peeking" : ""}`} key={row.id} data-row-id={row.id}>
                           <button
@@ -552,7 +569,6 @@ export function ParseDetailDialog({
                             {row.duplicate ? <span className="pd-chip pd-chip-duplicate">疑似重复</span> : null}
                             {row.manual ? <span className="pd-chip pd-chip-manual">手工</span> : null}
                           </button>
-                          {/* 原稿是显式动作：不点就不打开，避免一进来就被面板占掉半屏 */}
                           <button
                             type="button"
                             className="pd-row-peek"
@@ -563,29 +579,33 @@ export function ParseDetailDialog({
                           </button>
                           {open ? (
                             <div className="pd-row-detail">
-                              <div className="pd-row-detail-grid">
+                              <div className="pd-row-detail-meta">
                                 <div>
-                                  <span className="pd-detail-label">摘要 / 备注</span>
+                                  <span className="pd-detail-label">摘要</span>
                                   <span className="pd-detail-value">{row.memo || "—"}</span>
                                 </div>
                                 <div>
                                   <span className="pd-detail-label">定位</span>
-                                  <span className="pd-detail-value">{row.locator || "—"}</span>
+                                  <span className="pd-detail-value pd-detail-locator">{row.locator || "—"}</span>
                                 </div>
                               </div>
                               <div className="pd-detail-raw">
-                                <span className="pd-detail-label">原件原文（按列拆开）</span>
-                                {fields.length ? (
-                                  <ol className="pd-raw-cols">
-                                    {fields.map((f, i) => (
-                                      <li key={i}>
-                                        <span className="pd-raw-col-no">{f.label}</span>
-                                        <span className="pd-raw-col-val">{f.value || "—"}</span>
-                                      </li>
+                                <span className="pd-detail-label">原件原文</span>
+                                {cells.length ? (
+                                  <ScrollRegion
+                                    className="pd-raw-strip"
+                                    axis="x"
+                                    role="list"
+                                    aria-label="原件按列拆分"
+                                  >
+                                    {cells.map((cell, i) => (
+                                      <span className="pd-raw-cell" role="listitem" key={i}>
+                                        {cell}
+                                      </span>
                                     ))}
-                                  </ol>
+                                  </ScrollRegion>
                                 ) : (
-                                  <p className="muted">这份行没有保留原件原文（手工新增或结构化导入）。</p>
+                                  <p className="muted pd-raw-empty">这份行没有保留原件原文（手工新增或结构化导入）。</p>
                                 )}
                               </div>
                             </div>
@@ -599,24 +619,25 @@ export function ParseDetailDialog({
                       只显示前 300 行，完整清单请导出 .md / .csv。
                     </p>
                   ) : null}
-                  </div>
-                  {peek ? (
-                    <PdfPreviewPane
-                      cid={cid}
-                      doc={doc}
-                      row={peek}
-                      totalPages={meta.pages}
-                      onClose={() => setPeek(null)}
-                      variant="inline"
-                    />
-                  ) : null}
-                </div>
+                </>
               ) : (
                 <p className="muted">这份文件没有解析出交易行。</p>
               )
             ) : null}
-          </div>
+          </ScrollRegion>
         )}
+        </div>
+        {peek && tab === "rows" ? (
+          <PdfPreviewPane
+            key={`peek-${peek.document_id || doc?.id || "doc"}`}
+            cid={cid}
+            doc={doc}
+            row={peek}
+            totalPages={meta.pages}
+            onClose={() => setPeek(null)}
+            variant="inline"
+          />
+        ) : null}
       </div>
     </Modal>
   );

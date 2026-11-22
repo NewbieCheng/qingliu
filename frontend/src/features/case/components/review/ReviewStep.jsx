@@ -1,13 +1,15 @@
-import React from "react";
-import { PlusIcon } from "@/shared/ui/icons.jsx";
+import React, { useEffect, useRef, useState } from "react";
+import { FileTextIcon, PlusIcon, XIcon } from "@/shared/ui/icons.jsx";
 import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { FoldPanel } from "@/shared/ui/FoldPanel.jsx";
+import { AIAnalysisPanel } from "@/features/ai-analysis/index.js";
 import { AccountingSummary } from "../AccountingSummary.jsx";
 import { RangeForm } from "../RangeForm.jsx";
 import { RuleEditor } from "../RuleEditor.jsx";
 import { TransactionTable } from "./TransactionTable.jsx";
 import { BulkReviewForm } from "./BulkReviewForm.jsx";
 import { CoverageForm } from "./CoverageForm.jsx";
+import { ReviewSourceSwitcher } from "./ReviewSourceSwitcher.jsx";
 import {
   reviewCanNext,
   reviewPagerLabel,
@@ -37,20 +39,38 @@ export function ReviewStep({
   onRefresh,
 }) {
   const { t } = useI18n();
-  // 「新增条目」放在折叠条标题行里，和「收起」并排，不再单独占一行。
-  const [addOpen, setAddOpen] = React.useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const rulesWrapRef = useRef(null);
   const highAI = highConfidenceSuggested(data.rows);
   const adoptedAI = adoptedAIRows(data.rows);
+  const relatedCount = data.fields?.rules?.related?.length || 0;
+
   function changeView(value) {
     onViewChange(value);
     onPageChange(1);
   }
 
   function changeQuery(value) {
-    // 仅在 SearchInput 点放大镜 / 回车 / 清空时触发，避免键入实时打服务器
     onPageChange(1);
     onQueryChange(value);
   }
+
+  useEffect(() => {
+    if (!rulesOpen) return undefined;
+    function onDown(event) {
+      if (!rulesWrapRef.current?.contains(event.target)) setRulesOpen(false);
+    }
+    function onKey(event) {
+      if (event.key === "Escape") setRulesOpen(false);
+    }
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [rulesOpen]);
 
   return (
     <>
@@ -67,21 +87,82 @@ export function ReviewStep({
         className="card fold-panel--card review-table-card"
         title={t("case.review.title")}
         badge={
-          <em className="fold-panel-badge">{t("case.tx_stat", { n: data.row_count })}</em>
+          <ReviewSourceSwitcher
+            source={data.source}
+            choices={data.choices || []}
+            rowCount={data.row_count}
+            onChange={(source) => onRangeChange({ source })}
+          />
         }
         defaultOpen
         actions={
-          <button
-            type="button"
-            className={addOpen ? "btn-outline btn-compact" : "btn-outline btn-compact"}
-            onClick={() => setAddOpen((v) => !v)}
-          >
-            {addOpen ? t("common.cancel") : (
-              <>
-                <PlusIcon size={13} />{t("review.add_row")}
-              </>
-            )}
-          </button>
+          <>
+            <AIAnalysisPanel
+              cid={cid}
+              docs={data.docs || []}
+              onCaseRefresh={onRefresh}
+              variant="toolbar"
+            />
+            <div className="review-rules-wrap" ref={rulesWrapRef}>
+              <button
+                type="button"
+                className={`btn-outline btn-compact${rulesOpen ? " is-active" : ""}`}
+                aria-expanded={rulesOpen}
+                aria-haspopup="dialog"
+                onClick={() => setRulesOpen((value) => !value)}
+              >
+                <FileTextIcon size={13} />
+                {t("case.rules.title")}
+                {relatedCount > 0 ? (
+                  <em className="fold-panel-badge">{relatedCount}</em>
+                ) : null}
+              </button>
+              {rulesOpen ? (
+                <div
+                  className="review-rules-pop ql-secondary-pop"
+                  role="dialog"
+                  aria-label={t("case.rules.title")}
+                >
+                  <RuleEditor
+                    rules={data.fields.rules}
+                    busy={data.busy}
+                    onSave={async (payload) => {
+                      await onRulesSave(payload);
+                      setRulesOpen(false);
+                    }}
+                  />
+                </div>
+              ) : null}
+            </div>
+            <BulkReviewForm
+              selectedCount={selected.length}
+              busy={data.busy}
+              onSave={(form) =>
+                onReview({
+                  ids: selected,
+                  label: form.get("label"),
+                  reason: form.get("reason"),
+                })
+              }
+            />
+            <button
+              type="button"
+              className="btn-outline btn-compact"
+              onClick={() => setAddOpen((value) => !value)}
+            >
+              {addOpen ? (
+                <>
+                  <XIcon size={13} />
+                  {t("common.cancel")}
+                </>
+              ) : (
+                <>
+                  <PlusIcon size={13} />
+                  {t("review.add_row")}
+                </>
+              )}
+            </button>
+          </>
         }
       >
         <TransactionTable
@@ -92,41 +173,44 @@ export function ReviewStep({
           addOpen={addOpen}
           onAddOpenChange={setAddOpen}
         />
-        {!data.rows.length && (
-          <p className="empty">
-            {t("case.review.no_transactions")}
-          </p>
-        )}
+        {!data.rows.length ? (
+          <p className="empty">{t("case.review.no_transactions")}</p>
+        ) : null}
         <div className="review-table-foot">
-          {data.rows?.length > 0 &&
-          data.rows.every((row) => row.scope_excluded) ? (
-            <p className="muted" role="status">
-              {t("case.review.all_out_of_range")}
-            </p>
-          ) : null}
-          {data.busy ? (
-            <p className="muted" role="status">
-              {t("case.review.busy_notice")}
-            </p>
-          ) : null}
-          <Pagination
-            page={page}
-            canPrevious={page !== 1}
-            canNext={reviewCanNext(page, data.row_count)}
-            onPrevious={() => onPageChange(page - 1)}
-            onNext={() => onPageChange(page + 1)}
-            label={reviewPagerLabel(page, data.row_count)}
-          />
-          {(highAI.length > 0 || adoptedAI.length > 0) && (
-            <div className="review-action review-action--ai" role="group" aria-label={t("case.review.ai_group")}>
+          <div className="review-table-foot-row">
+            <div className="review-table-foot-status" role="status">
+              {data.busy ? (
+                <p className="muted">{t("case.review.busy_notice")}</p>
+              ) : data.rows?.length > 0 &&
+                data.rows.every((row) => row.scope_excluded) ? (
+                <p className="muted">{t("case.review.all_out_of_range")}</p>
+              ) : null}
+            </div>
+            <Pagination
+              page={page}
+              canPrevious={page !== 1}
+              canNext={reviewCanNext(page, data.row_count)}
+              onPrevious={() => onPageChange(page - 1)}
+              onNext={() => onPageChange(page + 1)}
+              label={reviewPagerLabel(page, data.row_count)}
+            />
+          </div>
+          {highAI.length > 0 || adoptedAI.length > 0 ? (
+            <div
+              className="review-action review-action--ai"
+              role="group"
+              aria-label={t("case.review.ai_group")}
+            >
               {highAI.length > 0 ? (
                 <button
                   type="button"
-                  className="primary"
+                  className="primary btn-compact"
                   disabled={data.busy || !onAIAdopt}
                   onClick={() => onAIAdopt?.()}
                 >
-                  {t("case.review.adopt_ai_suggestions", { count: highAI.length })}
+                  {t("case.review.adopt_ai_suggestions", {
+                    count: highAI.length,
+                  })}
                 </button>
               ) : null}
               {adoptedAI.length > 0 ? (
@@ -147,25 +231,9 @@ export function ReviewStep({
                 </button>
               ) : null}
             </div>
-          )}
-          <BulkReviewForm
-            selectedCount={selected.length}
-            busy={data.busy}
-            onSave={(form) =>
-              onReview({
-                ids: selected,
-                label: form.get("label"),
-                reason: form.get("reason"),
-              })
-            }
-          />
+          ) : null}
         </div>
       </FoldPanel>
-      <RuleEditor
-        rules={data.fields.rules}
-        busy={data.busy}
-        onSave={onRulesSave}
-      />
       <CoverageForm
         data={data}
         onSave={async (payload) => {

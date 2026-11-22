@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/shared/i18n/index.jsx";
 import { Loading } from "@/shared/ui/Loading.jsx";
-import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { SearchInput } from "@/shared/ui/SearchInput.jsx";
 import { EmptyState } from "@/shared/ui/EmptyState.jsx";
@@ -55,18 +54,6 @@ export function ClientsPage({ user }) {
 
   return (
     <main className="clients-page">
-      <PageHeader
-        title={t("clients.title")}
-        actions={
-          <button
-            type="button"
-            className="primary"
-            onClick={() => setCreating(true)}
-          >
-            {t("clients.create")}
-          </button>
-        }
-      />
       <div className="card">
         <div className="toolbar clients-toolbar">
           <div className="toolbar-start">
@@ -112,6 +99,13 @@ export function ClientsPage({ user }) {
               onClick={() => void refresh()}
             >
               <RefreshIcon size={15} />
+            </button>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => setCreating(true)}
+            >
+              {t("clients.create")}
             </button>
           </div>
         </div>

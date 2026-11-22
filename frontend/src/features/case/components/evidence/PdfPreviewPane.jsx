@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/shared/i18n/index.jsx";
+import { ScrollRegion } from "@/shared/ui/ScrollRegion.jsx";
 import { SplitDock } from "@/shared/ui/SplitDock.jsx";
 import { originalPageURL } from "../../api.js";
 import { loadPageURL } from "@/shared/cache/pageCache.js";
@@ -48,7 +49,12 @@ function Viewer({ cid, doc, row, totalPages, onClose, variant }) {
     loadPage(cid, doc.id, page, doc.sha || "", controller.signal)
       .then((url) => setSrc(url))
       .catch((err) => {
-        if (err.name !== "AbortError") setError(err.message || t("pdf.load_failed"));
+        if (err.name === "AbortError") return;
+        // pageCache 抛的是 `HTTP 500` 这类状态码；对用户改成可读说明
+        const raw = String(err.message || "");
+        if (/^HTTP 404$/.test(raw)) setError(t("pdf.not_found"));
+        else if (/^HTTP 5\d\d$/.test(raw)) setError(t("pdf.load_failed"));
+        else setError(raw || t("pdf.load_failed"));
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
@@ -123,9 +129,12 @@ function Viewer({ cid, doc, row, totalPages, onClose, variant }) {
   );
 
   const body = (
-    <div className="pdf-pane-viewport">
-      {error ? <p className="error">{error}</p> : null}
-      {loading && !src ? <p className="muted">{t("pdf.loading")}</p> : null}
+    <ScrollRegion className="pdf-pane-viewport" axis="both">
+      {error && !src ? (
+        <p className="error pdf-pane-status" role="alert">{error}</p>
+      ) : null}
+      {loading && !src && !error ? <p className="muted pdf-pane-status">{t("pdf.loading")}</p> : null}
+      {error && src ? <p className="error">{error}</p> : null}
       {src ? (
         <div className="pdf-page-wrap" style={{ width: `${Math.round(zoom * 100)}%` }}>
           <img
@@ -154,7 +163,7 @@ function Viewer({ cid, doc, row, totalPages, onClose, variant }) {
         </div>
       ) : null}
       {src && !showBox && row ? <p className="pdf-pane-hint">{t("pdf.no_box")}</p> : null}
-    </div>
+    </ScrollRegion>
   );
 
   return (

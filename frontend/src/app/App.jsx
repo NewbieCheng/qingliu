@@ -42,12 +42,6 @@ function Workspace() {
 
   const { route, params } = resolveRoute(location.pathname);
   const routeTitle = route.titleKey ? t(route.titleKey) : route.title;
-  const routeBack = route.back
-    ? {
-        ...route.back,
-        label: route.back.labelKey ? t(route.back.labelKey) : route.back.label,
-      }
-    : undefined;
 
   useEffect(() => {
     document.title = routeTitle
@@ -83,7 +77,6 @@ function Workspace() {
         user={user}
         pathname={location.pathname}
         title={routeTitle}
-        back={routeBack}
         onPassword={() => setPasswordOpen(true)}
         onLogout={async () => {
           await logout();
@@ -109,7 +102,6 @@ function Workspace() {
         user={user}
         pathname={location.pathname}
         title={routeTitle}
-        back={routeBack}
         onPassword={() => setPasswordOpen(true)}
         onLogout={async () => {
           await logout();

@@ -97,9 +97,11 @@ export async function cacheQuery(fn, opts = {}) {
 
   if (!key) return fn();
 
+  // 同步内存命中最快；并发单飞必须在任何 await 之前挂上 pending，
+  // 否则两个调用都会各自穿过 await readCacheDeep 再各打一次回源。
   if (!force) {
-    const hit = await readCacheDeep(key, persist);
-    if (hit !== undefined) return hit;
+    const memHit = readCache(key);
+    if (memHit !== undefined) return memHit;
   } else {
     // 强制刷新：先把旧的清掉，避免回源失败时又读到旧值
     memory.delete(key);
@@ -108,19 +110,21 @@ export async function cacheQuery(fn, opts = {}) {
   const inflight = pending.get(key);
   if (inflight) return inflight;
 
-  const promise = Promise.resolve()
-    .then(fn)
-    .then((value) => {
-      if (shouldCache && !shouldCache(value)) return value;
-      writeCache(key, value, ttlMs);
-      if (persist) {
-        idbPut(key, value, { ttlMs }).catch(() => {});
-      }
-      return value;
-    })
-    .finally(() => {
-      if (pending.get(key) === promise) pending.delete(key);
-    });
+  const promise = (async () => {
+    if (!force) {
+      const hit = await readCacheDeep(key, persist);
+      if (hit !== undefined) return hit;
+    }
+    const value = await fn();
+    if (shouldCache && !shouldCache(value)) return value;
+    writeCache(key, value, ttlMs);
+    if (persist) {
+      idbPut(key, value, { ttlMs }).catch(() => {});
+    }
+    return value;
+  })().finally(() => {
+    if (pending.get(key) === promise) pending.delete(key);
+  });
 
   pending.set(key, promise);
   return promise;

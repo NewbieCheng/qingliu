@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "@/shared/router/index.js";
-import { NavIcon } from "@/shared/ui/icons.jsx";
+import { NavIcon, RailToggleIcon } from "@/shared/ui/icons.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { isQingliuAdmin } from "@/shared/lib/constants.js";
 import { NAVIGATION, isNavItemActive } from "./navigation.js";
@@ -38,7 +38,13 @@ function NavItem({ item, pathname, collapsed, locked = false, label, t }) {
   );
 }
 
-export function Sidebar({ user, pathname, collapsed, spaceSwitcher = null }) {
+export function Sidebar({
+  user,
+  pathname,
+  collapsed,
+  onToggleRail = null,
+  spaceSwitcher = null,
+}) {
   const { t } = useI18n();
   const spaceKind = user?.kind || user?.space?.kind || "personal";
   const teamManaged = spaceKind === "team";
@@ -56,16 +62,24 @@ export function Sidebar({ user, pathname, collapsed, spaceSwitcher = null }) {
       <div className="rail-head">
         <Link to="/" className="brand" aria-label={t("app.title_suffix")}>
           <img
-            className="brand-logo"
-            src="/qingliu-logo-dark.svg"
-            alt="Qingliu"
-          />
-          <img
             className="brand-mark"
             src="/qingliu-icon-light.svg"
-            alt="Qingliu"
+            alt=""
           />
+          <span className="brand-word">{t("brand.short")}</span>
         </Link>
+        {!collapsed && onToggleRail ? (
+          <button
+            type="button"
+            className="rail-toggle"
+            aria-label={t("topbar.collapse_rail")}
+            aria-expanded="true"
+            title={t("topbar.collapse_rail")}
+            onClick={onToggleRail}
+          >
+            <RailToggleIcon collapsed={false} />
+          </button>
+        ) : null}
       </div>
       <nav className="rail-nav" aria-label={t("nav.main")}>
         {NAVIGATION.filter(

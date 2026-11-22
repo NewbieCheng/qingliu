@@ -6,11 +6,11 @@
 .pdf-pane-viewport {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: 10px;
+  padding: 6px 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  /* overflow 由 ScrollRegion axis=both 接管，与左侧列表互不串滚 */
   /* flex-start + 子元素 margin auto：放大溢出时从左边开始，
      左侧不会被推到滚动区外（居中对齐会导致左半边永远看不到）。 */
   align-items: flex-start;
@@ -49,30 +49,45 @@
   font-size: 11px;
   color: #8b857f;
 }
-
-.pdf-pane-page {
-  font-size: 12px;
-  color: #55504b;
-  font-variant-numeric: tabular-nums;
-  min-width: 52px;
+.pdf-pane-status {
+  margin: auto;
+  padding: 24px 16px;
+  max-width: 28em;
   text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+  align-self: center;
 }
 
-/* 缩放控件 */
+.pdf-pane-page {
+  font-size: 11px;
+  color: var(--ql-muted, #68746d);
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* 缩放控件：塞进 34px 头栏 */
 .pdf-zoom {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  margin-right: 4px;
+  gap: 1px;
+  margin-right: 2px;
+}
+.pdf-zoom .btn-outline.btn-compact {
+  min-width: 22px;
+  padding: 2px 5px;
 }
 .pdf-zoom-value {
-  min-width: 46px;
-  padding: 4px 6px;
+  min-width: 40px;
+  padding: 2px 4px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 2px;
   background: transparent;
-  font-size: 12px;
-  color: #55504b;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--ql-muted, #68746d);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }

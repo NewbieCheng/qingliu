@@ -31,6 +31,34 @@ const ETA_HINT = {
   report: "case.tasks.eta_report",
 };
 
+/** 库内可能是英文原文或 i18n key；展示前再映射一次，避免中文界面漏出英文。 */
+const JOB_MESSAGE_KEY = {
+  "job.upload.done": "job.upload.done",
+  "job.upload.partial": "job.upload.partial",
+  "job.upload.queued": "job.upload.queued",
+  "job.upload.starting": "job.upload.starting",
+  "Recognition complete. Confirm document ownership.": "job.upload.done",
+  "Saved with incomplete recognition; review warnings before issuing a formal report":
+    "job.upload.partial",
+  "Queued for parsing": "job.upload.queued",
+  "Preparing to process": "job.upload.starting",
+  "识别完成，请确认资料归属": "job.upload.done",
+  "已完成": "job.upload.done",
+  "部分完成": "job.upload.partial",
+};
+
+function jobMessageLabel(t, message) {
+  const raw = String(message || "").trim();
+  if (!raw) return "";
+  const key = JOB_MESSAGE_KEY[raw];
+  if (key) return t(key);
+  if (raw.startsWith("job.") || raw.startsWith("ai.") || raw.startsWith("err.")) {
+    const translated = t(raw);
+    if (translated !== raw) return translated;
+  }
+  return raw;
+}
+
 const PAGE_SIZE = 5;
 const MAX_DONE_VISIBLE = 3;
 const DOCK_CACHE_PREFIX = "ql.task-dock:";
@@ -244,7 +272,10 @@ export function TaskList({ data, onRetry, onCancel }) {
                 >
                   <div className="task-head">
                     <span className="task-title">
-                      {t(KIND_LABEL[job.kind] || "case.tasks.title")} · {job.message}
+                      {t(KIND_LABEL[job.kind] || "case.tasks.title")}
+                      {job.message
+                        ? ` · ${jobMessageLabel(t, job.message)}`
+                        : ""}
                     </span>
                     <StatusBadge tone={statusTone(job.status)}>
                       {t(statusKey)}

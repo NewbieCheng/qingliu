@@ -13,15 +13,16 @@ export function LanguageSwitch({ className = "" }) {
     setLocale(isEn ? "zh-CN" : "en-US");
   }
 
+  const framed = Boolean(className);
   return (
     <button
       type="button"
-      className={`ghost lang-switch-btn ${className}`.trim()}
+      className={`${framed ? "" : "ghost "}lang-switch-btn ${className}`.trim()}
       onClick={toggle}
       title={`${t("topbar.lang")}: ${isEn ? t("topbar.lang.zh") : t("topbar.lang.en")}`}
       aria-label={`${t("topbar.lang")}: ${isEn ? t("topbar.lang.zh") : t("topbar.lang.en")}`}
     >
-      <span>{isEn ? t("topbar.lang.zh") : "EN"}</span>
+      <span>{isEn ? t("topbar.lang.zh") : t("topbar.lang.en")}</span>
     </button>
   );
 }

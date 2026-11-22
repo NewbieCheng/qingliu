@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
 import { Form } from "@/shared/ui/Form.jsx";
-import { SectionTitle } from "@/shared/ui/PageHeader.jsx";
 import { SegmentedControl } from "@/shared/ui/SegmentedControl.jsx";
 import { UploadDropzone } from "@/shared/ui/UploadDropzone.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
@@ -22,12 +21,9 @@ export function UploadStep({ data, onUpload, onCommitParsed, onReparsed, onNext 
   );
 
   return (
-    <section className="card">
-      <SectionTitle
-        title={t("upload.title")}
-        description={t("upload.desc")}
-      />
+    <section className="card upload-step">
       <Form
+        className="upload-step-form"
         success=""
         onSave={async (form) => {
           setProgress({ copy: t("upload.preparing") });
@@ -52,9 +48,9 @@ export function UploadStep({ data, onUpload, onCommitParsed, onReparsed, onNext 
         }}
       >
         <div className="field field-compact">
-          <span>{t("upload.source_label")}</span>
           <SegmentedControl
             name="source"
+            prefix={t("upload.source_label")}
             aria-label={t("upload.source_label")}
             defaultValue="other"
             options={sourceOptions}

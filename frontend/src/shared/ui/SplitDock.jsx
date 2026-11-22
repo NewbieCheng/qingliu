@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import "./split-dock.css";
 
 // 右侧停靠栏 + 可拖拽分隔条。
@@ -8,7 +9,7 @@ import "./split-dock.css";
 // 才能同时满足：不遮挡、可自己决定给原件多少空间。
 //
 // 两种形态：
-//   fixed    贴住视口右侧，页面主内容通过 --dock-inset 让出空间（核对页）
+//   fixed    portal 到 body，贴视口顶+右（与顶栏同高齐顶）；主内容靠 --dock-inset 让位
 //   inline   贴在父容器右侧（解析详情这类弹窗内部，弹窗本身是居中的）
 
 const MIN_W = 360;
@@ -44,10 +45,12 @@ export function SplitDock({
   );
   const dragging = useRef(false);
   const paneRef = useRef(null);
+  // inline 需要量父容器宽度；fixed portal 后父节点是 body，另存挂载点。
+  const hostRef = useRef(null);
 
   const availWidth = useCallback(() => {
     if (variant === "fixed") return window.innerWidth;
-    const parent = paneRef.current?.parentElement;
+    const parent = hostRef.current?.parentElement || paneRef.current?.parentElement;
     return parent ? parent.getBoundingClientRect().width : window.innerWidth;
   }, [variant]);
 
@@ -83,7 +86,7 @@ export function SplitDock({
     }
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, []);
+  }, [maxWidth]);
 
   const onPointerDown = useCallback((e) => {
     e.preventDefault();
@@ -132,7 +135,7 @@ export function SplitDock({
     setWidth(clampWidth(next, maxWidth()));
   }
 
-  return (
+  const pane = (
     <aside
       ref={paneRef}
       className={`dock-pane dock-pane-${variant}`}
@@ -156,15 +159,8 @@ export function SplitDock({
         <span className="dock-grip" aria-hidden="true" />
       </div>
 
-      <header className="dock-head">
-        <div className="dock-title">
-          <strong>{title}</strong>
-          {subtitle ? (
-            <span className="dock-sub" title={subtitle}>
-              {subtitle}
-            </span>
-          ) : null}
-        </div>
+      <header className="dock-head" title={subtitle || undefined}>
+        <strong className="dock-title">{title}</strong>
         <div className="dock-actions">
           {toolbar}
           <button type="button" className="btn-outline btn-compact" onClick={onClose}>
@@ -175,5 +171,17 @@ export function SplitDock({
 
       <div className="dock-body">{children}</div>
     </aside>
+  );
+
+  // fixed：挂到 body，避开页面祖先 transform/overflow 把 fixed 困在内容区
+  // （困住后会从顶栏下方起算，右侧顶出一条空白缝）。
+  if (variant === "fixed" && typeof document !== "undefined") {
+    return createPortal(pane, document.body);
+  }
+
+  return (
+    <div ref={hostRef} className="dock-inline-host">
+      {pane}
+    </div>
   );
 }

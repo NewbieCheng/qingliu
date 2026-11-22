@@ -204,10 +204,10 @@ func runOne(ctx context.Context, s *Store, app *App) (worked bool) {
 		}
 		meta := obj(str(d, "payload"))
 		state := "done"
-		message := "Recognition complete. Confirm document ownership."
+		message := "job.upload.done"
 		if str(meta, "status") != "success" {
 			state = "partial"
-			message = "Saved with incomplete recognition; review warnings before issuing a formal report"
+			message = "job.upload.partial"
 		}
 		s.jobFinish(jid, state, message)
 		if reparseOf == "" {

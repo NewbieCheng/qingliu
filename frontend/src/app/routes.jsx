@@ -25,7 +25,6 @@ export const ROUTES = [
     path: "/clients/:cid",
     page: CasePage,
     titleKey: "route.case",
-    back: { to: "/", labelKey: "route.back_customers" },
   },
   {
     path: "/clients/:cid/parse",

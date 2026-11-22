@@ -51,34 +51,98 @@ export function DocumentList({ data, onReparsed }) {
         const verdict = meta.verdict;
         const explain = meta.explain;
         const needsAttention = meta.status !== "success" || verdict === "suspect" || verdict === "fail";
+        const metaLine = t("upload.pages_stat", {
+          source: t(SOURCES[meta.source] || "source.other"),
+          pages: meta.pages || 0,
+          rows: meta.rows || 0,
+          coverage: meta.coverage || t("upload.unidentified_coverage"),
+        });
+        const hasDetail =
+          Boolean(meta.doc_type === "form" && meta.form_header) ||
+          Boolean(explain?.what) ||
+          Boolean(meta.issues?.length) ||
+          Boolean(meta.facts?.length);
+
+        const badges = (
+          <span className="doc-badges">
+            {verdict ? (
+              <StatusBadge tone={VERDICT_TONE[verdict] || "default"}>
+                {verdict === "ok" ? "识别正常" : verdict === "suspect" ? "需核对" : "识别失败"}
+              </StatusBadge>
+            ) : null}
+            <StatusBadge tone={meta.status !== "success" ? "amber" : "default"}>
+              {t(DOCUMENT_STATUS[meta.status] || "doc.failed")}
+            </StatusBadge>
+          </span>
+        );
+
+        const openBtn = (
+          <button
+            type="button"
+            className="btn-outline btn-compact"
+            onClick={() => setViewing(document)}
+          >
+            <EyeIcon size={13} />
+            {t("doc_text.open")}
+          </button>
+        );
+
+        // 无额外说明时整行平铺，不再套折叠；有导诊/问题才展开。
+        if (!hasDetail) {
+          return (
+            <div className="doc-row" key={document.id}>
+              <div className="doc-row-main">
+                <span className="doc-row-name" title={document.name}>
+                  {document.name}
+                </span>
+                {badges}
+                <span className="doc-fold-meta" title={metaLine}>
+                  {metaLine}
+                </span>
+              </div>
+              <div className="doc-actions">
+                {needsAttention ? (
+                  <button
+                    type="button"
+                    className="btn-outline-warning btn-compact"
+                    disabled={busy === document.id}
+                    onClick={() => handleReparse(document)}
+                  >
+                    <RefreshIcon size={13} />
+                    {busy === document.id ? "识别中…" : "重新识别"}
+                  </button>
+                ) : null}
+                {openBtn}
+              </div>
+            </div>
+          );
+        }
+
         return (
           <FoldPanel
             key={document.id}
             className="doc-fold"
             title={document.name}
-            badge={
-              <span className="doc-badges">
-                {verdict ? (
-                  <StatusBadge tone={VERDICT_TONE[verdict] || "default"}>
-                    {verdict === "ok" ? "识别正常" : verdict === "suspect" ? "需核对" : "识别失败"}
-                  </StatusBadge>
-                ) : null}
-                <StatusBadge
-                  tone={meta.status !== "success" ? "amber" : "default"}
-                >
-                  {t(DOCUMENT_STATUS[meta.status] || "doc.failed")}
-                </StatusBadge>
-              </span>
-            }
+            badge={badges}
+            actions={openBtn}
+            defaultOpen={needsAttention}
           >
-            <p>
-              {t("upload.pages_stat", {
-                source: t(SOURCES[meta.source] || "source.other"),
-                pages: meta.pages || 0,
-                rows: meta.rows || 0,
-                coverage: meta.coverage || t("upload.unidentified_coverage"),
-              })}
-            </p>
+            <div className="doc-fold-line">
+              <p className="doc-fold-meta">{metaLine}</p>
+              {needsAttention && !explain?.actions?.length ? (
+                <div className="doc-actions">
+                  <button
+                    type="button"
+                    className="btn-outline-warning btn-compact"
+                    disabled={busy === document.id}
+                    onClick={() => handleReparse(document)}
+                  >
+                    <RefreshIcon size={13} />
+                    {busy === document.id ? "识别中…" : "重新识别"}
+                  </button>
+                </div>
+              ) : null}
+            </div>
             {meta.doc_type === "form" && meta.form_header ? (
               <p className="doc-form-note">
                 表单解析：{meta.form_header["纳税人名称"] || ""}
@@ -95,7 +159,7 @@ export function DocumentList({ data, onReparsed }) {
                       <button
                         type="button"
                         key={i}
-                        className="btn-outline-warning"
+                        className="btn-outline-warning btn-compact"
                         disabled={busy === document.id}
                         onClick={() => handleReparse(document)}
                         title={action.hint}
@@ -114,33 +178,14 @@ export function DocumentList({ data, onReparsed }) {
             ))}
             {meta.facts?.map((fact, index) => (
               <p key={index}>
-                {t("case.documents.fact_page", { page: fact.page, kind: fact.kind })}
+                {t("case.documents.fact_page", {
+                  page: fact.page,
+                  kind: fact.kind,
+                })}
                 <br />
                 {fact.text}
               </p>
             ))}
-            {/* 操作按钮统一放在一行、靠右；不因为挤压而换行。
-                「查看原件」直接用同一套 PDF 原件浮窗（带行定位），
-                不再另做一套文本渲染。 */}
-            <div className="doc-actions">
-              {needsAttention && !explain?.actions?.length ? (
-                <button
-                  type="button"
-                  className="btn-outline-warning"
-                  disabled={busy === document.id}
-                  onClick={() => handleReparse(document)}
-                >
-                  <RefreshIcon size={14} />{busy === document.id ? "识别中…" : "重新识别"}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setViewing(document)}
-              >
-                <EyeIcon size={14} />{t("doc_text.open")}
-              </button>
-            </div>
           </FoldPanel>
         );
       })}

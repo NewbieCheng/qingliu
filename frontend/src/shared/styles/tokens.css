@@ -12,6 +12,13 @@
   --ql-surface:#fbfcf8;
   --ql-surface-2:#f4f6f0;
   --ql-rail:232px;
-  --ql-rail-collapsed:68px;
-  --ql-content:1120px;
+  --ql-rail-collapsed:64px;
+  /* 主内容区流体宽：铺满 .main，下限防挤烂，上限防超宽行 */
+  --ql-content-min:720px;
+  --ql-content-max:1440px;
+  --ql-content:var(--ql-content-max);
+  /* 案件纸面：外层 wrap + 纸面 pad；顶距由 legacy .case-page 单独加大 */
+  --ql-case-pad-x:16px;
+  --ql-case-pad-y:10px;
+  --ql-case-wrap-x:8px;
 }

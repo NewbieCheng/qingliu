@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/shared/i18n/index.jsx";
 import { RefreshIcon, SparkIcon, FileTextIcon, WalletIcon } from "@/shared/ui/icons.jsx";
 import { formatDateTime } from "@/shared/lib/format.js";
+import { SOURCES } from "@/shared/lib/constants.js";
 import { StatusBadge } from "@/shared/ui/Badge.jsx";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { ModalActions } from "@/shared/ui/ModalActions.jsx";
@@ -20,7 +21,15 @@ import {
   applyAISuggest,
   applyAIWriteback,
   startAnalysis,
+  startPersonMerge,
 } from "./api.js";
+import {
+  isActiveStatus,
+  latestAnalysisByDoc,
+  matrixStats,
+  mergeCandidates,
+  recentPersonMerges,
+} from "./doc-matrix.js";
 import { AIReportDialog } from "./AIReportDialog.jsx";
 import {
   copyText,
@@ -57,30 +66,17 @@ const AI_MODES = [
   },
 ];
 
-function isActiveStatus(status) {
-  return ["uploading", "queued", "running"].includes(status);
-}
-
 function progressValue(item) {
   return Math.max(0, Math.min(100, Number(item?.progress) || 0));
 }
 
-/** 入口卡分态：进行中 > 最近成功 > 最近失败 > 未分析 */
-function pickEntryState(items) {
-  const list = Array.isArray(items) ? items : [];
-  const running = list.find((item) => isActiveStatus(item.status));
-  const latestDone = list.find((item) => item.status === "done");
-  const latestFailed = list.find((item) => item.status === "failed");
-  if (running) {
-    return { mode: "running", current: running, latestDone, latestFailed };
-  }
-  if (latestDone) {
-    return { mode: "done", current: latestDone, latestDone, latestFailed };
-  }
-  if (latestFailed) {
-    return { mode: "failed", current: latestFailed, latestDone: null, latestFailed };
-  }
-  return { mode: "idle", current: null, latestDone: null, latestFailed: null };
+function docMeta(doc) {
+  return doc?.meta && typeof doc.meta === "object" ? doc.meta : {};
+}
+
+function sourceLabel(doc, t) {
+  const source = docMeta(doc).source;
+  return t(SOURCES[source] || "source.other");
 }
 
 async function handleCopyExport(result, action, t) {
@@ -160,31 +156,50 @@ function AIResultActions({ result, disabled }) {
   );
 }
 
+function DocStatusBadge({ item, t }) {
+  if (!item) {
+    return <StatusBadge tone="default">{t("ai.status_idle")}</StatusBadge>;
+  }
+  const tone =
+    item.status === "done"
+      ? "default"
+      : item.status === "failed"
+        ? "amber"
+        : "amber";
+  return (
+    <StatusBadge tone={tone}>
+      {t(STATUS_KEY[item.status] || "ai.status_failed")}
+      {isActiveStatus(item.status) ? ` ${progressValue(item)}%` : ""}
+    </StatusBadge>
+  );
+}
+
 function AIAnalysisDialog({
   cid,
   docs = [],
   onClose,
   intent = "start",
   focusAnalysisId = "",
+  initialSelected = [],
   onViewReport,
+  onCaseRefresh,
 }) {
   const { t } = useI18n();
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [mode, setMode] = useState("analysis");
-  const [documentId, setDocumentId] = useState(docs[0]?.id || "");
+  const [selected, setSelected] = useState(() => new Set(initialSelected.map(String)));
   const [points, setPoints] = useState(null);
 
   useEffect(() => {
-    if (!docs.length) {
-      setDocumentId("");
-      return;
-    }
-    if (!docs.some((doc) => String(doc.id) === String(documentId))) {
-      setDocumentId(docs[0].id);
-    }
-  }, [docs, documentId]);
+    const allowed = new Set(docs.map((doc) => String(doc.id)));
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((id) => allowed.has(id)));
+      if (!next.size && docs[0]?.id) next.add(String(docs[0].id));
+      return next;
+    });
+  }, [docs]);
 
   useEffect(() => {
     let alive = true;
@@ -216,8 +231,9 @@ function AIAnalysisDialog({
     void load();
   }, [cid]);
 
-  const latest = items[0];
-  const running = latest && isActiveStatus(latest.status);
+  const byDoc = useMemo(() => latestAnalysisByDoc(items), [items]);
+  const activeCount = items.filter((item) => isActiveStatus(item.status)).length;
+  const running = activeCount > 0;
 
   useEffect(() => {
     if (!running) return undefined;
@@ -225,10 +241,29 @@ function AIAnalysisDialog({
       void load({ force: true });
     }, 2500);
     return () => window.clearInterval(timer);
-  }, [running, latest?.id, latest?.status, cid]);
+  }, [running, activeCount, cid]);
+
+  function toggleDoc(id) {
+    const key = String(id);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selected.size === docs.length) {
+      setSelected(new Set());
+      return;
+    }
+    setSelected(new Set(docs.map((doc) => String(doc.id))));
+  }
 
   async function start() {
-    if (!documentId) {
+    const documentIds = [...selected];
+    if (!documentIds.length) {
       const message = docs.length ? t("ai.pick_doc") : t("ai.need_upload");
       setError(message);
       toast(message, "error");
@@ -238,11 +273,15 @@ function AIAnalysisDialog({
     setError("");
     try {
       await startAnalysis(cid, {
-        documentId,
+        documentIds,
         task: mode === "page_ocr" ? mode : undefined,
       });
       toast(
-        mode === "page_ocr" ? t("ai.start_ocr") : t("ai.start_analysis"),
+        documentIds.length > 1
+          ? t("ai.start_batch", { n: documentIds.length })
+          : mode === "page_ocr"
+            ? t("ai.start_ocr")
+            : t("ai.start_analysis"),
         "info",
       );
       invalidateAnalyses(cid);
@@ -256,46 +295,12 @@ function AIAnalysisDialog({
     }
   }
 
-  async function writeSuggest() {
-    if (!latest?.id || latest.status !== "done") return;
-    setBusy(true);
-    try {
-      const data = await applyAISuggest(cid, latest.id);
-      const n = Number(data?.applied) || 0;
-      toast(
-        n > 0 ? t("ai.write_suggest") : t("ai.pick_doc"),
-        n > 0 ? "success" : "info",
-      );
-    } catch (requestError) {
-      toast(requestError.message || t("ai.write_suggest"), "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function writeOCRRows() {
-    if (!latest?.id || latest.status !== "done") return;
-    setBusy(true);
-    try {
-      const data = await applyAIWriteback(cid, latest.id);
-      const n = Number(data?.rows) || 0;
-      toast(
-        n > 0
-          ? t("case.review.adopt_ai_suggestions", { count: n })
-          : t("ai.pick_doc"),
-        n > 0 ? "success" : "info",
-      );
-    } catch (requestError) {
-      toast(requestError.message || t("case.review.title"), "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const selectedDoc = docs.find((doc) => String(doc.id) === String(documentId));
-  const canStart = Boolean(documentId) && !busy && !needRecharge;
-  const percent = progressValue(latest);
-  const displayResult = latest?.result ? enrichAIResult(latest.result) : null;
+  const focusItem =
+    (focusAnalysisId &&
+      items.find((item) => String(item.id) === String(focusAnalysisId))) ||
+    items.find((item) => item.status === "done") ||
+    items[0];
+  const displayResult = focusItem?.result ? enrichAIResult(focusItem.result) : null;
   const detailCount =
     (displayResult?.income_structure?.length || 0) +
     (displayResult?.anomalies?.length || 0) +
@@ -307,18 +312,52 @@ function AIAnalysisDialog({
     AI_MODES.find((item) => item.value === mode)?.hintKey || AI_MODES[0].hintKey,
   );
   const eta = t(ETA_HINT_KEY[mode] || ETA_HINT_KEY.analysis);
+  const canStart = selected.size > 0 && !busy && !needRecharge;
+  const percent = progressValue(focusItem);
 
-  const focusItem =
-    (focusAnalysisId &&
-      items.find((item) => String(item.id) === String(focusAnalysisId))) ||
-    items.find((item) => item.status === "done") ||
-    latest;
+  async function writeSuggest() {
+    if (!focusItem?.id || focusItem.status !== "done") return;
+    setBusy(true);
+    try {
+      const data = await applyAISuggest(cid, focusItem.id);
+      const n = Number(data?.applied) || 0;
+      toast(
+        n > 0 ? t("ai.write_suggest") : t("ai.pick_doc"),
+        n > 0 ? "success" : "info",
+      );
+      if (n > 0) onCaseRefresh?.();
+    } catch (requestError) {
+      toast(requestError.message || t("ai.write_suggest"), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function writeOCRRows() {
+    if (!focusItem?.id || focusItem.status !== "done") return;
+    setBusy(true);
+    try {
+      const data = await applyAIWriteback(cid, focusItem.id);
+      const n = Number(data?.rows) || 0;
+      toast(
+        n > 0
+          ? t("case.review.adopt_ai_suggestions", { count: n })
+          : t("ai.pick_doc"),
+        n > 0 ? "success" : "info",
+      );
+      if (n > 0) onCaseRefresh?.();
+    } catch (requestError) {
+      toast(requestError.message || t("case.review.title"), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <Modal title={t("ai.title")} onClose={onClose} className="modal--sm">
       <div className="ai-dialog-body">
         <p className="muted" style={{ margin: 0 }}>
-          {t("ai.panel_title")}
+          {t("ai.batch_hint")}
         </p>
         {error ? (
           <p className="error" role="alert">
@@ -340,36 +379,56 @@ function AIAnalysisDialog({
             </button>
           </div>
         ) : null}
-        <label className="field">
-          <span>{t("ai.pick_doc")}</span>
+        <div className="ai-doc-picker">
+          <div className="ai-doc-picker-head">
+            <span>{t("ai.pick_docs")}</span>
+            {docs.length ? (
+              <button type="button" className="btn-chip" onClick={toggleAll} disabled={busy}>
+                {selected.size === docs.length
+                  ? t("ai.unselect_all")
+                  : t("ai.select_all")}
+              </button>
+            ) : null}
+          </div>
           {docs.length ? (
-            <select
-              value={documentId}
-              onChange={(event) => setDocumentId(event.target.value)}
-              disabled={busy || running}
-              aria-label={t("ai.pick_doc")}
-            >
-              {docs.map((doc) => (
-                <option key={doc.id} value={doc.id}>
-                  {doc.name}
-                  {doc.meta?.pages
-                    ? ` · ${t("ai.doc_pages", { n: doc.meta.pages })}`
-                    : ""}
-                  {doc.meta?.rows
-                    ? ` · ${t("ai.doc_rows", { n: doc.meta.rows })}`
-                    : ""}
-                </option>
-              ))}
-            </select>
+            <ul className="ai-doc-check-list">
+              {docs.map((doc) => {
+                const id = String(doc.id);
+                const item = byDoc.get(id);
+                const meta = docMeta(doc);
+                return (
+                  <li key={id}>
+                    <label className="ai-doc-check">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(id)}
+                        disabled={busy}
+                        onChange={() => toggleDoc(id)}
+                      />
+                      <span className="ai-doc-check-main">
+                        <strong>{doc.name}</strong>
+                        <span className="muted">
+                          {sourceLabel(doc, t)}
+                          {meta.pages
+                            ? ` · ${t("ai.doc_pages", { n: meta.pages })}`
+                            : ""}
+                          {meta.rows
+                            ? ` · ${t("ai.doc_rows", { n: meta.rows })}`
+                            : ""}
+                        </span>
+                      </span>
+                      <DocStatusBadge item={item} t={t} />
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
           ) : (
             <p className="muted" style={{ margin: 0 }}>
               {t("ai.need_upload")}
             </p>
           )}
-          {selectedDoc ? (
-            <p className="ai-mode-hint">{t("ai.mode_analysis_hint")}</p>
-          ) : null}
-        </label>
+        </div>
         <div>
           <SegmentedControl
             aria-label={t("ai.panel_title")}
@@ -395,37 +454,39 @@ function AIAnalysisDialog({
           <button
             type="button"
             className="primary"
-            disabled={!canStart || running}
+            disabled={!canStart}
             onClick={() => void start()}
           >
             {busy
               ? t("ai.status_queued")
-              : latest?.status === "done" || intent === "rerun"
-                ? t("ai.btn_rerun")
-                : t("ai.btn_start")}
+              : selected.size > 1
+                ? t("ai.btn_start_n", { n: selected.size })
+                : intent === "rerun"
+                  ? t("ai.btn_rerun")
+                  : t("ai.btn_start")}
           </button>
         </ModalActions>
-        {latest ? (
+        {focusItem ? (
           <div className="ai-result">
             <p className="muted">
               {t("ai.title")}:
               <StatusBadge
                 tone={
-                  latest.status === "done"
+                  focusItem.status === "done"
                     ? "default"
-                    : latest.status === "failed"
+                    : focusItem.status === "failed"
                       ? "amber"
                       : "amber"
                 }
               >
-                {t(STATUS_KEY[latest.status] || "ai.status_failed")}
+                {t(STATUS_KEY[focusItem.status] || "ai.status_failed")}
               </StatusBadge>
-              {latest.error ? ` · ${latest.error}` : ""}
-              {focusAnalysisId && String(latest.id) === String(focusAnalysisId)
-                ? ` · ${t("ai.focused_result")}`
+              {focusItem.error ? ` · ${focusItem.error}` : ""}
+              {activeCount > 1
+                ? ` · ${t("ai.queue_active", { n: activeCount })}`
                 : ""}
             </p>
-            {running ? (
+            {isActiveStatus(focusItem.status) ? (
               <>
                 <div
                   className="task-progress"
@@ -442,9 +503,9 @@ function AIAnalysisDialog({
                 </div>
                 <p className="task-meta">
                   <span>
-                    {latest.stage === "running"
+                    {focusItem.stage === "running"
                       ? t("ai.status_running")
-                      : t(STATUS_KEY[latest.status] || "ai.status_running")}
+                      : t(STATUS_KEY[focusItem.status] || "ai.status_running")}
                     {" · "}
                     {eta}
                   </span>
@@ -456,16 +517,21 @@ function AIAnalysisDialog({
             {summaryText ? (
               <AISummaryBlocks
                 summaryText={summaryText}
-                trailing={running && displayResult?.partial ? "…" : ""}
+                trailing={
+                  isActiveStatus(focusItem.status) && displayResult?.partial
+                    ? "…"
+                    : ""
+                }
               />
-            ) : latest.status === "done" ? (
+            ) : focusItem.status === "done" ? (
               <p className="muted">{t("ai.status_done")}</p>
-            ) : running ? (
+            ) : isActiveStatus(focusItem.status) ? (
               <p className="muted">{t("ai.status_running")}</p>
             ) : null}
             <div className="ai-result-actions ai-result-actions--stack">
               <AIResultActions result={displayResult} />
-              {latest.status === "done" ? (
+              {focusItem.status === "done" &&
+              displayResult?.kind !== "person_merge" ? (
                 <button
                   type="button"
                   className="btn-chip"
@@ -475,7 +541,7 @@ function AIAnalysisDialog({
                   {t("ai.write_suggest")}
                 </button>
               ) : null}
-              {latest.status === "done" && displayResult?.text ? (
+              {focusItem.status === "done" && displayResult?.text ? (
                 <button
                   type="button"
                   className="btn-chip"
@@ -485,13 +551,15 @@ function AIAnalysisDialog({
                   {t("ai.write_ocr")}
                 </button>
               ) : null}
-              {detailCount > 0 ? (
+              {detailCount > 0 || (focusItem.status === "done" && summaryText) ? (
                 <button
                   type="button"
                   className="btn-chip is-ok"
-                  onClick={() => onViewReport?.(focusItem || latest)}
+                  onClick={() => onViewReport?.(focusItem)}
                 >
-                  {t("ai.view_details", { n: detailCount })}
+                  {detailCount > 0
+                    ? t("ai.view_details", { n: detailCount })
+                    : t("ai.btn_view_report")}
                 </button>
               ) : null}
             </div>
@@ -503,10 +571,13 @@ function AIAnalysisDialog({
         {items.length > 1 ? (
           <FoldPanel title={`${t("ai.panel_title")} (${items.length})`}>
             <ul>
-              {items.slice(1).map((item) => (
+              {items.slice(0, 12).map((item) => (
                 <li key={item.id}>
                   {formatDateTime(item.created)} ·{" "}
                   {t(STATUS_KEY[item.status] || "ai.status_failed")}
+                  {item.result?.kind === "person_merge"
+                    ? ` · ${t("ai.merge_label")}`
+                    : ""}
                 </li>
               ))}
             </ul>
@@ -517,14 +588,37 @@ function AIAnalysisDialog({
   );
 }
 
-/** 报告页入口：按分析状态展示「查看报告 / 重新分析」，不再永远「开始分析」。 */
-export function AIAnalysisPanel({ cid, docs = [] }) {
+/** 核对页入口：panel=整块矩阵；toolbar=表头按钮弹出矩阵；写回后刷新底稿。 */
+export function AIAnalysisPanel({
+  cid,
+  docs = [],
+  onCaseRefresh,
+  variant = "panel",
+}) {
   const { t } = useI18n();
   const [setupOpen, setSetupOpen] = useState(false);
+  const [matrixOpen, setMatrixOpen] = useState(false);
   const [intent, setIntent] = useState("start");
   const [focusAnalysisId, setFocusAnalysisId] = useState("");
+  const [initialSelected, setInitialSelected] = useState([]);
   const [items, setItems] = useState([]);
+  const [selected, setSelected] = useState(() => new Set());
+  const [busy, setBusy] = useState(false);
   const [reportAnalysis, setReportAnalysis] = useState(null);
+  const matrixGuardUntil = useRef(0);
+  const isToolbar = variant === "toolbar";
+
+  function openMatrixSheet() {
+    // summary 内点击会穿透到刚挂上的 overlay；短暂忽略关闭。
+    matrixGuardUntil.current = Date.now() + 400;
+    setMatrixOpen(true);
+  }
+
+  function closeMatrixSheet() {
+    if (Date.now() < matrixGuardUntil.current) return;
+    setMatrixOpen(false);
+    void refresh();
+  }
 
   async function refresh({ force = false } = {}) {
     try {
@@ -549,39 +643,45 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
     };
   }, [cid]);
 
-  const entry = pickEntryState(items);
-  const current = entry.current;
-  const running = entry.mode === "running";
-  const percent = progressValue(current);
-  const eta = t(ETA_HINT_KEY.analysis);
-
-  // 弹窗打开时由 Dialog 负责 force 轮询；入口卡仅在关闭且进行中时轮询。
   useEffect(() => {
-    if (setupOpen) return undefined;
+    const allowed = new Set(docs.map((doc) => String(doc.id)));
+    setSelected((prev) => new Set([...prev].filter((id) => allowed.has(id))));
+  }, [docs]);
+
+  const byDoc = useMemo(() => latestAnalysisByDoc(items), [items]);
+  const stats = useMemo(() => matrixStats(docs, byDoc), [docs, byDoc]);
+  const candidates = useMemo(() => mergeCandidates(items), [items]);
+  const merges = useMemo(() => recentPersonMerges(items), [items]);
+  const running = stats.active > 0;
+
+  useEffect(() => {
     if (!running) return undefined;
+    // 表头徽章也要跟进度；弹层打开时略勤一点。
+    const ms = setupOpen || matrixOpen ? 2500 : 5000;
     const timer = window.setInterval(() => {
       void refresh({ force: true });
-    }, 2500);
+    }, ms);
     return () => window.clearInterval(timer);
-  }, [cid, setupOpen, running, current?.id, current?.status]);
+  }, [cid, setupOpen, matrixOpen, running, stats.active]);
 
   let statusLine = t("ai.entry_idle");
-  if (entry.mode === "running") {
-    statusLine = `${t("ai.status_running")} ${percent}% · ${eta}`;
-  } else if (entry.mode === "done") {
-    const when = current?.completed || current?.created;
-    statusLine = when
-      ? t("ai.entry_done", { time: formatDateTime(when) })
-      : t("ai.status_done");
-  } else if (entry.mode === "failed") {
-    statusLine = current?.error
-      ? t("ai.entry_failed", { error: current.error })
-      : t("ai.status_failed");
+  if (docs.length) {
+    statusLine = t("ai.entry_matrix", {
+      done: stats.done,
+      total: stats.total,
+      active: stats.active,
+    });
+    if (stats.active > 0) {
+      statusLine += ` · ${t("ai.queue_active", { n: stats.active })}`;
+    } else if (stats.failed > 0) {
+      statusLine += ` · ${t("ai.entry_failed_n", { n: stats.failed })}`;
+    }
   }
 
-  function openSetup(nextIntent, analysisId = "") {
+  function openSetup(nextIntent, analysisId = "", docIds = []) {
     setIntent(nextIntent);
     setFocusAnalysisId(analysisId || "");
+    setInitialSelected(docIds);
     setSetupOpen(true);
   }
 
@@ -593,82 +693,306 @@ export function AIAnalysisPanel({ cid, docs = [] }) {
     setReportAnalysis(analysis);
   }
 
+  function toggleDoc(id) {
+    const key = String(id);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selected.size === docs.length) {
+      setSelected(new Set());
+      return;
+    }
+    setSelected(new Set(docs.map((doc) => String(doc.id))));
+  }
+
+  async function batchStart(docIds) {
+    const ids = docIds?.length ? docIds : [...selected];
+    if (!ids.length) {
+      toast(t("ai.pick_doc"), "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      await startAnalysis(cid, { documentIds: ids });
+      toast(
+        ids.length > 1
+          ? t("ai.start_batch", { n: ids.length })
+          : t("ai.start_analysis"),
+        "info",
+      );
+      invalidateAnalyses(cid);
+      await refresh({ force: true });
+      setSelected(new Set());
+    } catch (requestError) {
+      toast(requestError.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runMerge() {
+    if (candidates.length < 2) {
+      toast(t("ai.merge_need_two"), "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      await startPersonMerge(
+        cid,
+        candidates.map((item) => item.id),
+      );
+      toast(t("ai.merge_started"), "info");
+      invalidateAnalyses(cid);
+      await refresh({ force: true });
+    } catch (requestError) {
+      toast(requestError.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const reportResult = reportAnalysis?.result
     ? enrichAIResult(reportAnalysis.result)
     : null;
 
-  return (
-    <>
+  const matrixBody = (
+    <div className="ai-entry-matrix">
       <div className="ai-entry-bar">
         <div>
-          <strong className="ai-entry-title">{t("ai.panel_title")}</strong>
+          {!isToolbar ? (
+            <strong className="ai-entry-title">{t("ai.panel_title")}</strong>
+          ) : null}
           <p>{statusLine}</p>
         </div>
         <div className="ai-entry-actions">
-          {entry.mode === "idle" ? (
+          {docs.length ? (
             <button
               type="button"
-              className="primary"
-              onClick={() => openSetup("start")}
+              className="btn-chip"
+              onClick={toggleAll}
+              disabled={busy}
             >
-              {t("ai.btn_start")}
+              {selected.size === docs.length
+                ? t("ai.unselect_all")
+                : t("ai.select_all")}
             </button>
           ) : null}
-          {entry.mode === "running" ? (
+          <button
+            type="button"
+            className="primary"
+            disabled={busy || !docs.length}
+            onClick={() => {
+              if (selected.size) {
+                void batchStart([...selected]);
+                return;
+              }
+              openSetup("start");
+            }}
+          >
+            {selected.size > 1
+              ? t("ai.btn_start_n", { n: selected.size })
+              : selected.size === 1
+                ? t("ai.btn_start")
+                : t("ai.btn_open_picker")}
+          </button>
+          {running ? (
             <button
               type="button"
-              className="primary"
-              onClick={() => openSetup("view", current?.id)}
+              className="btn-outline"
+              onClick={() => openSetup("view")}
             >
               {t("ai.btn_view_progress")}
             </button>
           ) : null}
-          {entry.mode === "done" ? (
-            <>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => openReport(entry.latestDone)}
-              >
-                <FileTextIcon size={14} />{t("ai.btn_view_report")}
-              </button>
-              <button
-                type="button"
-                className="btn-outline-warning"
-                onClick={() => openSetup("rerun")}
-              >
-                <SparkIcon size={14} />{t("ai.btn_rerun")}
-              </button>
-            </>
-          ) : null}
-          {entry.mode === "failed" ? (
-            <>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => openSetup("rerun")}
-              >
-                <SparkIcon size={14} />{t("ai.btn_rerun")}
-              </button>
-              {entry.latestDone ? (
-                <button
-                  type="button"
-                  className="btn-outline"
-                  onClick={() => openReport(entry.latestDone)}
-                >
-                  <FileTextIcon size={14} />{t("ai.btn_view_report")}
-                </button>
-              ) : null}
-            </>
-          ) : null}
         </div>
       </div>
+
+      {docs.length ? (
+        <ul className="ai-doc-matrix">
+          {docs.map((doc) => {
+            const id = String(doc.id);
+            const item = byDoc.get(id);
+            const meta = docMeta(doc);
+            return (
+              <li key={id} className="ai-doc-matrix-row">
+                <label className="ai-doc-check">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(id)}
+                    disabled={busy}
+                    onChange={() => toggleDoc(id)}
+                  />
+                  <span className="ai-doc-check-main">
+                    <strong>{doc.name}</strong>
+                    <span className="muted">
+                      {sourceLabel(doc, t)}
+                      {meta.pages
+                        ? ` · ${t("ai.doc_pages", { n: meta.pages })}`
+                        : ""}
+                      {meta.rows
+                        ? ` · ${t("ai.doc_rows", { n: meta.rows })}`
+                        : ""}
+                    </span>
+                  </span>
+                </label>
+                <div className="ai-doc-matrix-meta">
+                  <DocStatusBadge item={item} t={t} />
+                  {item?.status === "done" ? (
+                    <button
+                      type="button"
+                      className="btn-chip"
+                      onClick={() => openReport(item)}
+                    >
+                      <FileTextIcon size={14} />
+                      {t("ai.btn_view_report")}
+                    </button>
+                  ) : null}
+                  {item?.status === "failed" || !item ? (
+                    <button
+                      type="button"
+                      className="btn-chip"
+                      disabled={busy}
+                      onClick={() => void batchStart([id])}
+                    >
+                      <SparkIcon size={14} />
+                      {item?.status === "failed"
+                        ? t("ai.btn_rerun")
+                        : t("ai.btn_start")}
+                    </button>
+                  ) : null}
+                  {item?.status === "done" ? (
+                    <button
+                      type="button"
+                      className="btn-chip"
+                      disabled={busy}
+                      onClick={() => openSetup("rerun", item.id, [id])}
+                    >
+                      <SparkIcon size={14} />
+                      {t("ai.btn_rerun")}
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="muted ai-entry-empty">{t("ai.need_upload")}</p>
+      )}
+
+      <div className="ai-merge-bar">
+        <div>
+          <strong>{t("ai.merge_title")}</strong>
+          <p className="muted">
+            {candidates.length >= 2
+              ? t("ai.merge_ready", { n: candidates.length })
+              : t("ai.merge_hint")}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn-outline"
+          disabled={busy || candidates.length < 2}
+          onClick={() => void runMerge()}
+        >
+          {t("ai.btn_merge")}
+        </button>
+      </div>
+
+      {merges.length ? (
+        <FoldPanel title={t("ai.merge_history", { n: merges.length })}>
+          <ul className="ai-merge-history">
+            {merges.map((item) => (
+              <li key={item.id}>
+                <span>
+                  {formatDateTime(item.completed || item.created)} ·{" "}
+                  {t(STATUS_KEY[item.status] || "ai.status_failed")}
+                </span>
+                {item.status === "done" ? (
+                  <button
+                    type="button"
+                    className="btn-chip"
+                    onClick={() => openReport(item)}
+                  >
+                    {t("ai.btn_view_report")}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </FoldPanel>
+      ) : null}
+    </div>
+  );
+
+  const allDone = docs.length > 0 && stats.done >= stats.total && !running;
+  const toolbarBadge = docs.length
+    ? running
+      ? String(stats.active)
+      : t("ai.toolbar_progress", { done: stats.done, total: stats.total })
+    : null;
+  const cornerTone = running ? "is-live" : allDone ? "is-done" : stats.failed > 0 ? "is-warn" : "";
+
+  return (
+    <>
+      {isToolbar ? (
+        <button
+          type="button"
+          className={`ai-toolbar-trigger${running ? " is-active" : ""}${
+            matrixOpen ? " is-open" : ""
+          }${allDone ? " is-complete" : ""}`}
+          aria-haspopup="dialog"
+          aria-expanded={matrixOpen}
+          aria-label={`${t("ai.panel_title")} · ${statusLine}`}
+          title={statusLine}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            window.setTimeout(openMatrixSheet, 0);
+          }}
+        >
+          <span className="ai-toolbar-trigger-main">
+            <SparkIcon size={13} />
+            <span className="ai-toolbar-trigger-label">{t("ai.toolbar_label")}</span>
+          </span>
+          {toolbarBadge ? (
+            <span className={`ai-toolbar-corner ${cornerTone}`.trim()} aria-hidden="true">
+              {toolbarBadge}
+            </span>
+          ) : null}
+        </button>
+      ) : (
+        matrixBody
+      )}
+
+      {isToolbar && matrixOpen ? (
+        <Modal
+          title={t("ai.panel_title")}
+          className="modal--md ai-matrix-sheet"
+          onClose={closeMatrixSheet}
+        >
+          {matrixBody}
+        </Modal>
+      ) : null}
+
       {setupOpen ? (
         <AIAnalysisDialog
           cid={cid}
           docs={docs}
           intent={intent}
           focusAnalysisId={focusAnalysisId}
+          initialSelected={initialSelected}
+          onCaseRefresh={onCaseRefresh}
           onClose={() => {
             setSetupOpen(false);
             void refresh();

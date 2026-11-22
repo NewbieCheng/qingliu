@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
 import { CopyIcon } from "@/shared/ui/icons.jsx";
 import { Link } from "@/shared/router/index.js";
@@ -96,7 +95,6 @@ export function ParsePage({ cid }) {
 
   return (
     <section className="parse-page card">
-      <PageHeader title="资料解析工具" description="选择资料与想要的结果，AI 按需提取并生成可复制的表格" />
       <p className="muted">
         <Link to={`/clients/${cid}`}>← 返回客户底稿</Link>
       </p>

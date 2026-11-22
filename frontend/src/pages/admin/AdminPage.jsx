@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { useI18n } from "@/shared/i18n/index.jsx";
-import { PageHeader } from "@/shared/ui/PageHeader.jsx";
 import { Loading } from "@/shared/ui/Loading.jsx";
 import { Pagination } from "@/shared/ui/Pagination.jsx";
 import { toast } from "@/shared/ui/toast-api.js";
@@ -103,14 +102,6 @@ export function AdminPage() {
 
   return (
     <main>
-      <PageHeader
-        title={t("admin.page_title")}
-        description={
-          teamManaged
-            ? t("admin.page_desc_team")
-            : t("admin.page_desc_personal")
-        }
-      />
       {error && <p className="error">{error}</p>}
       <section className={`card${!teamManaged ? " is-team-locked" : ""}`}>
         {!teamManaged ? (

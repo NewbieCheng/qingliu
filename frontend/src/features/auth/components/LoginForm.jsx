@@ -222,6 +222,12 @@ export function LoginForm({ onRegister }) {
               });
             }
           } catch (error) {
+            // 用户关掉人机验证：不是失败，清掉错误条，也不要因为 message 含 captcha 再弹一次。
+            if (error === CANCELLED || error?.message === "captcha_cancelled") {
+              setSubmitError("");
+              error.silent = true;
+              throw error;
+            }
             if (mode === "password") setCaptcha({ id: "", code: "" });
             const message = error?.message || t("auth.login_failed");
             setSubmitError(message);
@@ -235,6 +241,8 @@ export function LoginForm({ onRegister }) {
               if (solved && solved !== CANCELLED) {
                 setCaptcha(solved);
                 setSubmitError(t("auth.captcha_ready_retry"));
+              } else if (solved === CANCELLED || !solved) {
+                setSubmitError("");
               }
             }
             throw error;

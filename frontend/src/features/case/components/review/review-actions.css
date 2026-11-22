@@ -8,7 +8,7 @@
 .tx-block {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 .tx-actions {
@@ -51,17 +51,17 @@
   }
 }
 
-/* 客户列表操作列 */
-.clients-col-actions {
-  width: 1%;
-  white-space: nowrap;
-  text-align: right;
-}
-
+/* 客户列表 / 交易表操作列：右贴齐，不居中 */
+.clients-col-actions,
 .tx-col-actions {
   width: 1%;
   white-space: nowrap;
   text-align: right;
+  vertical-align: middle;
+}
+.clients-col-actions .btn-tip-wrap,
+.tx-col-actions .tx-row-actions {
+  width: 100%;
 }
 
 /* 银行内部交易（取现/归还贷款利息等）：原件里本来就没有对方 */
@@ -76,9 +76,11 @@
   display: inline-block;
   white-space: nowrap;
 }
-/* 行内操作：原件 + 删除并排 */
+/* 行内操作：原件 + 删除并排，贴右 */
 .tx-row-actions {
   display: inline-flex;
-  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
   white-space: nowrap;
 }

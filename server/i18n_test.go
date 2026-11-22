@@ -22,6 +22,17 @@ func TestLocalizeStoredMessageSupportsEnglishJobText(t *testing.T) {
 	}
 }
 
+func TestLocalizeStoredMessageUploadDoneIsShortChinese(t *testing.T) {
+	got := localizeStoredMessage(localeZH, "Recognition complete. Confirm document ownership.")
+	if got != "已完成" {
+		t.Fatalf("localizeStoredMessage() = %q, want %q", got, "已完成")
+	}
+	got = localizeStoredMessage(localeZH, "job.upload.done")
+	if got != "已完成" {
+		t.Fatalf("localizeStoredMessage(key) = %q, want %q", got, "已完成")
+	}
+}
+
 func TestLocalizeStoredMessageSupportsChineseForEnglish(t *testing.T) {
 	got := localizeStoredMessage(localeEN, "请先登录")
 	want := T(localeEN, "err.login_required", nil)

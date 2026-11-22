@@ -248,7 +248,7 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged, 
                       : t(TRANSACTION_LABELS[row.label] || "label.pending")}
                 </StatusBadge>
               </td>
-              <td>
+              <td className="tx-col-actions">
                 <span className="tx-row-actions">
                   <button
                     type="button"
@@ -256,7 +256,8 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged, 
                     title={t("review.peek_original")}
                     onClick={() => setPeek(row)}
                   >
-                    <EyeIcon size={14} />{t("review.peek")}
+                    <EyeIcon size={13} />
+                    {t("review.peek")}
                   </button>
                   <button
                     type="button"
@@ -265,7 +266,8 @@ export function TransactionTable({ data, selected, onSelectedChange, onChanged, 
                     title={t("review.delete_hint")}
                     onClick={() => setPendingDelete(row)}
                   >
-                    <TrashIcon size={14} />{t("review.delete_row")}
+                    <TrashIcon size={13} />
+                    {t("review.delete_row")}
                   </button>
                 </span>
               </td>

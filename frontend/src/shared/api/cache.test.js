@@ -38,9 +38,10 @@ describe("api cache", () => {
           resolveOrigin = resolve;
         }),
     );
-    const first = cacheQuery(origin, { key: "x", ttlMs: 1000 });
-    const second = cacheQuery(origin, { key: "x", ttlMs: 1000 });
-    expect(origin).toHaveBeenCalledTimes(1);
+    const first = cacheQuery(origin, { key: "x", ttlMs: 1000, persist: false });
+    const second = cacheQuery(origin, { key: "x", ttlMs: 1000, persist: false });
+    // 单飞 promise 内仍有一层微任务，等回源挂上再断言。
+    await vi.waitFor(() => expect(origin).toHaveBeenCalledTimes(1));
     resolveOrigin({ ok: true });
     await expect(Promise.all([first, second])).resolves.toEqual([
       { ok: true },

@@ -5,6 +5,7 @@ import { FormRow, Select } from "@/shared/ui/FormRow.jsx";
 import { Modal } from "@/shared/ui/Modal.jsx";
 import { ModalActions } from "@/shared/ui/ModalActions.jsx";
 import { useI18n } from "@/shared/i18n/index.jsx";
+import { ShieldIcon } from "@/shared/ui/icons.jsx";
 
 export function CaseAdminGrant({ onGrant, onError }) {
   const { t } = useI18n();
@@ -26,9 +27,10 @@ export function CaseAdminGrant({ onGrant, onError }) {
     <>
       <button
         type="button"
-        className="case-grant-trigger"
+        className="btn-compact case-grant-trigger"
         onClick={() => void openDialog()}
       >
+        <ShieldIcon size={12} />
         {t("case.grant.trigger")}
       </button>
       {open ? (

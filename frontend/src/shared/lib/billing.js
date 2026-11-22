@@ -14,8 +14,8 @@ export function isInsufficientPointsError(error) {
  * （period_points_balance，订阅套餐发的，到 period_expires_at 作废）。
  * 「可用积分」是两个桶之和；扣费在工作台侧先扣本期再扣永久，这里只负责展示。
  *
- * 放在 shared/lib 而不是 features/billing/lib，是因为顶栏（shared/layout）
- * 也要显示可用积分，而 shared 不允许依赖 features。
+ * 放在 shared/lib 而不是 features/billing/lib，是因为侧栏空间切换
+ * （features/profile）与充值页都要读同一套口径，避免两处各算一遍。
  */
 
 export function availablePoints(balance) {

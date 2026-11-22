@@ -29,7 +29,7 @@ export function CasePage({ cid, user }) {
   const requestedStep = searchParams.get("step");
   const step = VALID_STEPS.has(requestedStep) ? requestedStep : "upload";
   const [period, setPeriod] = useState(null);
-  const [view, setView] = useState("issues");
+  const [view, setView] = useState("all");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   // 解析是计费入口：积分不足时后端回 402，这里直接拉起「前往充值」，
@@ -162,6 +162,7 @@ export function CasePage({ cid, user }) {
           onGenerate={(payload) => mutate("report", payload)}
           onSubmit={() => mutate("submit", {})}
           onFormal={(payload) => mutate("report", payload)}
+          onStepChange={changeStep}
         />
       )}
       {rechargeOpen && <RechargeTipDialog onClose={() => setRechargeOpen(false)} />}

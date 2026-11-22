@@ -1,13 +1,16 @@
-import React, { useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { useI18n } from "@/shared/i18n/index.jsx";
+import { ChevronDownIcon } from "@/shared/ui/icons.jsx";
 
 /**
- * 统一折叠条：标题左对齐，右侧 Expand/Collapse（走 i18n），无左侧箭头/SVG。
+ * 统一折叠条：标题左对齐；右侧动作与展开/收起同款描边小按钮 + SVG。
  *
  * `<details>` 没有 `defaultOpen` 这个 HTML 属性（React 也不认），
  * 传下去只会变成无意义的 DOM 属性并触发 no-unknown-property。
- * 初始展开状态改用 ref 在挂载时设 `open`，之后交给浏览器自己管；
- * 仅用 onToggle 同步右侧文案，不抢用户的点击。
+ * 初始展开只在首次挂载时写一次；之后交给浏览器，onToggle 只同步文案。
+ *
+ * 注意：不要在每次 ref 回调里重写 `node.open`——inline ref 每轮渲染都会
+ * 换新函数，点开后 setState → 重渲染 → 又被重置成 defaultOpen，表现为闪现回弹。
  */
 export function FoldPanel({
   title,
@@ -21,17 +24,21 @@ export function FoldPanel({
   actions = null,
 }) {
   const { t } = useI18n();
-  const ref = useRef(null);
-  const [open, setOpen] = useState(Boolean(defaultOpen));
+  const detailsRef = useRef(null);
+  const seededRef = useRef(false);
+  const initialOpenRef = useRef(Boolean(defaultOpen));
+  const [open, setOpen] = useState(initialOpenRef.current);
 
-  function syncOpen(node) {
-    ref.current = node;
-    if (node && defaultOpen) node.open = true;
-  }
+  const setDetailsRef = useCallback((node) => {
+    detailsRef.current = node;
+    if (!node || seededRef.current) return;
+    node.open = initialOpenRef.current;
+    seededRef.current = true;
+  }, []);
 
   return (
     <details
-      ref={syncOpen}
+      ref={setDetailsRef}
       className={`fold-panel${className ? ` ${className}` : ""}`}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
@@ -43,14 +50,18 @@ export function FoldPanel({
         {actions ? (
           <span
             className="fold-panel-actions"
-            onClick={(e) => e.preventDefault()}
+            onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
             role="presentation"
           >
             {actions}
           </span>
         ) : null}
-        <span className="fold-panel-toggle" aria-hidden="true">
+        <span
+          className={`fold-panel-toggle btn-outline btn-compact${open ? " is-open" : ""}`}
+          aria-hidden="true"
+        >
+          <ChevronDownIcon size={12} />
           {open ? t("common.collapse") : t("common.expand")}
         </span>
       </summary>
