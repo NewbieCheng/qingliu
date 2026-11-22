@@ -37,10 +37,12 @@
 | --- | --- |
 | 前端解析 / 门闩 | `upload-preflight`、`client-capability`、`client-parse`、`Upload*` |
 | 前端减负 / 轮询 | `queries`、`useCaseData`、`useJobPoll`、`job-policy` |
-| 前端 AI / 核对 | `features/ai-analysis/*`、`ReviewStep`、`TransactionTable` |
+| 前端 AI / 核对 | `features/ai-analysis/*`（工具条 + 批量矩阵）、`ReviewStep`、`TransactionTable`；IA / 排队 UX 见 [01 §6.1–6.2](01-前端开发.md) |
+| 前端报告出件 | `ReportStep`（跳转回核对做智析；按角色收 SubmitPanel；无 AI 矩阵） |
+| 排队 / 批量 | `ql_jobs` 单执行器 + `ql_upload_batches`；智析 `document_ids`≤10 串行入队；`busy` 仅 upload/report；见 [02 §6](02-后端开发.md) |
 | 清流入库 / 扣费 | `upload-parsed`、`chargeParse`；worker/parser 仅兜底 |
 | 上传 OCR 瀑布 | `/v1/ocr` → parse → 结构化补救（`structure_rescue.go`）→ partial；见 [02 §6.1](02-后端开发.md) |
-| 清流 AI / 长任务 | `ai_analysis.go`、`workbench.go`、`jobPolicy(kind)`（报告页分析 ≠ 上传补救） |
+| 清流 AI / 长任务 | `ai_analysis.go`、`workbench.go`、`jobPolicy(kind)`（核对步智析 ≠ 上传补救） |
 | 清流冷数据 | `cold_retention.go`（jobs/batches 30d、`ql_ai_analyses` 60d、pending/OS temp 7d；**不经** `poolFor`；**不删**正式底稿） |
 | 工作台 aidoc | `internal/aidoc/*`；任务中心见工作台 `operations-runbook` |
 | 工作台留存 / 月结 | `docs/development/data-retention.md`（与清流冷清理边界分离） |
