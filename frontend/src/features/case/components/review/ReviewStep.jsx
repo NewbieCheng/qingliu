@@ -59,6 +59,7 @@ export function ReviewStep({
   useEffect(() => {
     if (!rulesOpen) return undefined;
     function onDown(event) {
+      if (event.target?.closest?.(".ql-select-menu")) return;
       if (!rulesWrapRef.current?.contains(event.target)) setRulesOpen(false);
     }
     function onKey(event) {

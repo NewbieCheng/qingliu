@@ -5,17 +5,15 @@ import { InputWithCheck } from "@/shared/ui/InputWithCheck.jsx";
 import { Switch } from "@/shared/ui/Switch.jsx";
 import { EmptyState } from "@/shared/ui/EmptyState.jsx";
 import { UserPlusIcon } from "@/shared/ui/icons.jsx";
-import { toast } from "@/shared/ui/toast-api.js";
 import { DocumentList } from "../DocumentList.jsx";
+import {
+  initialConfirmedMap,
+  normalizeRelationship,
+  RELATIONSHIP_KEYS,
+  RELATIONSHIPS,
+} from "../../lib/ownership.js";
 import { useI18n } from "@/shared/i18n/index.jsx";
 
-const RELATIONSHIPS = ["Self", "配偶", "子女", "Other"];
-const RELATIONSHIP_KEYS = {
-  Self: "ownership.rel_self",
-  配偶: "ownership.rel_spouse",
-  子女: "ownership.rel_child",
-  Other: "ownership.rel_other",
-};
 const VISIBLE_DOCS = 8;
 
 function hasFamilyExtras(fields = {}) {
@@ -33,12 +31,13 @@ function hasFamilyExtras(fields = {}) {
  */
 export function OwnershipStep({ data, onSave, onNext }) {
   const { t } = useI18n();
-  const [confirmed, setConfirmed] = useState({});
+  const docs = data.docs || [];
+  const [confirmed, setConfirmed] = useState(() =>
+    initialConfirmedMap(docs, data.fields?.document_scopes),
+  );
   const [showAll, setShowAll] = useState(false);
   const [familyOpen, setFamilyOpen] = useState(false);
   const familyWrapRef = useRef(null);
-  const docs = data.docs || [];
-  const visibleDocs = showAll ? docs : docs.slice(0, VISIBLE_DOCS);
   const familyFilled = hasFamilyExtras(data.fields);
 
   function toggleConfirmed(id) {
@@ -48,6 +47,7 @@ export function OwnershipStep({ data, onSave, onNext }) {
   useEffect(() => {
     if (!familyOpen) return undefined;
     function onDown(event) {
+      if (event.target?.closest?.(".ql-select-menu")) return;
       if (!familyWrapRef.current?.contains(event.target)) setFamilyOpen(false);
     }
     function onKey(event) {
@@ -85,8 +85,16 @@ export function OwnershipStep({ data, onSave, onNext }) {
                 !confirmed[document.id],
             );
             if (unconfirmed.length > 0) {
-              toast(t("ownership.confirm_all_prompt"), "error");
-              return;
+              if (
+                !showAll &&
+                docs.some(
+                  (document, index) =>
+                    index >= VISIBLE_DOCS && unconfirmed.includes(document),
+                )
+              ) {
+                setShowAll(true);
+              }
+              throw new Error(t("ownership.confirm_all_prompt"));
             }
             const scopes = {};
             docs.forEach((document) => {
@@ -207,11 +215,12 @@ export function OwnershipStep({ data, onSave, onNext }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleDocs.map((document) => {
+                  {docs.map((document, index) => {
                     const scope =
                       data.fields.document_scopes?.[document.id] || {};
+                    const hiddenRow = !showAll && index >= VISIBLE_DOCS;
                     return (
-                      <tr key={document.id}>
+                      <tr key={document.id} hidden={hiddenRow}>
                         <td>
                           <span className="ownership-doc-name">
                             {document.name}
@@ -252,10 +261,13 @@ export function OwnershipStep({ data, onSave, onNext }) {
                             label={t("case.ownership.relationship_label", {
                               name: document.name,
                             })}
-                            defaultValue={scope.relationship || "Self"}
+                            defaultValue={
+                              normalizeRelationship(scope.relationship) ||
+                              "Self"
+                            }
                           >
                             {RELATIONSHIPS.map((value) => (
-                              <option key={value}>
+                              <option key={value} value={value}>
                                 {t(RELATIONSHIP_KEYS[value])}
                               </option>
                             ))}

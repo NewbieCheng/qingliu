@@ -86,8 +86,14 @@ export function Select({
     return firstValue;
   });
   const current = String(isControlled ? value : internal);
-  const selected =
-    options.find((item) => item.value === current) || options[0] || null;
+  const matched = options.find((item) => item.value === current) || null;
+  const selected = matched || options[0] || null;
+  // 未命中选项且按钮回退到首项时，同步隐藏 select 的值，防止界面展示与提交值不一致。
+  const nativeValue = matched
+    ? matched.value
+    : current === "" && required && !options.some((item) => item.value === "")
+      ? ""
+      : (selected?.value ?? "");
 
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -276,7 +282,7 @@ export function Select({
         tabIndex={-1}
         aria-hidden="true"
         name={name}
-        value={current}
+        value={nativeValue}
         required={required}
         disabled={disabled}
         onChange={(event) => commit(event.target.value)}

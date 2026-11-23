@@ -835,8 +835,9 @@ func (a *App) mux() http.Handler {
 			require(len(docs) > 0, "请先上传资料")
 			for _, d := range docs {
 				sc := nested(scopes, str(d, "id"))
-				rel := str(sc, "relationship")
-				require(strings.TrimSpace(str(sc, "holder")) != "" && (rel == "Self" || rel == "配偶" || rel == "子女" || rel == "Other"), "每份资料须填写持有人及关系")
+				rel, ok := normalizeOwnershipRelationship(str(sc, "relationship"))
+				require(strings.TrimSpace(str(sc, "holder")) != "" && ok, "每份资料须填写持有人及关系")
+				sc["relationship"] = rel
 				sc["confirmed"] = true
 				sc["operator"] = q.user["display"]
 				sc["at"] = time.Now().UTC().Format(time.RFC3339)
@@ -1725,4 +1726,20 @@ func resolveGrantSubject(s *Store, b Object) (localID string, wbID int64) {
 // 用于工作台不可达时的应急运维。
 func (a *App) localLoginAllowed() bool {
 	return strings.TrimSpace(os.Getenv("QINGLIU_ALLOW_LOCAL_LOGIN")) == "1"
+}
+
+// normalizeOwnershipRelationship 统一前端/历史脚本提交的中英文关系码，避免展示文案与校验枚举错位。
+func normalizeOwnershipRelationship(raw string) (string, bool) {
+	switch strings.TrimSpace(raw) {
+	case "Self", "本人":
+		return "Self", true
+	case "配偶", "Spouse":
+		return "配偶", true
+	case "子女", "Child":
+		return "子女", true
+	case "Other", "其他":
+		return "Other", true
+	default:
+		return "", false
+	}
 }
