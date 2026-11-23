@@ -148,6 +148,26 @@ func looksLikeAccount(s string) bool {
 
 var amountRE = regexp.MustCompile(`^[+-]?\d+(\.\d+)?$`)
 
+// leadingMoneyRE 从被页脚粘脏的金额格抽出开头合法金额（最多两位小数）。
+// 例：`-17.091.记账日期/时间…` → `-17.09`。
+var leadingMoneyRE = regexp.MustCompile(`^[+-]?(?:\d{1,3}(?:,\d{3})*|\d+)(?:\.\d{1,2})?`)
+
+// sanitizeMoneyToken 清洗金额格；已是合法金额则原样返回，否则尝试截取前缀。
+func sanitizeMoneyToken(s string) string {
+	s = strings.TrimSpace(norm.NFKC.String(s))
+	if s == "" {
+		return s
+	}
+	cleaned := strings.NewReplacer(",", "", "¥", "", "￥", "").Replace(s)
+	if amountRE.MatchString(cleaned) {
+		return s
+	}
+	if m := leadingMoneyRE.FindString(s); m != "" {
+		return m
+	}
+	return s
+}
+
 func cents(s string) (int64, error) {
 	s = strings.TrimSpace(norm.NFKC.String(s))
 	s = strings.NewReplacer(",", "", "¥", "", "￥", "").Replace(s)

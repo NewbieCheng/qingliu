@@ -647,15 +647,24 @@ func pageLines(words []Word) []string {
 // Header labels determine columns; unrecognized layouts never guess monetary direction.
 // isPageFooterLine 判断一行是不是 PDF 页脚/汇总行（不是交易）。
 //
-// 依据：银行流水页脚固定包含「打印时间/打印方式/打印机构/打印柜员」，
-// 以及每页小计「本页支出 / 本页收入」。它们出现在表格坐标范围内，
-// 但语义上不是一笔交易，抽出来只会变成无效行污染整份结果。
+// 依据：
+//  1. 招行等页脚固定「打印时间/打印方式/打印机构/打印柜员」+「本页支出/收入」；
+//  2. 中行等末页页脚是「温馨提示 / ----END---- / 第 N 页/共 M 页」。
+// 它们常落在表格坐标范围内，抽出来只会变成 invalid 脏行，把整份
+// 从 success 拖成 partial（用户看到「部分交易字段无效」）。
 func isPageFooterLine(line string) bool {
 	n := normalize(line)
 	if n == "" {
 		return false
 	}
-	// 页脚强特征：出现任意两个即可判定（避免把摘要里恰好含"打印"的正常行误杀）。
+	// 中行等单特征页脚：足够强，单独即可判定。
+	if strings.Contains(n, "温馨提示") || strings.Contains(n, "--------------------end--------------------") {
+		return true
+	}
+	if regexp.MustCompile(`第\d+页/共\d+页`).MatchString(n) {
+		return true
+	}
+	// 招行等：出现任意两个才判定（避免摘要里恰好含「打印」的正常行误杀）。
 	hits := 0
 	for _, key := range []string{"打印时间", "打印方式", "打印机构", "打印柜员", "本页支出", "本页收入", "本页合计"} {
 		if strings.Contains(n, key) {
@@ -664,6 +673,25 @@ func isPageFooterLine(line string) bool {
 	}
 	return hits >= 2
 }
+
+// isPageFooterMarker 词级页脚锚点：用于末行底边裁剪，避免把页脚吸进最后一笔。
+func isPageFooterMarker(text string) bool {
+	v := normalize(text)
+	if v == "" {
+		return false
+	}
+	if v == "说明:" || v == "注:" || v == "说明" || strings.HasPrefix(v, "特别说明:") {
+		return true
+	}
+	if strings.Contains(v, "温馨提示") {
+		return true
+	}
+	if strings.Contains(v, "----end----") {
+		return true
+	}
+	return regexp.MustCompile(`^第\d+页`).MatchString(v)
+}
+
 
 func parsePage(p PDFPage, source string, page int, owner, account string, walletLayout *[]Anchor) ([]Object, []string) {
 	words := p.words()
@@ -816,11 +844,15 @@ func parsePage(p PDFPage, source string, page int, owner, account string, wallet
 			gap := starts[len(starts)-1].Y - starts[len(starts)-2].Y
 			bottom = start.Y + gap - 2
 		}
-		if i == len(starts)-1 && (source == "wechat_statement" || source == "alipay_statement") {
+		// 末行必须裁掉页脚：中行末页常只有 1 笔，若底边落到近页底，
+		// 「温馨提示 / ----END----」会被吸进金额格，触发控制总额失败。
+		if i == len(starts)-1 {
 			for _, w := range words {
-				v := normalize(w.Text)
-				if w.Y > start.Y && w.X < p.Width*0.2 && (v == "说明:" || v == "注:" || v == "说明" || strings.HasPrefix(v, "特别说明:")) {
-					if w.Y < bottom {
+				if w.Y <= start.Y || w.Y >= bottom {
+					continue
+				}
+				if isPageFooterMarker(w.Text) {
+					if w.Y-1 < bottom {
 						bottom = w.Y - 1
 					}
 				}
@@ -883,6 +915,7 @@ func parsePage(p PDFPage, source string, page int, owner, account string, wallet
 				}
 			}
 			if signed != "" {
+				signed = sanitizeMoneyToken(signed)
 				n, e := cents(signed)
 				if e == nil {
 					raw["direction"] = "收入"
